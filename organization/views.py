@@ -7,7 +7,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework import serializers
+from rest_framework.serializers import ValidationError
 
 # Local imports 
 from organization.models import (
@@ -20,32 +20,72 @@ from organization.utils import (
     generate_otp, verify_otp
 )
 from organization.services import (
-    send_email
+    send_register_otp_to_email
 )
 
 from user.models import UserType
 from user.serializers import UserSerializer
 
+from core.services import success_response, error_response
+
 
 User = get_user_model()
 
 class RegisterOrganizationAPIView(APIView):
+    """
+    API endpoint to register a new organization.
+
+    This view performs the following actions:
+    - Verifies the OTP sent to the provided email.
+    - Creates a user with 'organization' user type.
+    - Creates an address record.
+    - Creates an organization profile linked to the user and address.
+
+    Request Body:
+    {
+        "email": "org@example.com",
+        "password": "strongpassword",
+        "otp": "123456",
+        "name": "Organization Name",
+        "phone_number": "+1234567890",
+        "website": "https://example.com",
+        "organization_type": 1,
+        "industry_type": 1,
+        "address": {
+            "line1": "123 Street",
+            "line2": "Apt 4",
+            "city": "City",
+            "state": "State",
+            "zipcode": "123456",
+            "country": "Country"
+        }
+    }
+
+    Responses:
+    - 201: Organization registered successfully.
+    - 400: Validation error, missing or invalid input.
+    - 500: Internal server error.
+    """
     def post(self, request):
         data = request.data
         email = data.get('email')
         password = data.get('password')
         otp = data.get('otp', '')
 
-        if not verify_otp(email, otp):
-            return Response({'detail': 'Invalid or expired OTP.'}, status=400)
-
-        if User.objects.filter(email=email).exists():
-            return Response({'detail': 'A user with this email already exists.'}, status=400)
-
         try:
+            if not email:
+                raise ValueError('Email is required')
+
+            if not verify_otp(email, otp):
+                return Response(error_response('Invalid or expired OTP.'), status=status.HTTP_400_BAD_REQUEST)
+            
             with transaction.atomic():
                 # Get or create user_type
-                user_type_obj, _ = UserType.objects.get_or_create(code='organization')
+                user_type_obj, _ = UserType.objects.get_or_create(
+                    code='organization',
+                    defaults={
+                        "name":"Organization"
+                    })
 
                 # Create user
                 user_serializer = UserSerializer(data={
@@ -78,53 +118,97 @@ class RegisterOrganizationAPIView(APIView):
                 organization_serializer.is_valid(raise_exception=True)
                 organization_serializer.save()
 
-                return Response({'detail': 'Organization registered successfully.'}, status=201)
+                return Response(success_response('Organization registered successfully.'), status=201)
 
         except ObjectDoesNotExist as e:
-            return Response({'detail': f'Missing related object: {str(e)}'}, status=400)
-        except serializers.ValidationError as ve:
-            return Response(ve.detail, status=400)
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
-            return Response({'detail': f'Unexpected error: {str(e)}'}, status=500)
+            return Response(error_response({str(e)}), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class SendRegisterOTPIView(APIView):
+    """
+    API endpoint to send an OTP to an email address for registration verification.
+
+    This view checks whether the email is already registered, and if not,
+    sends an OTP to the email for verification during the signup process.
+
+    Request Body:
+    {
+        "email": "org@example.com"
+    }
+
+    Responses:
+    - 201: OTP sent successfully.
+    - 400: Email is missing or already in use.
+    - 500: Failed to send OTP or internal server error.
+    """
     def post(self, request):
-        email = request.data.get('email')
+        try:
+            email = request.data.get('email')
 
-        if not email:
-            return Response({'detail': 'Email is required.'}, status=400)
-        
-        if User.objects.filter(email=email).exists():
-            return Response({'detail': 'A user with this email already exists.'}, status=400)
+            if not email:
+                raise ValueError('Email is required.')
+            
+            if User.objects.filter(email=email).exists():
+                raise ValidationError('Account with this email already exists.')
 
-        otp = generate_otp(email)
-        send_email(
-            subject="Your OTP Code",
-            text_content=f"Your OTP code is {otp}",
-            template_address='organization_register.html',
-            context={
-                'otp':otp
-            },
-            to_email_list=[email]
-        )
-        return Response({"detail": "OTP sent to email."})
+            # Send OTP via SMS
+            sent, message = send_register_otp_to_email(email)
+            if not sent:
+                return Response(error_response(f'Failed to send OTP, {message}'), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(success_response('OTP sent successfully'), status=status.HTTP_201_CREATED)
+        except ValueError as e:
+                return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class OrganizationTypeListView(APIView):
+    """
+    API endpoint to fetch a list of active organization types.
+
+    This view returns a list of organization types that are marked as active in the system.
+
+    Request:
+    - GET /api/organization-types/
+
+    Response:
+    - 200: List of organization types.
+    - 500: Internal server error.
+    """
     def get(self, request):
         try:
             org_types = OrganizationType.objects.filter(is_active=True)
             serializer = OrganizationTypeSerializer(org_types, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({'detail': f'Unexpected error: {str(e)}'}, status=500)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class IndustryTypeListView(APIView):
+    """
+    API endpoint to fetch a list of active industry types.
+
+    This view returns a list of industry types that are marked as active in the system.
+
+    Request:
+    - GET /api/industry-types/
+
+    Response:
+    - 200: List of industry types.
+    - 500: Internal server error.
+    """
     def get(self, request):
         try:
             industries = IndustryType.objects.filter(is_active=True)
             serializer = IndustryTypeSerializer(industries, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
-            return Response({'detail': f'Unexpected error: {str(e)}'}, status=500)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
