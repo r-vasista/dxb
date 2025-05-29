@@ -1,6 +1,4 @@
 # Django imports
-from django.utils import timezone
-from django.core.mail import send_mail
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
@@ -13,10 +11,10 @@ from rest_framework import serializers
 
 # Local imports 
 from organization.models import (
-    Organization, Address
+    OrganizationType, IndustryType
 )
 from organization.serializers import (
-    AddressSerializer, RegisterOrganizationSerializer
+    AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer
 )
 from organization.utils import (
     generate_otp, verify_otp
@@ -111,3 +109,22 @@ class SendRegisterOTPIView(APIView):
             to_email_list=[email]
         )
         return Response({"detail": "OTP sent to email."})
+
+
+class OrganizationTypeListView(APIView):
+    def get(self, request):
+        try:
+            org_types = OrganizationType.objects.filter(is_active=True)
+            serializer = OrganizationTypeSerializer(org_types, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'detail': f'Unexpected error: {str(e)}'}, status=500)
+
+class IndustryTypeListView(APIView):
+    def get(self, request):
+        try:
+            industries = IndustryType.objects.filter(is_active=True)
+            serializer = IndustryTypeSerializer(industries, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response({'detail': f'Unexpected error: {str(e)}'}, status=500)

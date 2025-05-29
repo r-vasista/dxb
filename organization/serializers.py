@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from organization.models import (
-    Organization, Address
+    Organization, Address, OrganizationType, IndustryType
 )
 
 class RegisterOrganizationSerializer(serializers.ModelSerializer):
@@ -26,4 +26,15 @@ class OrganizationSerializer(serializers.ModelSerializer):
 class AddressSerializer(serializers.ModelSerializer):
     class Meta:
         model = Address
+        fields = '__all__'
+
+
+class OrganizationTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationType
+        fields = '__all__'
+
+class IndustryTypeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = IndustryType
         fields = '__all__'
