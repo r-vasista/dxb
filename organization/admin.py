@@ -27,14 +27,14 @@ class OrganizationAdmin(admin.ModelAdmin):
     list_display = (
         'name', 'slug', 'email', 'phone_number',
         'organization_type', 'industry_type',
-        'status', 'visibility_status', 'is_email_verified'
+        'status', 'visibility_status',
     )
     search_fields = ('name', 'email', 'phone_number', 'slug')
     list_filter = (
         'organization_type', 'industry_type',
-        'status', 'visibility_status', 'is_email_verified'
+        'status', 'visibility_status',
     )
-    readonly_fields = ('slug', 'email_verified_at')
+    readonly_fields = ('slug',)
     autocomplete_fields = ('address', 'organization_type', 'industry_type')
     fieldsets = (
         (None, {
@@ -47,6 +47,6 @@ class OrganizationAdmin(admin.ModelAdmin):
             'fields': ('description', 'logo', 'address')
         }),
         ('Status', {
-            'fields': ('status', 'visibility_status', 'is_email_verified', 'email_verified_at')
+            'fields': ('status', 'visibility_status')
         }),
     )

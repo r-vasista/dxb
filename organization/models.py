@@ -82,9 +82,6 @@ class Organization(BaseModel):
         choices = VisibilityStatus.choices,
         default = VisibilityStatus.PUBLIC
     )
-    
-    is_email_verified = models.BooleanField(default=False)
-    email_verified_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         indexes = [
