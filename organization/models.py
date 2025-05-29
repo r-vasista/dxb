@@ -4,6 +4,7 @@ from django.utils.text import slugify
 
 # Local import
 from core.models import BaseModel, BaseTypeModel
+from user.models import CustomUser
 from organization.choices import OrganizationStatus, VisibilityStatus
 
 # External imports
@@ -49,6 +50,7 @@ class Organization(BaseModel):
     Model representing an organization/company.
     """
     name = models.CharField(max_length=255)
+    user = models.OneToOneField(CustomUser, on_delete=models.PROTECT, related_name='organization')
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     
     email = models.EmailField(unique=True)
@@ -96,12 +98,12 @@ class Organization(BaseModel):
         constraints = [
             models.UniqueConstraint(
                 fields=['name'],
-                condition=models.Q(is_deleted=False),
+                condition=models.Q(is_active=True),
                 name='unique_active_organization_name'
             ),
             models.UniqueConstraint(
-                fields=['business_email'],
-                condition=models.Q(is_deleted=False),
+                fields=['email'],
+                condition=models.Q(is_active=True),
                 name='unique_active_organization_email'
             ),
         ]
@@ -121,7 +123,7 @@ class Organization(BaseModel):
         slug = base_slug
         counter = 1
         
-        while Organization.objects.filter(slug=slug, is_deleted=False).exists():
+        while Organization.objects.filter(slug=slug, is_active=True).exists():
             slug = f'{base_slug}-{counter}'
             counter += 1
         
