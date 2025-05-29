@@ -4,6 +4,7 @@ from django.utils.text import slugify
 
 # Local import
 from core.models import BaseModel, BaseTypeModel
+from organization.choices import OrganizationStatus, VisibilityStatus
 
 # External imports
 from phonenumber_field.modelfields import PhoneNumberField
@@ -73,9 +74,15 @@ class Organization(BaseModel):
         choices=OrganizationStatus.choices,
         default=OrganizationStatus.PENDING
     )
+
+    visibility_status = models.CharField(
+        max_length=20,
+        choices = VisibilityStatus.choices,
+        default = VisibilityStatus.PUBLIC
+    )
     
-    is_email_verified = models.BooleanField(_('email verified'), default=False)
-    email_verified_at = models.DateTimeField(_('email verified at'), blank=True, null=True)
+    is_email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         indexes = [
