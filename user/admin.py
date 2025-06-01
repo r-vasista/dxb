@@ -1,6 +1,8 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
-from .models import UserType, CustomUser
+from user.models import (
+    UserType, CustomUser, Permission, Role
+)
 
 @admin.register(UserType)
 class UserTypeAdmin(admin.ModelAdmin):
@@ -36,3 +38,17 @@ class CustomUserAdmin(BaseUserAdmin):
             'fields': ('email', 'user_type', 'password1', 'password2'),
         }),
     )
+
+
+@admin.register(Permission)
+class PermissionAdmin(admin.ModelAdmin):
+    list_display = ['code', 'content_type', 'type']
+    search_fields = ['code', 'content_type', 'type']
+    list_filter = ['code', 'content_type', 'type']
+
+
+@admin.register(Role)
+class RoleAdmin(admin.ModelAdmin):
+    list_display = ['name']
+    search_fields = ['name', 'permissions'] 
+    list_filter = ['name', 'permissions']

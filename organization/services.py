@@ -38,3 +38,7 @@ def send_register_otp_to_email(email):
             return False, message
     except Exception as e:
         return False, str(e)
+    
+
+def create_single_field(request, org):
+    pass

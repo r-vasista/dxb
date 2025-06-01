@@ -2,6 +2,7 @@
 from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from django.shortcuts import get_object_or_404
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -11,7 +12,7 @@ from rest_framework.serializers import ValidationError
 
 # Local imports 
 from organization.models import (
-    OrganizationType, IndustryType
+    OrganizationType, IndustryType, Organization
 )
 from organization.serializers import (
     AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer
@@ -20,7 +21,10 @@ from organization.utils import (
     generate_otp, verify_otp
 )
 from organization.services import (
-    send_register_otp_to_email
+    send_register_otp_to_email, create_single_field
+)
+from user.permissions import (
+    HasPermission
 )
 
 from user.models import UserType
@@ -212,3 +216,31 @@ class IndustryTypeListView(APIView):
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class OrganizationProfileFieldCreateView(APIView):
+    """
+    POST /api/organizations/{org_id}/profile-fields/
+    Create single or multiple profile fields for an organization
+    """
+
+    permission_classes = [HasPermission]
+    permission_required = 'view_reports'
+    
+    def post(self, request, org_id):
+        try:
+            # Verify organization exists
+            organization = get_object_or_404(Organization, id=org_id)
+            
+            # Check if request contains multiple fields
+            # if 'fields' in request.data:
+            #     return self._create_multiple_fields(request, org_id)
+            # else:
+            #     return self._create_single_field(request, org_id)
+            create_single_field(request, org_id)
+                
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to create profile fields: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

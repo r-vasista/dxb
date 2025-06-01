@@ -141,6 +141,12 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # OWN CONFIGURATIONS
 
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    )
+}
+
 # Setting Custom User as the main User model
 AUTH_USER_MODEL = 'user.CustomUser'
 
