@@ -9,7 +9,7 @@ from user.manager import CustomUserManager
 from core.models import BaseModel, BaseTypeModel
 from user.choices import PermissionType
 
-class Permission(models.Model):
+class Permission(BaseModel):
     TYPE_CHOICES = [
         ('view', 'View'),
         ('create', 'Create'),
@@ -29,7 +29,7 @@ class Permission(models.Model):
         return f"{self.content_type.app_label}.{self.code}"
 
 
-class Role(models.Model):
+class Role(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     permissions = models.ManyToManyField(Permission, blank=True)
 

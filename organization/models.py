@@ -2,6 +2,10 @@
 from django.db import models
 from django.utils.text import slugify
 from django.core.exceptions import ValidationError
+from django.contrib.auth import get_user_model
+
+User = get_user_model()
+
 
 # Local import
 from core.models import BaseModel, BaseTypeModel
@@ -192,6 +196,7 @@ class OrganizationProfileField(BaseModel):
         null=True, 
         help_text="Additional description or notes about this field"
     )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null= True)
     
     class Meta:
         indexes = [
@@ -236,19 +241,15 @@ class OrganizationProfileField(BaseModel):
         
         # Check that the appropriate value field is set based on field_type
         if self.field_type == FieldType.TEXT and not self.text_value:
-            if self.is_required:
                 raise ValidationError(f"Text value is required for field '{self.field_name}'.")
         
         elif self.field_type == FieldType.DATE and not self.date_value:
-            if self.is_required:
                 raise ValidationError(f"Date value is required for field '{self.field_name}'.")
         
         elif self.field_type == FieldType.IMAGE and not self.image_value:
-            if self.is_required:
                 raise ValidationError(f"Image is required for field '{self.field_name}'.")
         
         elif self.field_type == FieldType.FILE and not self.file_value:
-            if self.is_required:
                 raise ValidationError(f"File is required for field '{self.field_name}'.")
         
         # Ensure only the correct value field is set

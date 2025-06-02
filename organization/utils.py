@@ -24,9 +24,39 @@ def delete_otp(email):
     cache.delete(f"otp:{email}")
 
 def validate_org_prof_fields(data):
+    # Validate field_type is present and valid
     field_type = data.get('field_type')
-    fields = [ f.value for f in FieldType]
+    if not field_type:
+        raise ValidationError("field_type is required")
 
-    if field_type.lower() not in fields:
+    valid_field_types = [f.value for f in FieldType]
+    if field_type.lower() not in [ft.lower() for ft in valid_field_types]:
         raise ValidationError(f"{field_type} is not a valid field type")
-    
+
+    # Validate field_name
+    field_name = data.get('field_name', '').strip()
+    if not field_name:
+        raise ValidationError("Field name cannot be empty.")
+
+    # Validate the correct value field is set
+    text_value = data.get('text_value')
+    date_value = data.get('date_value')
+    image_value = data.get('image_value')
+    file_value = data.get('file_value')
+
+    value_fields = {
+        'text': text_value,
+        'date': date_value,
+        'image': image_value,
+        'file': file_value,
+    }
+
+    # Ensure only the correct value field is set based on field_type
+    expected_value = value_fields.get(field_type.lower())
+    if not expected_value:
+        raise ValidationError(f"{field_type.capitalize()} value is required for field '{field_name}'.")
+
+    # Ensure no more than one value field is set
+    value_counts = sum(1 for v in value_fields.values() if v)
+    if value_counts > 1:
+        raise ValidationError("Only one value field should be set based on field_type.")

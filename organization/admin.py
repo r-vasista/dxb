@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Address, OrganizationType, IndustryType, Organization
+from .models import Address, OrganizationType, IndustryType, Organization, OrganizationProfileField
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
@@ -38,7 +38,7 @@ class OrganizationAdmin(admin.ModelAdmin):
     autocomplete_fields = ('address', 'organization_type', 'industry_type')
     fieldsets = (
         (None, {
-            'fields': ('name', 'slug', 'email', 'phone_number', 'website')
+            'fields': ('name', 'slug', 'email', 'phone_number', 'website', 'user')
         }),
         ('Classification', {
             'fields': ('organization_type', 'industry_type')
@@ -50,3 +50,10 @@ class OrganizationAdmin(admin.ModelAdmin):
             'fields': ('status', 'visibility_status')
         }),
     )
+
+
+@admin.register(OrganizationProfileField)
+class OrganizationProfileFieldAdmin(admin.ModelAdmin):
+    list_display = ['organization', 'field_name', 'field_type']
+    search_fields = ['organization', 'field_name', 'field_type']
+    list_filter = ['organization', 'field_name', 'field_type']

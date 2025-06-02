@@ -3,25 +3,27 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
+from django.http import Http404
 
 # Rest Framework imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import ValidationError
+from rest_framework.parsers import MultiPartParser, FormParser
 
 # Local imports 
 from organization.models import (
     OrganizationType, IndustryType, Organization
 )
 from organization.serializers import (
-    AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer
+    AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer
 )
 from organization.utils import (
     generate_otp, verify_otp
 )
 from organization.services import (
-    send_register_otp_to_email, create_single_field
+    send_register_otp_to_email
 )
 from user.permissions import (
     HasPermission
@@ -218,29 +220,33 @@ class IndustryTypeListView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class OrganizationProfileFieldCreateView(APIView):
+class OrganizationProfileFieldView(APIView):
     """
     POST /api/organizations/{org_id}/profile-fields/
     Create single or multiple profile fields for an organization
     """
 
     permission_classes = [HasPermission]
-    permission_required = 'view_reports'
+    permission_required = 'create_org_prof_field'
+    parser_classes = (MultiPartParser, FormParser)
     
     def post(self, request, org_id):
         try:
             # Verify organization exists
-            organization = get_object_or_404(Organization, id=org_id)
-            
-            # Check if request contains multiple fields
-            # if 'fields' in request.data:
-            #     return self._create_multiple_fields(request, org_id)
-            # else:
-            #     return self._create_single_field(request, org_id)
-            create_single_field(request, org_id)
-                
+            get_object_or_404(Organization, id=org_id)
+            data = request.data.copy()
+            data['organization'] = org_id
+            data['created_by'] = request.user.id
+
+            serializer = OrganizationProfileFieldSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
+        
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(
-                {'error': f'Failed to create profile fields: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+        

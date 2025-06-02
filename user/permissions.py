@@ -18,16 +18,19 @@ class HasPermission(BasePermission):
 
         if not request.user or not request.user.is_authenticated:
             return False
+        
 
         # Combine role permissions + user custom permissions
         user_permissions = set(
             request.user.custom_permissions.values_list('code', flat=True)
         )
-        role_permissions = set(
-            Permission.objects.filter(
-                role__user=request.user
-            ).values_list('code', flat=True)
-        )
+        role_permissions = set()
+        if request.user.roles.exists():
+            role_permissions = set(
+                Permission.objects.filter(
+                    role__user=request.user
+                ).values_list('code', flat=True)
+            )
         all_permissions = user_permissions.union(role_permissions)
 
         return required_permission in all_permissions

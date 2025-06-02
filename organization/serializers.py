@@ -47,12 +47,11 @@ class OrganizationProfileFieldSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = OrganizationProfileField
-        fields = [
-            'id', 'organization', 'field_name', 'field_type', 'value',
-            'text_value', 'image_value', 'file_value', 'date_value',
-            'is_public', 'display_order', 'description'
-        ]
+        fields = '__all__'
         read_only_fields = ['id']
+        extra_kwargs = {
+            'field_type': {'required': True},
+        }
     
     def get_value(self, obj):
         """Return the appropriate value based on field type"""
