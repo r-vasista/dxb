@@ -23,9 +23,9 @@ def verify_otp(email, otp):
 def delete_otp(email):
     cache.delete(f"otp:{email}")
 
-def validate_org_prof_fields(data):
+def validate_org_prof_fields(data, instance=None):
     # Validate field_type is present and valid
-    field_type = data.get('field_type')
+    field_type = data.get('field_type') or (getattr(instance, 'field_type', None) if instance else None)
     if not field_type:
         raise ValidationError("field_type is required")
 

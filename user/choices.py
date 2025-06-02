@@ -7,5 +7,5 @@ class PermissionType(models.TextChoices):
     """
     VIEW = 'view', 'View'
     CREATE = 'create', 'Create'
-    EDIT = 'edit', 'Edit'
+    UPDATE = 'update', 'Update'
     DELETE = 'delete', 'Delete'

@@ -141,7 +141,7 @@ class OrganizationProfileField(BaseModel):
     Each organization can add any number of custom fields.
     """
     organization = models.ForeignKey(
-        'Organization', 
+        Organization, 
         on_delete=models.CASCADE, 
         related_name='profile_fields'
     )

@@ -36,20 +36,6 @@ class OrganizationAdmin(admin.ModelAdmin):
     )
     readonly_fields = ('slug',)
     autocomplete_fields = ('address', 'organization_type', 'industry_type')
-    fieldsets = (
-        (None, {
-            'fields': ('name', 'slug', 'email', 'phone_number', 'website', 'user')
-        }),
-        ('Classification', {
-            'fields': ('organization_type', 'industry_type')
-        }),
-        ('Details', {
-            'fields': ('description', 'logo', 'address')
-        }),
-        ('Status', {
-            'fields': ('status', 'visibility_status')
-        }),
-    )
 
 
 @admin.register(OrganizationProfileField)

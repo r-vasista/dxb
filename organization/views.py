@@ -10,14 +10,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import ValidationError
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # Local imports 
 from organization.models import (
-    OrganizationType, IndustryType, Organization
+    OrganizationType, IndustryType, Organization, OrganizationProfileField
 )
 from organization.serializers import (
-    AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer
+    AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer,
+    UpdateOrganizationProfileFieldSerializer
 )
 from organization.utils import (
     generate_otp, verify_otp
@@ -227,26 +228,102 @@ class OrganizationProfileFieldView(APIView):
     """
 
     permission_classes = [HasPermission]
-    permission_required = 'create_org_prof_field'
-    parser_classes = (MultiPartParser, FormParser)
-    
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
+    method_permissions = {
+        'POST': 'create_org_prof_field',
+        'PUT': 'update_org_prof_field',
+        'DELETE': 'delete_org_prof_field',
+    }
+
     def post(self, request, org_id):
         try:
             # Verify organization exists
             get_object_or_404(Organization, id=org_id)
-            data = request.data.copy()
-            data['organization'] = org_id
-            data['created_by'] = request.user.id
 
-            serializer = OrganizationProfileFieldSerializer(data=data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
-            return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
-        
+            data = request.data
+            if not isinstance(data, list):
+                data = [data] 
+
+            created_fields = []
+
+            with transaction.atomic():
+                for field_data in data:
+                    # Make a mutable copy to add org_id and created_by
+                    field_data = field_data.copy()
+                    field_data['organization'] = org_id
+                    field_data['created_by'] = request.user.id
+
+                    serializer = OrganizationProfileFieldSerializer(data=field_data)
+                    serializer.is_valid(raise_exception=True)
+                    field = serializer.save()
+                    created_fields.append(serializer.data)
+
+            return Response(success_response(created_fields), status=status.HTTP_201_CREATED)
+
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)  
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+    def get(self, request, org_id):
+        try:
+            get_object_or_404(Organization, id=org_id)
+            fields = OrganizationProfileField.objects.filter(organization_id=org_id)
+            serializer = OrganizationProfileFieldSerializer(fields, many=True)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def put(self, request, org_id):
+        try:
+            org = get_object_or_404(Organization, id=org_id)
+            data = request.data
+            if not isinstance(data, list):
+                data = [data]
+
+            updated_fields = []
+
+            with transaction.atomic():
+                for item in data:
+                    field_id = item.get("id")
+                    if not field_id:
+                        raise ValidationError("Each update object must include the 'id' field.")
+
+                    instance = get_object_or_404(OrganizationProfileField, id=field_id, organization_id=org_id)
+                    serializer = UpdateOrganizationProfileFieldSerializer(instance, data=item, partial=True)
+                    serializer.is_valid(raise_exception=True)
+                    serializer.save()
+                    updated_fields.append(serializer.data)
+
+            return Response(success_response(updated_fields), status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, org_id):
+        try:
+            get_object_or_404(Organization, id=org_id)
+            ids = request.data.get('ids')
+            if not isinstance(ids, list) or not ids:
+                raise ValidationError("A non-empty list of 'ids' is required to delete fields.")
+
+            deleted_count, _ = OrganizationProfileField.objects.filter(
+                id__in=ids, organization_id=org_id
+            ).delete()
+
+            return Response(success_response(f"{deleted_count} field(s) deleted."), status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

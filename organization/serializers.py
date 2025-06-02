@@ -48,7 +48,7 @@ class OrganizationProfileFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrganizationProfileField
         fields = '__all__'
-        read_only_fields = ['id']
+        read_only_fields = ['id', 'created_at', 'updated_at']
         extra_kwargs = {
             'field_type': {'required': True},
         }
@@ -58,7 +58,37 @@ class OrganizationProfileFieldSerializer(serializers.ModelSerializer):
         return obj.get_value()
     
     def validate(self, data):
-        validate_org_prof_fields(data)
+        instance = getattr(self, 'instance', None)
+        if self.instance:
+            data = {**self.initial_data, **data}
+        if instance and 'is_active' not in data:
+            data['is_active'] = instance.is_active
+        validate_org_prof_fields(data, instance=self.instance)
+        return data
+    
+
+class UpdateOrganizationProfileFieldSerializer(serializers.ModelSerializer):
+    value = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = OrganizationProfileField
+        fields = '__all__'
+        read_only_fields = ['id', 'created_at', 'updated_at', 'organization']
+        extra_kwargs = {
+            'field_type': {'required': True},
+        }
+    
+    def get_value(self, obj):
+        """Return the appropriate value based on field type"""
+        return obj.get_value()
+    
+    def validate(self, data):
+        instance = getattr(self, 'instance', None)
+        if self.instance:
+            data = {**self.initial_data, **data}
+        if instance and 'is_active' not in data:
+            data['is_active'] = instance.is_active
+        validate_org_prof_fields(data, instance=self.instance)
         return data
 
 class BulkOrganizationProfileFieldSerializer(serializers.Serializer):
