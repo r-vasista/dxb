@@ -306,7 +306,7 @@ class OrganizationInvite(BaseModel):
     
 
 class OrganizationMember(BaseModel):
-    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='members')
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
 
     class Meta:

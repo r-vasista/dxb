@@ -15,7 +15,7 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 
 # Local imports 
 from organization.models import (
-    OrganizationType, IndustryType, Organization, OrganizationProfileField
+    OrganizationType, IndustryType, Organization, OrganizationProfileField, OrganizationMember
 )
 from organization.serializers import (
     AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer,
@@ -402,11 +402,13 @@ class AcceptInviteAPIView(APIView):
                 user_serializer.is_valid(raise_exception=True)
                 user = user_serializer.save()
 
+                # Assign role to user
+                user.roles.add(invite.role)
+
                 # Add user to organization via serializer
                 member_data = {
                     'organization': invite.organization.id,
-                    'user': user.id,
-                    'role': invite.role.id
+                    'user': user.id
                 }
                 member_serializer = OrganizationMemberSerializer(data=member_data)
                 member_serializer.is_valid(raise_exception=True)
@@ -423,3 +425,21 @@ class AcceptInviteAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
+
+class OrganizationMembersListAPIView(APIView):
+    """
+    API to list all members of a specific organization.
+    """
+    def get(self, request, org_id):
+        try:
+            organization = get_object_or_404(Organization, pk=org_id)
+
+            members = OrganizationMember.objects.filter(organization=organization).select_related('user')
+            serializer = OrganizationMemberSerializer(members, many=True)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

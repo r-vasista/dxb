@@ -15,6 +15,9 @@ from organization.choices import (
     OrgInviteStatus
 )
 from organization.utils import validate_org_prof_fields
+from user.serializers import (
+    UserMiniSerializer
+)
 
 
 class RegisterOrganizationSerializer(serializers.ModelSerializer):
@@ -148,6 +151,7 @@ class AcceptInviteSerializer(serializers.Serializer):
 
 
 class OrganizationMemberSerializer(serializers.ModelSerializer):
+    user_data = UserMiniSerializer(read_only=True)
     class Meta:
         model = OrganizationMember
-        fields = ['organization', 'user']
+        fields = '__all__'
