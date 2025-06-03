@@ -1,9 +1,18 @@
+# Django imports
+from django.utils import timezone
+
+# Python imports
+import datetime
+
 # Rest Framework imports
 from rest_framework import serializers
 
 # Local imports
 from organization.models import (
-    Organization, Address, OrganizationType, IndustryType, OrganizationProfileField
+    Organization, Address, OrganizationType, IndustryType, OrganizationProfileField, OrganizationInvite, OrganizationMember
+)
+from organization.choices import (
+    OrgInviteStatus
 )
 from organization.utils import validate_org_prof_fields
 
@@ -86,29 +95,59 @@ class UpdateOrganizationProfileFieldSerializer(serializers.ModelSerializer):
         validate_org_prof_fields(data, instance=self.instance)
         return data
 
-class BulkOrganizationProfileFieldSerializer(serializers.Serializer):
-    """Serializer for bulk creation of profile fields"""
-    fields = OrganizationProfileFieldSerializer(many=True)
-    
-    def validate_fields(self, fields_data):
-        """Validate that field names are unique within the batch"""
-        field_names = [field.get('field_name') for field in fields_data]
-        if len(field_names) != len(set(field_names)):
-            raise serializers.ValidationError(
-                "Field names must be unique within the same organization."
-            )
-        return fields_data
-    
+
+class OrganizationInviteSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationInvite
+        fields = ['organization', 'email', 'role', 'message']
+
     def create(self, validated_data):
-        """Create multiple profile fields at once"""
-        organization_id = validated_data['organization_id']
-        fields_data = validated_data['fields']
+
+        validated_data['invited_by'] = self.context['request'].user
+        validated_data['expires_at'] = timezone.now() + datetime.timedelta(days=3)
+
+        return super().create(validated_data)
+    
+    def validate(self, attrs):
+        """
+        Custom validation to check for existing pending invites
+        """
+        organization = self.context.get('organization')
+        email = attrs.get('email')
         
-        created_fields = []
-        for field_data in fields_data:
-            field_data['organization_id'] = organization_id
-            serializer = OrganizationProfileFieldSerializer(data=field_data)
-            serializer.is_valid(raise_exception=True)
-            created_fields.append(serializer.save())
+        if organization and email:
+            # Check if there's already a pending invite for this email and organization
+            existing_invite = OrganizationInvite.objects.filter(
+                organization=organization,
+                email=email,
+                status=OrgInviteStatus.PENDING
+            ).first()
+            
+            if existing_invite:
+                raise serializers.ValidationError(
+                    f"A pending invitation already exists for {email} in this organization."
+                )
         
-        return created_fields
+        return attrs
+
+
+class AcceptInviteSerializer(serializers.Serializer):
+    token = serializers.UUIDField()
+    password = serializers.CharField(write_only=True)
+    full_name = serializers.CharField()
+
+    def validate_token(self, token):
+        try:
+            invite = OrganizationInvite.objects.get(token=token, status=OrgInviteStatus.PENDING)
+        except OrganizationInvite.DoesNotExist:
+            raise serializers.ValidationError("Invalid or expired invite.")
+
+        if invite.expires_at < timezone.now():
+            raise serializers.ValidationError("Invite has expired.")
+        return invite
+
+
+class OrganizationMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrganizationMember
+        fields = ['organization', 'user']

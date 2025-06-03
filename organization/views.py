@@ -4,6 +4,7 @@ from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from django.http import Http404
+from django.conf import settings
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -18,10 +19,13 @@ from organization.models import (
 )
 from organization.serializers import (
     AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer,
-    UpdateOrganizationProfileFieldSerializer
+    UpdateOrganizationProfileFieldSerializer, OrganizationInviteSerializer, AcceptInviteSerializer, OrganizationMemberSerializer
+)
+from organization.choices import (
+    OrgInviteStatus
 )
 from organization.utils import (
-    generate_otp, verify_otp
+    verify_otp
 )
 from organization.services import (
     send_register_otp_to_email
@@ -33,7 +37,7 @@ from user.permissions import (
 from user.models import UserType
 from user.serializers import UserSerializer
 
-from core.services import success_response, error_response
+from core.services import success_response, error_response, send_custom_email
 
 
 User = get_user_model()
@@ -336,3 +340,86 @@ class OrganizationProfileFieldView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SendInviteAPIView(APIView):
+    # permission_classes = [IsOrgAdmin]
+
+    def post(self, request, org_id):
+        try:
+            organization = get_object_or_404(Organization, pk=org_id)
+
+            serializer = OrganizationInviteSerializer(data=request.data, context={'request': request, 'organization': organization})
+            serializer.is_valid(raise_exception=True)
+            invite = serializer.save(organization=organization)
+
+            accept_url = f"{settings.EMAIL_DOMAIL_URL}/accept-invite/{invite.token}/"
+            send_custom_email(
+                subject=f"You're invited to join {organization.name}",
+                text_content=f"Click here to accept the invite: {accept_url}",
+                template_address='org_invite.html',
+                context={'invite': invite, 'accept_url': accept_url},
+                recipient_list=[invite.email],
+            )
+
+            return Response(success_response('Invite sent successfully.'), status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AcceptInviteAPIView(APIView):
+    """
+    API to accept an invitation and register a user to an organization.
+    """
+    def post(self, request):
+        try:
+            serializer = AcceptInviteSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            invite = serializer.validated_data['token']
+            password = serializer.validated_data['password']
+            full_name = serializer.validated_data['full_name']
+
+            with transaction.atomic():
+                # Get or create 'staff' user_type
+                user_type_obj, _ = UserType.objects.get_or_create(
+                    code='staff',
+                    defaults={"name": "Staff"}
+                )
+
+                # Create user
+                user_serializer = UserSerializer(data={
+                    'email': invite.email,
+                    'password': password,
+                    'user_type': user_type_obj.id,
+                    'full_name':full_name
+                })
+                user_serializer.is_valid(raise_exception=True)
+                user = user_serializer.save()
+
+                # Add user to organization via serializer
+                member_data = {
+                    'organization': invite.organization.id,
+                    'user': user.id,
+                    'role': invite.role.id
+                }
+                member_serializer = OrganizationMemberSerializer(data=member_data)
+                member_serializer.is_valid(raise_exception=True)
+                member_serializer.save()
+
+                # Mark the invite as accepted
+                invite.status = OrgInviteStatus.ACCEPTED
+                invite.save()
+
+                return Response(success_response("Invite accepted and user registered successfully."), status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    

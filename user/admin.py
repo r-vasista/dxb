@@ -21,7 +21,7 @@ class CustomUserAdmin(BaseUserAdmin):
     readonly_fields = ('last_login',)
 
     fieldsets = (
-        (None, {'fields': ('email', 'password')}),
+        (None, {'fields': ('email', 'password', 'full_name')}),
         ('Personal Info', {'fields': ('user_type',)}),
         ('Permissions', {
             'fields': (

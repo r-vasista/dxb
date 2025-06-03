@@ -49,6 +49,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     last_login = models.DateTimeField(blank=True, null=True)
+    full_name = models.CharField(max_length=200, blank=True, null=True)
 
     roles = models.ManyToManyField(Role, related_name='custom_users')
     custom_permissions = models.ManyToManyField(Permission, blank=True, related_name='custom_users')

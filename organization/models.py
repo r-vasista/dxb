@@ -7,7 +7,10 @@ from django.contrib.auth import get_user_model
 # Local import
 from core.models import BaseModel, BaseTypeModel
 from organization.choices import (
-    OrganizationStatus, VisibilityStatus, FieldType, OrgInviteStatus
+    OrganizationStatus, VisibilityStatus, FieldType, OrgInviteStatus, OrgInviteStatus
+)
+from user.models import (
+    Role
 )
 
 # External imports
@@ -268,27 +271,6 @@ class OrganizationProfileField(BaseModel):
         if not self.field_name or not self.field_name.strip():
             raise ValidationError("Field name cannot be empty.")
 
-
-class Position(BaseModel):
-    """
-    Job positions/roles within the organization
-    """
-    organization = models.ForeignKey('Organization', on_delete=models.CASCADE, related_name='positions')
-    title = models.CharField(max_length=150)
-    code = models.CharField(max_length=30)
-    description = models.TextField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='user_positions')
-    
-    class Meta:
-        unique_together = ['organization', 'code']
-        indexes = [
-            models.Index(fields=['organization', 'is_active']),
-        ]
-    
-    def __str__(self):
-        return f"{self.title} - {self.organization.name}"
-
-
 class OrganizationInvite(BaseModel):
     """
     Invite system for organization members
@@ -296,7 +278,7 @@ class OrganizationInvite(BaseModel):
     
     organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='invites')
     email = models.EmailField()
-    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name='invites')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='org_invites')
     
     token = models.UUIDField(default=uuid.uuid4, unique=True)
     status = models.CharField(max_length=20, choices=OrgInviteStatus.choices, default=OrgInviteStatus.PENDING)
@@ -306,7 +288,13 @@ class OrganizationInvite(BaseModel):
     message = models.TextField(blank=True, null=True)
     
     class Meta:
-        unique_together = ['organization', 'email', 'status']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'email'],
+                condition=models.Q(status=OrgInviteStatus.PENDING),
+                name='unique_pending_invite_per_org_email'
+            )
+        ]
         indexes = [
             models.Index(fields=['token']),
             models.Index(fields=['email', 'status']),
@@ -320,7 +308,6 @@ class OrganizationInvite(BaseModel):
 class OrganizationMember(BaseModel):
     organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='members')
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
-    position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name='organization_memebers')
 
     class Meta:
         unique_together = ['organization', 'user']

@@ -3,7 +3,8 @@ from django.urls import path
 
 # Local imports
 from organization.views import (
-    SendRegisterOTPIView, RegisterOrganizationAPIView, OrganizationTypeListView, IndustryTypeListView, OrganizationProfileFieldView
+    SendRegisterOTPIView, RegisterOrganizationAPIView, OrganizationTypeListView, IndustryTypeListView, OrganizationProfileFieldView,
+    SendInviteAPIView, AcceptInviteAPIView
 )
 
 urlpatterns = [
@@ -12,4 +13,6 @@ urlpatterns = [
     path('organization-types/', OrganizationTypeListView.as_view(), name='organization-types'),
     path('industry-types/', IndustryTypeListView.as_view(), name='industry-types'),
     path('organization-field/<int:org_id>/',OrganizationProfileFieldView.as_view(), name='organization-field'),
+    path('send-organization-invite/<int:org_id>/', SendInviteAPIView.as_view(), name='send-invite'),
+    path('accept-invite/', AcceptInviteAPIView.as_view(), name='accept-invite'),
 ]

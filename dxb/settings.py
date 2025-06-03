@@ -188,3 +188,5 @@ EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
 
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+EMAIL_DOMAIL_URL = os.environ.get('EMAIL_DOMAIL_URL', '')

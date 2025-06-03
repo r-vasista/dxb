@@ -1,5 +1,7 @@
 from django.contrib import admin
-from .models import Address, OrganizationType, IndustryType, Organization, OrganizationProfileField
+from organization.models import (
+    Address, OrganizationType, IndustryType, Organization, OrganizationProfileField, OrganizationInvite, OrganizationMember
+)
 
 @admin.register(Address)
 class AddressAdmin(admin.ModelAdmin):
@@ -43,3 +45,17 @@ class OrganizationProfileFieldAdmin(admin.ModelAdmin):
     list_display = ['organization', 'field_name', 'field_type']
     search_fields = ['organization', 'field_name', 'field_type']
     list_filter = ['organization', 'field_name', 'field_type']
+
+
+@admin.register(OrganizationInvite)
+class OrganizationInviteAdmin(admin.ModelAdmin):
+    list_display = ['organization', 'email', 'status', 'invited_by', 'expires_at']
+    search_fields = ['organization', 'email', 'status', 'invited_by', 'expires_at']
+    list_filter = ['organization', 'email', 'status', 'invited_by', 'expires_at']
+
+
+@admin.register(OrganizationMember)
+class OrganizationMemberAdmin(admin.ModelAdmin):
+    list_display = ['organization', 'user']
+    search_fields = ['organization', 'user']
+    list_filter = ['organization', 'user']
