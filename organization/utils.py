@@ -52,7 +52,7 @@ def validate_org_prof_fields(data, instance=None):
     }
 
     # Ensure only the correct value field is set based on field_type
-    expected_value = value_fields.get(field_type.lower())
+    expected_value = value_fields.get(field_type.lower()) or (getattr(instance, 'field_type', None) if instance else None)
     if not expected_value:
         raise ValidationError(f"{field_type.capitalize()} value is required for field '{field_name}'.")
 

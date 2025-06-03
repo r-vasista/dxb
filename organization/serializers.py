@@ -48,9 +48,9 @@ class OrganizationProfileFieldSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrganizationProfileField
         fields = '__all__'
-        read_only_fields = ['id', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'created_at', 'updated_at', 'is_public']
         extra_kwargs = {
-            'field_type': {'required': True},
+            'field_type': {'required': True}
         }
     
     def get_value(self, obj):
@@ -58,12 +58,7 @@ class OrganizationProfileFieldSerializer(serializers.ModelSerializer):
         return obj.get_value()
     
     def validate(self, data):
-        instance = getattr(self, 'instance', None)
-        if self.instance:
-            data = {**self.initial_data, **data}
-        if instance and 'is_active' not in data:
-            data['is_active'] = instance.is_active
-        validate_org_prof_fields(data, instance=self.instance)
+        validate_org_prof_fields(data)
         return data
     
 

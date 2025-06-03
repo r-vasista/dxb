@@ -270,8 +270,16 @@ class OrganizationProfileFieldView(APIView):
     def get(self, request, org_id):
         try:
             get_object_or_404(Organization, id=org_id)
-            fields = OrganizationProfileField.objects.filter(organization_id=org_id)
-            serializer = OrganizationProfileFieldSerializer(fields, many=True)
+
+            is_public = request.query_params.get('is_public', True)
+            queryset  = OrganizationProfileField.objects.filter(organization_id=org_id, is_public=is_public)
+            
+            field_type = request.query_params.get('field_type') 
+            if field_type:
+                queryset = queryset.filter(field_type=field_type)
+            queryset = queryset.order_by('display_order')
+
+            serializer = OrganizationProfileFieldSerializer(queryset, many=True)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
