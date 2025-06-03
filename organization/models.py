@@ -4,19 +4,20 @@ from django.utils.text import slugify
 from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
-User = get_user_model()
-
-
 # Local import
 from core.models import BaseModel, BaseTypeModel
-from user.models import CustomUser
 from organization.choices import (
-    OrganizationStatus, VisibilityStatus, FieldType
+    OrganizationStatus, VisibilityStatus, FieldType, OrgInviteStatus
 )
 
 # External imports
 from phonenumber_field.modelfields import PhoneNumberField
 
+# Python imports
+import uuid
+
+
+User = get_user_model()
 
 
 class Address(BaseModel):
@@ -57,7 +58,7 @@ class Organization(BaseModel):
     Model representing an organization/company.
     """
     name = models.CharField(max_length=255)
-    user = models.OneToOneField(CustomUser, on_delete=models.PROTECT, related_name='organization')
+    user = models.OneToOneField(User, on_delete=models.PROTECT, related_name='organization')
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     
     email = models.EmailField(unique=True)
@@ -266,3 +267,67 @@ class OrganizationProfileField(BaseModel):
         # Validate field_name is not empty
         if not self.field_name or not self.field_name.strip():
             raise ValidationError("Field name cannot be empty.")
+
+
+class Position(BaseModel):
+    """
+    Job positions/roles within the organization
+    """
+    organization = models.ForeignKey('Organization', on_delete=models.CASCADE, related_name='positions')
+    title = models.CharField(max_length=150)
+    code = models.CharField(max_length=30)
+    description = models.TextField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='user_positions')
+    
+    class Meta:
+        unique_together = ['organization', 'code']
+        indexes = [
+            models.Index(fields=['organization', 'is_active']),
+        ]
+    
+    def __str__(self):
+        return f"{self.title} - {self.organization.name}"
+
+
+class OrganizationInvite(BaseModel):
+    """
+    Invite system for organization members
+    """
+    
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='invites')
+    email = models.EmailField()
+    position = models.ForeignKey(Position, on_delete=models.CASCADE, related_name='invites')
+    
+    token = models.UUIDField(default=uuid.uuid4, unique=True)
+    status = models.CharField(max_length=20, choices=OrgInviteStatus.choices, default=OrgInviteStatus.PENDING)
+    expires_at = models.DateTimeField()
+    
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    message = models.TextField(blank=True, null=True)
+    
+    class Meta:
+        unique_together = ['organization', 'email', 'status']
+        indexes = [
+            models.Index(fields=['token']),
+            models.Index(fields=['email', 'status']),
+            models.Index(fields=['expires_at']),
+        ]
+    
+    def __str__(self):
+        return f"Invite: {self.email} to {self.organization.name}"
+    
+
+class OrganizationMember(BaseModel):
+    organization = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='members')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='memberships')
+    position = models.ForeignKey(Position, on_delete=models.PROTECT, related_name='organization_memebers')
+
+    class Meta:
+        unique_together = ['organization', 'user']
+        indexes = [
+            models.Index(fields=['organization', 'user']),
+            models.Index(fields=['user']),
+        ]
+    
+    def __str__(self):
+        return f"{self.user.email} - {self.organization.name} )"

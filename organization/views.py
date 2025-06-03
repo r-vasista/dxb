@@ -199,6 +199,7 @@ class OrganizationTypeListView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class IndustryTypeListView(APIView):
     """
     API endpoint to fetch a list of active industry types.

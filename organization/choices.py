@@ -22,3 +22,10 @@ class FieldType(models.TextChoices):
     IMAGE = 'image', 'Image'
     FILE = 'file', 'File'
     DATE = 'date', 'Date'
+
+
+class OrgInviteStatus(models.TextChoices):
+        PENDING = 'pending', 'Pending'
+        ACCEPTED = 'accepted', 'Accepted'
+        EXPIRED = 'expired', 'Expired'
+        CANCELLED = 'cancelled', 'Cancelled'
