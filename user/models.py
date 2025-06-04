@@ -3,6 +3,7 @@ from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Q, UniqueConstraint
 
 # Local imports
 from user.manager import CustomUserManager
@@ -30,12 +31,37 @@ class Permission(BaseModel):
 
 
 class Role(BaseModel):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
+    organization = models.ForeignKey(
+        'organization.Organization',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name='roles'
+    )
     permissions = models.ManyToManyField(Permission, blank=True)
 
+    class Meta:
+        constraints = [
+            # Unique name when organization is NULL (global roles)
+            UniqueConstraint(
+                fields=['name'],
+                condition=Q(organization__isnull=True),
+                name='unique_global_role_name'
+            ),
+            # Unique name per organization when organization is set
+            UniqueConstraint(
+                fields=['name', 'organization'],
+                condition=Q(organization__isnull=False),
+                name='unique_org_role_name'
+            )
+        ]
+
     def __str__(self):
+        if self.organization:
+            return f"{self.name} ({self.organization.name})"
         return self.name
-    
+
 
 class UserType(BaseTypeModel):
     class Meta:
