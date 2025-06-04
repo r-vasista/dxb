@@ -9,3 +9,11 @@ class PermissionType(models.TextChoices):
     CREATE = 'create', 'Create'
     UPDATE = 'update', 'Update'
     DELETE = 'delete', 'Delete'
+
+class PermissionScope(models.TextChoices):
+    """
+    Choices for scope of the permissions
+    """
+    GLOBAL = 'global', 'Global'
+    ORGANIZATION = 'organization', 'Organization'
+    ADMIN = 'admin', 'System Admin'

@@ -8,7 +8,7 @@ from django.db.models import Q, UniqueConstraint
 # Local imports
 from user.manager import CustomUserManager
 from core.models import BaseModel, BaseTypeModel
-from user.choices import PermissionType
+from user.choices import PermissionType, PermissionScope
 
 class Permission(BaseModel):
     TYPE_CHOICES = [
@@ -22,6 +22,10 @@ class Permission(BaseModel):
     description = models.TextField(blank=True)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='permissions')
     type = models.CharField(max_length=10, choices=PermissionType.choices)
+    scope = models.CharField(max_length=15, choices=PermissionScope.choices, default=PermissionScope.ADMIN)
+    is_visible = models.BooleanField(default=True)
+    # module = models.CharField(max_length=100) for future use if needed
+
     
     class Meta:
         unique_together = ['content_type', 'type']
