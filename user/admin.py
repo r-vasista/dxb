@@ -42,9 +42,9 @@ class CustomUserAdmin(BaseUserAdmin):
 
 @admin.register(Permission)
 class PermissionAdmin(admin.ModelAdmin):
-    list_display = ['code', 'content_type', 'type']
-    search_fields = ['code', 'content_type', 'type']
-    list_filter = ['code', 'content_type', 'type']
+    list_display = ['code', 'content_type', 'type', 'scope']
+    search_fields = ['code', 'content_type', 'type', 'scope']
+    list_filter = ['code', 'content_type', 'type', 'scope']
 
 
 @admin.register(Role)

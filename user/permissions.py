@@ -1,5 +1,5 @@
 # Rest Framework
-from rest_framework.permissions import BasePermission
+from rest_framework.permissions import BasePermission, SAFE_METHODS
 
 # Local imports
 from user.models import Permission
@@ -26,12 +26,15 @@ class HasPermission(BasePermission):
         user_permissions = set(
             request.user.custom_permissions.values_list('code', flat=True)
         )
-        role_permissions = set()
-        if request.user.roles.exists():
-            role_permissions = set(
-                Permission.objects.filter(role__user=request.user).values_list('code', flat=True)
-            )
+        role_permissions = set(
+            request.user.roles.values_list('permissions__code', flat=True)
+        )
 
         all_permissions = user_permissions.union(role_permissions)
 
         return required_permission in all_permissions
+
+
+class ReadOnly(BasePermission):
+    def has_permission(self, request, view):
+        return request.method in SAFE_METHODS

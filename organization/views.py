@@ -12,6 +12,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 # Local imports 
 from organization.models import (
@@ -32,11 +33,11 @@ from organization.services import (
     send_register_otp_to_email
 )
 from user.permissions import (
-    HasPermission
+    HasPermission, ReadOnly
 )
 
-from user.models import UserType
-from user.serializers import UserSerializer
+from user.models import UserType, Role
+from user.serializers import UserSerializer, RoleSerializer
 
 from core.services import success_response, error_response, send_custom_email
 
@@ -61,6 +62,9 @@ class SendRegisterOTPIView(APIView):
     - 400: Email is missing or already in use.
     - 500: Failed to send OTP or internal server error.
     """
+
+    permission_classes = [AllowAny]
+
     def post(self, request):
         try:
             email = request.data.get('email')
@@ -98,6 +102,10 @@ class OrganizationTypeListView(APIView):
     - 200: List of organization types.
     - 500: Internal server error.
     """
+
+    permission_classes = [AllowAny]
+
+
     def get(self, request):
         try:
             org_types = OrganizationType.objects.filter(is_active=True)
@@ -120,6 +128,9 @@ class IndustryTypeListView(APIView):
     - 200: List of industry types.
     - 500: Internal server error.
     """
+
+    permission_classes = [AllowAny]
+
     def get(self, request):
         try:
             industries = IndustryType.objects.filter(is_active=True)
@@ -164,6 +175,9 @@ class RegisterOrganizationAPIView(APIView):
     - 400: Validation error, missing or invalid input.
     - 500: Internal server error.
     """
+
+    permission_classes = [AllowAny]
+
     def post(self, request):
         data = request.data
         email = data.get('email')
@@ -194,11 +208,16 @@ class RegisterOrganizationAPIView(APIView):
                 user_serializer.is_valid(raise_exception=True)
                 user = user_serializer.save()
 
+                # Assign role to user
+                role = Role.objects.get(name='organization')
+                user.roles.add(role)
+
                 # Create address
-                address_data = data.get('address', {})
-                address_serializer = AddressSerializer(data=address_data)
-                address_serializer.is_valid(raise_exception=True)
-                address = address_serializer.save()
+                address_data = data.get('address')
+                if address_data:
+                    address_serializer = AddressSerializer(data=address_data)
+                    address_serializer.is_valid(raise_exception=True)
+                    address = address_serializer.save()
 
                 # Create organization
                 organization_data = {
@@ -208,7 +227,7 @@ class RegisterOrganizationAPIView(APIView):
                     'website': data.get('website'),
                     'organization_type': data.get('organization_type'),
                     'industry_type': data.get('industry_type'),
-                    'address': address.id,
+                    'address': address.id if address_data else None,
                     'user': user.id
                 }
 
@@ -240,11 +259,19 @@ class OrganizationDetailAPIView(APIView):
     URL: /api/organization/<int:pk>/
     """
 
+    permission_classes = [HasPermission ]
+    method_permissions = {
+        'PUT': 'update_org',
+        'DELETE': 'delete_org',
+    }
+
     def get(self, request, pk):
         try:
             organization = get_object_or_404(Organization, pk=pk, is_active=True, status=OrganizationStatus.ACTIVE)
             serializer = OrganizationSerializer(organization)
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -309,6 +336,8 @@ class OrganizationListAPIView(APIView):
     - 500: Internal server error
     """
 
+    permission_classes = [AllowAny]
+
     def get(self, request):
         try:
             queryset = Organization.objects.filter(
@@ -333,7 +362,9 @@ class OrganizationListAPIView(APIView):
             queryset = queryset.order_by('name')
             serializer = OrganizationSerializer(queryset, many=True)
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
-
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

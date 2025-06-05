@@ -68,8 +68,8 @@ class Organization(BaseModel):
     phone_number = PhoneNumberField(blank=True, null=True)
     website = models.URLField(blank=True, null=True)
     
-    organization_type = models.ForeignKey(OrganizationType, on_delete=models.PROTECT)
-    industry_type = models.ForeignKey(IndustryType, on_delete=models.PROTECT)
+    organization_type = models.ForeignKey(OrganizationType, on_delete=models.PROTECT, blank=True, null=True)
+    industry_type = models.ForeignKey(IndustryType, on_delete=models.PROTECT, blank=True, null=True)
     
     description = models.TextField(blank=True, null=True)
     bio = models.TextField(blank=True, null=True)
