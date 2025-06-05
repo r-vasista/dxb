@@ -65,7 +65,7 @@ class Organization(BaseModel):
     slug = models.SlugField(max_length=100, unique=True, blank=True)
     
     email = models.EmailField(unique=True)
-    phone_number = PhoneNumberField()
+    phone_number = PhoneNumberField(blank=True, null=True)
     website = models.URLField(blank=True, null=True)
     
     organization_type = models.ForeignKey(OrganizationType, on_delete=models.PROTECT)
@@ -77,7 +77,7 @@ class Organization(BaseModel):
     
     address = models.OneToOneField(
         Address,
-        on_delete=models.CASCADE,
+        on_delete=models.SET_NULL,
         related_name='organization',
         null=True,
         blank=True

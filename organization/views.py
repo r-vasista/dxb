@@ -19,10 +19,11 @@ from organization.models import (
 )
 from organization.serializers import (
     AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer,
-    UpdateOrganizationProfileFieldSerializer, OrganizationInviteSerializer, AcceptInviteSerializer, OrganizationMemberSerializer
+    UpdateOrganizationProfileFieldSerializer, OrganizationInviteSerializer, AcceptInviteSerializer, OrganizationMemberSerializer, 
+    OrganizationSerializer
 )
 from organization.choices import (
-    OrgInviteStatus
+    OrgInviteStatus, OrganizationStatus, VisibilityStatus
 )
 from organization.utils import (
     verify_otp
@@ -41,6 +42,92 @@ from core.services import success_response, error_response, send_custom_email
 
 
 User = get_user_model()
+
+
+class SendRegisterOTPIView(APIView):
+    """
+    API endpoint to send an OTP to an email address for registration verification.
+
+    This view checks whether the email is already registered, and if not,
+    sends an OTP to the email for verification during the signup process.
+
+    Request Body:
+    {
+        "email": "org@example.com"
+    }
+
+    Responses:
+    - 201: OTP sent successfully.
+    - 400: Email is missing or already in use.
+    - 500: Failed to send OTP or internal server error.
+    """
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+
+            if not email:
+                raise ValueError('Email is required.')
+            
+            if User.objects.filter(email=email).exists():
+                raise ValidationError('Account with this email already exists.')
+
+            # Send OTP via SMS
+            sent, message = send_register_otp_to_email(email)
+            if not sent:
+                return Response(error_response(f'Failed to send OTP, {message}'), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(success_response('OTP sent successfully'), status=status.HTTP_201_CREATED)
+        except ValueError as e:
+                return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class OrganizationTypeListView(APIView):
+    """
+    API endpoint to fetch a list of active organization types.
+
+    This view returns a list of organization types that are marked as active in the system.
+
+    Request:
+    - GET /api/organization-types/
+
+    Response:
+    - 200: List of organization types.
+    - 500: Internal server error.
+    """
+    def get(self, request):
+        try:
+            org_types = OrganizationType.objects.filter(is_active=True)
+            serializer = OrganizationTypeSerializer(org_types, many=True)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class IndustryTypeListView(APIView):
+    """
+    API endpoint to fetch a list of active industry types.
+
+    This view returns a list of industry types that are marked as active in the system.
+
+    Request:
+    - GET /api/industry-types/
+
+    Response:
+    - 200: List of industry types.
+    - 500: Internal server error.
+    """
+    def get(self, request):
+        try:
+            industries = IndustryType.objects.filter(is_active=True)
+            serializer = IndustryTypeSerializer(industries, many=True)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class RegisterOrganizationAPIView(APIView):
     """
@@ -141,87 +228,112 @@ class RegisterOrganizationAPIView(APIView):
             return Response(error_response({str(e)}), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class SendRegisterOTPIView(APIView):
+
+class OrganizationDetailAPIView(APIView):
     """
-    API endpoint to send an OTP to an email address for registration verification.
-
-    This view checks whether the email is already registered, and if not,
-    sends an OTP to the email for verification during the signup process.
-
-    Request Body:
-    {
-        "email": "org@example.com"
-    }
-
-    Responses:
-    - 201: OTP sent successfully.
-    - 400: Email is missing or already in use.
-    - 500: Failed to send OTP or internal server error.
+    API for retrieving, updating, or deleting an organization.
+    
+    - GET: Fetch organization details.
+    - PUT: Update organization details.
+    - DELETE: Soft-delete (or deactivate) the organization.
+    
+    URL: /api/organization/<int:pk>/
     """
-    def post(self, request):
+
+    def get(self, request, pk):
         try:
-            email = request.data.get('email')
+            organization = get_object_or_404(Organization, pk=pk, is_active=True, status=OrganizationStatus.ACTIVE)
+            serializer = OrganizationSerializer(organization)
+            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            if not email:
-                raise ValueError('Email is required.')
+    def put(self, request, pk):
+        try:
+            organization = get_object_or_404(Organization, pk=pk, is_active=True)
             
-            if User.objects.filter(email=email).exists():
-                raise ValidationError('Account with this email already exists.')
+            data = request.data
+            org_data = data.copy()
+            address_data = org_data.pop('address', None)  # Remove address from main data
 
-            # Send OTP via SMS
-            sent, message = send_register_otp_to_email(email)
-            if not sent:
-                return Response(error_response(f'Failed to send OTP, {message}'), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            serializer = OrganizationSerializer(organization, data=org_data, partial=True)
+            serializer.is_valid(raise_exception=True)
 
-            return Response(success_response('OTP sent successfully'), status=status.HTTP_201_CREATED)
-        except ValueError as e:
-                return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+            with transaction.atomic():
+                serializer.save()
+
+                # Handle address update if provided
+                if address_data:
+                    if organization.address:
+                        address_serializer = AddressSerializer(organization.address, data=address_data, partial=True)
+                        address_serializer.is_valid(raise_exception=True)
+                        address_serializer.save()
+                    else:
+                        # In case no address exists yet
+                        address_serializer = AddressSerializer(data=address_data)
+                        address_serializer.is_valid(raise_exception=True)
+                        address = address_serializer.save()
+                        organization.address = address
+                        organization.save()
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
-class OrganizationTypeListView(APIView):
-    """
-    API endpoint to fetch a list of active organization types.
-
-    This view returns a list of organization types that are marked as active in the system.
-
-    Request:
-    - GET /api/organization-types/
-
-    Response:
-    - 200: List of organization types.
-    - 500: Internal server error.
-    """
-    def get(self, request):
+    def delete(self, request, pk):
         try:
-            org_types = OrganizationType.objects.filter(is_active=True)
-            serializer = OrganizationTypeSerializer(org_types, many=True)
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            organization = get_object_or_404(Organization, pk=pk, is_active=True)
+            organization.is_active = False
+            organization.status = OrganizationStatus.INACTIVE
+            organization.save()
+            return Response(success_response("Organization deleted successfully."), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class IndustryTypeListView(APIView):
+class OrganizationListAPIView(APIView):
     """
-    API endpoint to fetch a list of active industry types.
+    GET /api/organizations/
+    List all active and public organizations with optional filters.
 
-    This view returns a list of industry types that are marked as active in the system.
+    Query Params:
+    - industry_type: ID of IndustryType
+    - organization_type: ID of OrganizationType
+    - name: partial name match (case-insensitive)
 
-    Request:
-    - GET /api/industry-types/
-
-    Response:
-    - 200: List of industry types.
-    - 500: Internal server error.
+    Returns:
+    - 200: List of organizations
+    - 500: Internal server error
     """
+
     def get(self, request):
         try:
-            industries = IndustryType.objects.filter(is_active=True)
-            serializer = IndustryTypeSerializer(industries, many=True)
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            queryset = Organization.objects.filter(
+                is_active=True,
+                visibility_status=VisibilityStatus.PUBLIC,
+                status = OrganizationStatus.ACTIVE
+            )
+
+            industry_type = request.query_params.get('industry_type')
+            organization_type = request.query_params.get('organization_type')
+            name = request.query_params.get('name')
+
+            if industry_type:
+                queryset = queryset.filter(industry_type_id=industry_type)
+
+            if organization_type:
+                queryset = queryset.filter(organization_type_id=organization_type)
+
+            if name:
+                queryset = queryset.filter(name__icontains=name)
+
+            queryset = queryset.order_by('name')
+            serializer = OrganizationSerializer(queryset, many=True)
+            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
