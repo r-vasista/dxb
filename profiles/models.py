@@ -30,7 +30,8 @@ class Profile(BaseModel):
     username = models.CharField(max_length=200, unique=True, blank=True, null=True)
 
     bio = models.TextField(blank=True, null=True)
-    picture = models.ImageField(upload_to='profiles/logos/', blank=True, null=True)
+    profile_picture = models.ImageField(upload_to='profiles/profile_picture/', blank=True, null=True)
+    cover_picture = models.ImageField(upload_to='profiles/cover_picture/', blank=True, null=True)
     profile_type = models.CharField(
         max_length=20,
         choices=ProfileType.choices
@@ -61,7 +62,7 @@ class Profile(BaseModel):
         return self.following.count()
     
     @property
-    def friends_conut(self):
+    def friends_count(self):
         return self.friends.count()
 
 

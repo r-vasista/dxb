@@ -22,7 +22,7 @@ class ProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = [
-            'id', 'username', 'bio', 'picture', 'profile_type', 'visibility_status',
+            'id', 'username', 'bio', 'profile_picture', 'profile_type', 'cover_picture', 'visibility_status',
             'followers_count', 'friends_count', 'following_count',
             'organization', 'profile_fields'
         ]
@@ -42,7 +42,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['username', 'bio', 'picture', 'visibility_status']
+        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status']
         extra_kwargs = {
             'username': {'required': False}, 
         }
