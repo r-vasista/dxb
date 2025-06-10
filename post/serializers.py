@@ -14,6 +14,7 @@ class PostMediaSerializer(serializers.ModelSerializer):
 
 class PostSerializer(serializers.ModelSerializer):
     media = PostMediaSerializer(many=True, read_only=True)
+    username = serializers.CharField(source='profile.username')
 
     class Meta:
         model = Post
