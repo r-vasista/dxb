@@ -1,9 +1,48 @@
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenObtainSerializer
+from rest_framework_simplejwt.settings import api_settings
+from rest_framework_simplejwt.tokens import RefreshToken
+from django.contrib.auth.models import update_last_login
+from rest_framework.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from user.models import Role, Permission
 from organization.models import Organization
 
 User = get_user_model()
+
+class CustomTokenObtainPairSerializer(TokenObtainSerializer):
+    token_class = RefreshToken
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        refresh = self.get_token(self.user)
+
+        data["refresh"] = str(refresh)
+        data["access"] = str(refresh.access_token)
+
+        # Fetch profile (either directly or via organization)
+        profile = getattr(self.user, "profile", None)
+
+        if not profile and hasattr(self.user, "organization"):
+            profile = getattr(self.user.organization, "profile", None)
+
+        if profile:
+            data["profile_id"] = profile.id
+            data["profile_type"] = profile.profile_type
+            data['username'] =  profile.username
+        else:
+            data["profile_id"] = None
+            data["profile_type"] = None
+
+        # Optional: Add more user details
+        data["email"] = self.user.email
+        data["user_type"] = self.user.user_type.code
+
+        if api_settings.UPDATE_LAST_LOGIN:
+            update_last_login(None, self.user)
+
+        return data
 
 class UserSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)

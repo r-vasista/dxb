@@ -4,6 +4,7 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.utils.text import slugify
 from django.contrib.contenttypes.models import ContentType
 from django.db.models import Q, UniqueConstraint
+from django.contrib.contenttypes.fields import GenericRelation
 
 # Local imports
 from user.manager import CustomUserManager
@@ -11,13 +12,6 @@ from core.models import BaseModel, BaseTypeModel
 from user.choices import PermissionType, PermissionScope
 
 class Permission(BaseModel):
-    TYPE_CHOICES = [
-        ('view', 'View'),
-        ('create', 'Create'),
-        ('edit', 'Edit'),
-        ('delete', 'Delete'),
-    ]
-    
     code = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, related_name='permissions')

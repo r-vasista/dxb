@@ -5,6 +5,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
+from django.utils.dateparse import parse_datetime
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -13,10 +14,11 @@ from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
 
 # Local imports 
 from organization.models import (
-    OrganizationType, IndustryType, Organization, OrganizationProfileField, OrganizationMember
+    OrganizationType, IndustryType, Organization, OrganizationProfileField, OrganizationMember, OrganizationInvite
 )
 from organization.serializers import (
     AddressSerializer, RegisterOrganizationSerializer, OrganizationTypeSerializer, IndustryTypeSerializer, OrganizationProfileFieldSerializer,
@@ -24,7 +26,7 @@ from organization.serializers import (
     OrganizationSerializer
 )
 from organization.choices import (
-    OrgInviteStatus, OrganizationStatus, VisibilityStatus
+    OrgInviteStatus, OrganizationStatus
 )
 from organization.utils import (
     verify_otp
@@ -33,11 +35,18 @@ from organization.services import (
     send_register_otp_to_email
 )
 from user.permissions import (
-    HasPermission, ReadOnly
+    HasPermission, ReadOnly, IsOrgAdminOrMember
 )
 
 from user.models import UserType, Role
 from user.serializers import UserSerializer, RoleSerializer
+
+from profiles.models import (
+    Profile
+)
+from profiles.choices import (
+    ProfileType
+)
 
 from core.services import success_response, error_response, send_custom_email
 
@@ -233,9 +242,19 @@ class RegisterOrganizationAPIView(APIView):
 
                 organization_serializer = RegisterOrganizationSerializer(data=organization_data)
                 organization_serializer.is_valid(raise_exception=True)
-                organization_serializer.save()
+                organization = organization_serializer.save()
 
-                return Response(success_response('Organization registered successfully.'), status=201)
+                profile = Profile.objects.create(organization=organization, profile_type = ProfileType.ORGANIZATION)
+
+                refresh = RefreshToken.for_user(user)
+                token_data = {
+                    'access': str(refresh.access_token),
+                    'refresh': str(refresh),
+                    'profile_type': profile.profile_type,
+                    'profile_id': profile.id
+                }
+
+                return Response(success_response(token_data), status=status.HTTP_201_CREATED)
 
         except ObjectDoesNotExist as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
@@ -259,7 +278,7 @@ class OrganizationDetailAPIView(APIView):
     URL: /api/organization/<int:pk>/
     """
 
-    permission_classes = [HasPermission ]
+    permission_classes = [HasPermission, IsOrgAdminOrMember]
     method_permissions = {
         'PUT': 'update_org',
         'DELETE': 'delete_org',
@@ -267,7 +286,7 @@ class OrganizationDetailAPIView(APIView):
 
     def get(self, request, pk):
         try:
-            organization = get_object_or_404(Organization, pk=pk, is_active=True, status=OrganizationStatus.ACTIVE)
+            organization = get_object_or_404(Organization, pk=pk, is_active=True)
             serializer = OrganizationSerializer(organization)
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
@@ -342,7 +361,6 @@ class OrganizationListAPIView(APIView):
         try:
             queryset = Organization.objects.filter(
                 is_active=True,
-                visibility_status=VisibilityStatus.PUBLIC,
                 status = OrganizationStatus.ACTIVE
             )
 
@@ -375,7 +393,7 @@ class OrganizationProfileFieldView(APIView):
     Create single or multiple profile fields for an organization
     """
 
-    permission_classes = [HasPermission]
+    permission_classes = [HasPermission, IsOrgAdminOrMember]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
     method_permissions = {
         'POST': 'create_org_prof_field',
@@ -486,7 +504,8 @@ class OrganizationProfileFieldView(APIView):
 
 
 class SendInviteAPIView(APIView):
-    # permission_classes = [IsOrgAdmin]
+    permission_classes = [HasPermission, IsOrgAdminOrMember]
+    permission_required = 'create_org_invite'
 
     def post(self, request, org_id):
         try:
@@ -515,10 +534,53 @@ class SendInviteAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ListOrganizationInvitesAPIView(APIView):
+    permission_classes = [HasPermission, IsOrgAdminOrMember]
+    permission_required = 'view_org_invite'
+
+    def get(self, request, org_id):
+        try:
+            organization = get_object_or_404(Organization, pk=org_id)
+            invites = OrganizationInvite.objects.filter(organization=organization)
+
+            # Optional filters
+            role_id = request.query_params.get('role')
+            status_filter = request.query_params.get('status')
+            invited_by = request.query_params.get('invited_by')
+            expires_after = request.query_params.get('expires_at__gte')
+
+            if role_id:
+                invites = invites.filter(role_id=role_id)
+            if status_filter:
+                invites = invites.filter(status=status_filter)
+            if invited_by:
+                invites = invites.filter(invited_by_id=invited_by)
+            if expires_after:
+                try:
+                    dt = parse_datetime(expires_after)
+                    if dt:
+                        invites = invites.filter(expires_at__gte=dt)
+                except Exception:
+                    return Response(error_response("Invalid 'expires_at__gte' datetime format."), status=status.HTTP_400_BAD_REQUEST)
+
+            invites = invites.order_by('-created_at')
+            serializer = OrganizationInviteSerializer(invites, many=True)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class AcceptInviteAPIView(APIView):
     """
     API to accept an invitation and register a user to an organization.
     """
+
+    permission_classes = [AllowAny]
+
     def post(self, request):
         try:
             serializer = AcceptInviteSerializer(data=request.data)
@@ -573,6 +635,9 @@ class OrganizationMembersListAPIView(APIView):
     """
     API to list all members of a specific organization.
     """
+    permission_classes = [HasPermission, IsOrgAdminOrMember]
+    permission_required ='view_org_member'
+
     def get(self, request, org_id):
         try:
             organization = get_object_or_404(Organization, pk=org_id)

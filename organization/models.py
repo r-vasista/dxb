@@ -71,10 +71,6 @@ class Organization(BaseModel):
     organization_type = models.ForeignKey(OrganizationType, on_delete=models.PROTECT, blank=True, null=True)
     industry_type = models.ForeignKey(IndustryType, on_delete=models.PROTECT, blank=True, null=True)
     
-    description = models.TextField(blank=True, null=True)
-    bio = models.TextField(blank=True, null=True)
-    logo = models.ImageField(upload_to='organizations/logos/', blank=True, null=True)
-    
     address = models.OneToOneField(
         Address,
         on_delete=models.SET_NULL,
@@ -89,11 +85,6 @@ class Organization(BaseModel):
         default=OrganizationStatus.PENDING
     )
 
-    visibility_status = models.CharField(
-        max_length=20,
-        choices = VisibilityStatus.choices,
-        default = VisibilityStatus.PUBLIC
-    )
 
     class Meta:
         indexes = [

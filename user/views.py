@@ -14,11 +14,11 @@ from django.db.models import Q
 # Local imports
 from core.services import success_response, error_response
 from user.models import Role, Permission
-from user.serializers import RoleSerializer, PermissionSerializer
+from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer
 from user.choices import PermissionScope
 
 class LoginView(TokenObtainPairView):
-    serializer_class = TokenObtainPairSerializer
+    serializer_class = CustomTokenObtainPairSerializer
 
     def post(self, request, *args, **kwargs):
         try:
