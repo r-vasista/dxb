@@ -278,11 +278,13 @@ class OrganizationDetailAPIView(APIView):
     URL: /api/organization/<int:pk>/
     """
 
-    permission_classes = [HasPermission, IsOrgAdminOrMember]
-    method_permissions = {
-        'PUT': 'update_org',
-        'DELETE': 'delete_org',
-    }
+    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    # method_permissions = {
+    #     'PUT': 'update_org',
+    #     'DELETE': 'delete_org',
+    # }
+
+    permission_classes = [AllowAny]
 
     def get(self, request, pk):
         try:
@@ -393,13 +395,15 @@ class OrganizationProfileFieldView(APIView):
     Create single or multiple profile fields for an organization
     """
 
-    permission_classes = [HasPermission, IsOrgAdminOrMember]
-    parser_classes = (MultiPartParser, FormParser, JSONParser)
-    method_permissions = {
-        'POST': 'create_org_prof_field',
-        'PUT': 'update_org_prof_field',
-        'DELETE': 'delete_org_prof_field',
-    }
+    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    # parser_classes = (MultiPartParser, FormParser, JSONParser)
+    # method_permissions = {
+    #     'POST': 'create_org_prof_field',
+    #     'PUT': 'update_org_prof_field',
+    #     'DELETE': 'delete_org_prof_field',
+    # }
+
+    permission_classes = [AllowAny]
 
     def post(self, request, org_id):
         try:
@@ -504,8 +508,9 @@ class OrganizationProfileFieldView(APIView):
 
 
 class SendInviteAPIView(APIView):
-    permission_classes = [HasPermission, IsOrgAdminOrMember]
-    permission_required = 'create_org_invite'
+    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    # permission_required = 'create_org_invite'
+    permission_classes = [AllowAny]
 
     def post(self, request, org_id):
         try:
@@ -535,8 +540,9 @@ class SendInviteAPIView(APIView):
 
 
 class ListOrganizationInvitesAPIView(APIView):
-    permission_classes = [HasPermission, IsOrgAdminOrMember]
-    permission_required = 'view_org_invite'
+    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    # permission_required = 'view_org_invite'
+    permission_classes = [AllowAny]
 
     def get(self, request, org_id):
         try:
@@ -635,8 +641,9 @@ class OrganizationMembersListAPIView(APIView):
     """
     API to list all members of a specific organization.
     """
-    permission_classes = [HasPermission, IsOrgAdminOrMember]
-    permission_required ='view_org_member'
+    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    # permission_required ='view_org_member'
+    permission_classes = [AllowAny]
 
     def get(self, request, org_id):
         try:

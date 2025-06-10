@@ -47,12 +47,6 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
             'username': {'required': False}, 
         }
 
-    # def validate_username(self, value):
-    #     if Profile.objects.exclude(id=self.instance.id).filter(username=value).exists():
-    #         raise serializers.ValidationError("This username is already taken.")
-    #     return value
-
-
 class ProfileFieldSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
 

@@ -3,7 +3,7 @@ from post.models import Post, PostMedia
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ['id', 'organization', 'user', 'title']
+    list_display = ['id', 'profile', 'title']
 
 @admin.register(PostMedia)
 class PostMediaAdmin(admin.ModelAdmin):
