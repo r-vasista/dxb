@@ -5,7 +5,7 @@ from django.urls import path
 from organization.views import (
     SendRegisterOTPIView, RegisterOrganizationAPIView, OrganizationTypeListView, IndustryTypeListView, OrganizationProfileFieldView,
     SendInviteAPIView, AcceptInviteAPIView, OrganizationMembersListAPIView, OrganizationDetailAPIView, OrganizationListAPIView,
-    ListOrganizationInvitesAPIView
+    ListOrganizationInvitesAPIView, SendForgotPasswordOTPIView, ResetPasswordWithOTPAPIView
 )
 
 urlpatterns = [
@@ -20,5 +20,7 @@ urlpatterns = [
     path('list-invites/<str:org_id>/', ListOrganizationInvitesAPIView.as_view(), name='list-invites'),
     path('accept-invite/', AcceptInviteAPIView.as_view(), name='accept-invite'),
     path('members/<int:org_id>/', OrganizationMembersListAPIView.as_view(), name='organization-members'),
+    path('send-forgot-otp/', SendForgotPasswordOTPIView.as_view(), name='send-forgot-otp'),
+    path('reset-password/', ResetPasswordWithOTPAPIView.as_view(), name='reset-password')
     
 ]

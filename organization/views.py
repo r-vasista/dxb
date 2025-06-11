@@ -658,3 +658,90 @@ class OrganizationMembersListAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SendForgotPasswordOTPIView(APIView):
+    """
+    POST /api/auth/forgot-password/send-otp/
+
+    Sends an OTP to the email address for password reset.
+
+    Request Body:
+    {
+        "email": "user@example.com"
+    }
+
+    Responses:
+    - 201: OTP sent successfully.
+    - 400: Email missing or not registered.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            if not email:
+                raise ValueError("Email is required.")
+
+            if not User.objects.filter(email=email).exists():
+                raise ValidationError("No account found with this email.")
+
+            sent, message = send_register_otp_to_email(email)
+            if not sent:
+                return Response(error_response(f"Failed to send OTP: {message}"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(success_response("OTP sent successfully"), status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ResetPasswordWithOTPAPIView(APIView):
+    """
+    POST /api/auth/forgot-password/reset/
+
+    Resets the password after verifying OTP.
+
+    Request Body:
+    {
+        "email": "user@example.com",
+        "otp": "123456",
+        "new_password": "NewStrongPassword123"
+    }
+
+    Responses:
+    - 200: Password reset successful.
+    - 400: Validation errors or OTP failure.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            email = request.data.get('email')
+            otp = request.data.get('otp')
+            new_password = request.data.get('new_password')
+
+            if not all([email, otp, new_password]):
+                raise ValueError("Email, OTP, and new password are required.")
+
+            if not verify_otp(email, otp):
+                return Response(error_response("Invalid or expired OTP."), status=status.HTTP_400_BAD_REQUEST)
+
+            user = User.objects.get(email=email)
+            user.set_password(new_password)
+            user.save()
+
+            return Response(success_response("Password has been reset successfully."), status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response(error_response("User not found."), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
