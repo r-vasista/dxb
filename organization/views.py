@@ -6,6 +6,8 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
+from django.utils.http import urlsafe_base64_decode
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -741,6 +743,96 @@ class ResetPasswordWithOTPAPIView(APIView):
 
         except User.DoesNotExist:
             return Response(error_response("User not found."), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+from django.utils.http import urlsafe_base64_encode
+from django.utils.encoding import force_bytes
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+
+class SendPasswordResetLinkAPIView(APIView):
+    """
+    POST /api/auth/forgot-password/send-link/
+
+    Sends a password reset link to the registered email.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            email = request.data.get("email")
+            if not email:
+                raise ValueError("Email is required.")
+
+            user = User.objects.filter(email=email).first()
+            if not user:
+                raise ValidationError("No account found with this email.")
+
+            uid = urlsafe_base64_encode(force_bytes(user.pk))
+            token = PasswordResetTokenGenerator().make_token(user)
+
+            # Frontend URL for resetting password
+            reset_url = f"{settings.FRONTEND_URL}/reset-password/?uid={uid}&token={token}"
+
+            subject = "Reset your password"
+            text_content = f"Click the link below to reset your password:\n{reset_url}"
+            html_template = "password_reset_email.html"
+            context = {"reset_url": reset_url}
+
+            status_ok, message = send_custom_email(
+                subject=subject,
+                text_content=text_content,
+                template_address=html_template,
+                context=context,
+                recipient_list=[email]
+            )
+
+            if not status_ok:
+                return Response(error_response(f"Failed to send email: {message}"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            return Response(success_response("Password reset link sent."), status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ResetPasswordViaLinkAPIView(APIView):
+    """
+    POST /api/auth/forgot-password/confirm/
+
+    Confirms reset token and updates the password.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        try:
+            uidb64 = request.data.get("uid")
+            token = request.data.get("token")
+            new_password = request.data.get("new_password")
+
+            if not all([uidb64, token, new_password]):
+                raise ValueError("Missing required fields.")
+
+            uid = urlsafe_base64_decode(uidb64).decode()
+            user = User.objects.get(pk=uid)
+
+            if not PasswordResetTokenGenerator().check_token(user, token):
+                return Response(error_response("Invalid or expired token."), status=status.HTTP_400_BAD_REQUEST)
+
+            user.set_password(new_password)
+            user.save()
+
+            return Response(success_response("Password reset successful."), status=status.HTTP_200_OK)
+
+        except User.DoesNotExist:
+            return Response(error_response("Invalid user."), status=status.HTTP_400_BAD_REQUEST)
         except ValueError as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
