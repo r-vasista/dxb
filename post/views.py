@@ -25,7 +25,7 @@ from post.models import (
     Post, PostMedia
 )
 from post.serializers import (
-    PostSerializer
+    PostSerializer, ImageMediaSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -164,6 +164,41 @@ class AllPostsAPIView(APIView, PaginationMixin):
 
             return self.get_paginated_response(serializer.data)
         
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfileImageMediaListView(APIView, PaginationMixin):
+    """
+    GET /api/profiles/{profile_id}/media/images/
+    Returns only image media files for a given profile.
+    """
+
+    def get(self, request, profile_id=None, username=None):
+        try:
+            if profile_id:
+                profile = get_object_or_404(Profile, id=profile_id)
+            elif username:
+                profile = get_object_or_404(Profile, username=username)
+            else:
+                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+
+            # Get all post IDs for this profile
+            post_ids = Post.objects.filter(profile=profile).values_list('id', flat=True)
+
+            # Filter PostMedia by those post IDs and media_type='image'
+            image_media = PostMedia.objects.filter(
+                post_id__in=post_ids,
+                media_type='image'
+            ).order_by('order')
+
+            paginated_queryset = self.paginate_queryset(image_media, request)
+            serializer = ImageMediaSerializer(paginated_queryset, many=True)
+
+            return self.get_paginated_response(serializer.data)
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:

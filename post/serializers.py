@@ -19,3 +19,9 @@ class PostSerializer(serializers.ModelSerializer):
     class Meta:
         model = Post
         fields = '__all__'
+
+
+class ImageMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PostMedia
+        fields = ['id', 'file', 'order']
