@@ -190,8 +190,7 @@ class ProfileImageMediaListView(APIView, PaginationMixin):
 
             # Filter PostMedia by those post IDs and media_type='image'
             image_media = PostMedia.objects.filter(
-                post_id__in=post_ids,
-                media_type='image'
+                post_id__in=post_ids
             ).order_by('order')
 
             paginated_queryset = self.paginate_queryset(image_media, request)
