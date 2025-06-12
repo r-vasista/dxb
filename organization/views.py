@@ -32,7 +32,7 @@ from organization.utils import (
     verify_otp
 )
 from organization.services import (
-    send_register_otp_to_email
+    send_register_otp_to_email, send_forgot_otp_to_email
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -687,7 +687,7 @@ class SendForgotPasswordOTPIView(APIView):
             if not User.objects.filter(email=email).exists():
                 raise ValidationError("No account found with this email.")
 
-            sent, message = send_register_otp_to_email(email)
+            sent, message = send_forgot_otp_to_email(email)
             if not sent:
                 return Response(error_response(f"Failed to send OTP: {message}"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
