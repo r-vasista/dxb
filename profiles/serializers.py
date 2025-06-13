@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from profiles.models import (
-    ProfileField, Profile
+    ProfileField, Profile, FriendRequest, ProfileFieldSection
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -82,3 +82,36 @@ class UpdateProfileFieldSerializer(serializers.ModelSerializer):
             data = {**self.initial_data, **data}
         validate_profile_field_data(data, instance=instance)
         return data
+    
+
+class ProfileFieldSectionSerializer(serializers.ModelSerializer):
+    fields = ProfileFieldSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = ProfileFieldSection
+        fields = ['id', 'title', 'description', 'display_order', 'fields']
+
+class ProfileDetailSerializer(serializers.ModelSerializer):
+    field_sections = ProfileFieldSectionSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Profile
+        fields = [
+            'id', 'username', 'bio', 'profile_picture', 'cover_picture',
+            'profile_type', 'visibility_status',
+            'followers_count', 'following_count', 'friends_count',
+            'field_sections'
+        ]
+
+class FriendRequestSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FriendRequest
+        fields = ['id', 'from_profile', 'to_profile', 'status']
+        read_only_fields = ['id', 'status']
+
+
+class UpdateProfileFieldSectionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProfileFieldSection
+        fields = ['title', 'description', 'display_order']
+    

@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
+from django.db.models import Q
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -23,10 +24,11 @@ from core.services import (
     success_response, error_response
 )
 from profiles.models import (
-    Profile, ProfileField
+    Profile, ProfileField, FriendRequest, ProfileFieldSection,
 )
 from profiles.serializers import (
-    ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer
+    ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
+    ProfileDetailSerializer, UpdateProfileFieldSectionSerializer
 )
 
 
@@ -41,7 +43,7 @@ class ProfileView(APIView):
     def get(self, request, profile_id):
         try:
             profile = get_object_or_404(Profile, id=profile_id)
-            serializer = ProfileSerializer(profile)
+            serializer = ProfileDetailSerializer(profile)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -79,27 +81,41 @@ class ProfileFieldView(APIView):
     GET/PUT/DELETE: Operate on dynamic fields for a profile (user/org).
     """
 
-    # permission_classes = [HasPermission, IsOrgAdminOrMember]
+    permission_classes = [IsAuthenticated]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request, profile_id):
         try:
-            get_object_or_404(Profile, id=profile_id)
+            profile = get_object_or_404(Profile, id=profile_id)
 
-            data = request.data
-            if not isinstance(data, list):
-                data = [data]
+            section_data = request.data.get('section')
+            fields_data = request.data.get('fields', [])
+
+            if not section_data or not isinstance(fields_data, list):
+                return Response(error_response("Both 'section' and 'fields' are required."), status=status.HTTP_400_BAD_REQUEST)
 
             created_fields = []
+
             with transaction.atomic():
-                for field_data in data:
+                # Check if section exists for the profile, else create it
+                section, created = ProfileFieldSection.objects.get_or_create(
+                    profile=profile,
+                    title=section_data.get("title"),
+                    defaults={
+                        "display_order": section_data.get("display_order", 0),
+                        "created_by": request.user
+                    }
+                )
+
+                for field_data in fields_data:
                     field_data = field_data.copy()
                     field_data['profile'] = profile_id
+                    field_data['section'] = section.id
                     field_data['created_by'] = request.user.id
 
                     serializer = ProfileFieldSerializer(data=field_data)
                     serializer.is_valid(raise_exception=True)
-                    field = serializer.save()
+                    serializer.save()
                     created_fields.append(serializer.data)
 
             return Response(success_response(created_fields), status=status.HTTP_201_CREATED)
@@ -191,9 +207,170 @@ class ProfileDetailView(APIView):
     def get(self, request, username):
         try:
             profile = get_object_or_404(Profile, username=username)
-            serializer = ProfileSerializer(profile)
+            serializer = ProfileDetailSerializer(profile)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SendFriendRequestView(APIView):
+    """
+    POST /api/friends/send-request/
+    {
+        "to_profile_id": <int>
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            from_profile = request.user.profile
+            to_profile_id = request.data.get('to_profile_id')
+
+            if not to_profile_id:
+                return error_response("to_profile_id is required.")
+
+            if from_profile.id == int(to_profile_id):
+                return error_response("Cannot send friend request to yourself.")
+
+            to_profile = get_object_or_404(Profile, id=to_profile_id)
+
+            # Already friends
+            if to_profile in from_profile.friends.all():
+                return error_response("You are already friends.")
+
+            # Friend request already exists in either direction
+            if FriendRequest.objects.filter(
+                Q(from_profile=from_profile, to_profile=to_profile) |
+                Q(from_profile=to_profile, to_profile=from_profile)
+            ).exclude(status__in=['rejected', 'cancelled']).exists():
+                return error_response("A friend request already exists between these profiles.")
+
+            # Create friend request
+            friend_request = FriendRequest.objects.create(
+                from_profile=from_profile,
+                to_profile=to_profile
+            )
+
+            serializer = FriendRequestSerializer(friend_request)
+            return success_response("Friend request sent.", serializer.data, status=201)
+
+        except Exception as e:
+            return error_response("Failed to send friend request.", {"detail": str(e)}, status=500)
+
+
+class CancelFriendRequestView(APIView):
+    """
+    POST /api/friends/cancel-request/
+    {
+        "request_id": <int>
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = request.user.profile
+            request_id = request.data.get('request_id')
+
+            if not request_id:
+                return error_response("request_id is required.")
+
+            friend_request = get_object_or_404(FriendRequest, id=request_id, from_profile=profile)
+
+            if friend_request.status != 'pending':
+                return error_response("Only pending friend requests can be cancelled.")
+
+            friend_request.status = 'cancelled'
+            friend_request.save()
+
+            return success_response("Friend request cancelled.")
+
+        except Exception as e:
+            return error_response("Failed to cancel friend request.", {"detail": str(e)}, status=500)
+
+
+class RespondFriendRequestView(APIView):
+    """
+    POST /api/friends/respond-request/
+    {
+        "request_id": <int>,
+        "action": "accept" | "reject"
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = request.user.profile
+            request_id = request.data.get('request_id')
+            action = request.data.get('action')
+
+            if not request_id:
+                return error_response("request_id is required.")
+
+            if action not in ['accept', 'reject']:
+                return error_response("Invalid action. Must be 'accept' or 'reject'.")
+
+            friend_request = get_object_or_404(FriendRequest, id=request_id, to_profile=profile)
+
+            if friend_request.status != 'pending':
+                return error_response("Friend request is not pending.")
+
+            if action == 'accept':
+                friend_request.status = 'accepted'
+                friend_request.save()
+
+                # Establish friendship (symmetrical)
+                from_profile = friend_request.from_profile
+                to_profile = friend_request.to_profile
+
+                from_profile.friends.add(to_profile)
+                to_profile.friends.add(from_profile)
+
+                return success_response("Friend request accepted.")
+
+            elif action == 'reject':
+                friend_request.status = 'rejected'
+                friend_request.save()
+                return success_response("Friend request rejected.")
+
+        except Exception as e:
+            return error_response("Failed to respond to friend request.", {"detail": str(e)}, status=500)
+
+
+class ProfileFieldSectionView(APIView):
+    """
+    PUT /api/profiles/sections/<int:section_id>/
+    Updates title, description, or display_order of a profile section.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, section_id):
+        try:
+            section = get_object_or_404(ProfileFieldSection, id=section_id)
+            
+            serializer = UpdateProfileFieldSectionSerializer(section, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, section_id):
+        try:
+            section = get_object_or_404(ProfileFieldSection, id=section_id)
+            section.delete()
+
+            return Response(success_response(f"Section '{section.title}' deleted successfully."), status=status.HTTP_200_OK)
+
+        except Http404:
+            return Response(error_response("Section not found."), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

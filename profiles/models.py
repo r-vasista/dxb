@@ -90,40 +90,27 @@ class Profile(BaseModel):
         return f"Profile for {'User: ' + str(self.user) if self.user else 'Org: ' + str(self.organization)}"
 
 
-class FriendRequest(BaseModel):
+class ProfileFieldSection(BaseModel):
     """
-    Friend request between two profiles: from -> to.
+    Represents a group/section for organizing profile fields (like tabs or grouped fields).
     """
-    from_profile = models.ForeignKey(
+    profile = models.ForeignKey(
         Profile,
         on_delete=models.CASCADE,
-        related_name='sent_friend_requests'
+        related_name='field_sections'
     )
-    to_profile = models.ForeignKey(
-        Profile,
-        on_delete=models.CASCADE,
-        related_name='received_friend_requests'
-    )
-    status = models.CharField(
-        max_length=20,
-        choices=[
-            ('pending', 'Pending'),
-            ('accepted', 'Accepted'),
-            ('rejected', 'Rejected'),
-            ('cancelled', 'Cancelled'),
-        ],
-        default='pending'
-    )
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
 
     class Meta:
-        unique_together = [('from_profile', 'to_profile')]
-        indexes = [
-            models.Index(fields=['from_profile', 'to_profile']),
-            models.Index(fields=['status']),
-        ]
+        unique_together = ('profile', 'title')
+        ordering = ['profile', 'display_order']
 
     def __str__(self):
-        return f"{self.from_profile} → {self.to_profile} [{self.status}]"
+        return f"{self.profile} - Section: {self.title}"
+
 
 
 class ProfileField(BaseModel):
@@ -134,6 +121,13 @@ class ProfileField(BaseModel):
         Profile, 
         on_delete=models.CASCADE, 
         related_name='dynamic_fields'
+    )
+    section = models.ForeignKey(
+        ProfileFieldSection,
+        on_delete=models.CASCADE,
+        related_name='fields',
+        null=True,
+        blank=True
     )
 
     field_name = models.CharField(max_length=100)
@@ -205,3 +199,39 @@ class ProfileField(BaseModel):
 
         if not self.field_name or not self.field_name.strip():
             raise ValidationError("Field name cannot be empty.")
+
+
+class FriendRequest(BaseModel):
+    """
+    Friend request between two profiles: from -> to.
+    """
+    from_profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='sent_friend_requests'
+    )
+    to_profile = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name='received_friend_requests'
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'Pending'),
+            ('accepted', 'Accepted'),
+            ('rejected', 'Rejected'),
+            ('cancelled', 'Cancelled'),
+        ],
+        default='pending'
+    )
+
+    class Meta:
+        unique_together = [('from_profile', 'to_profile')]
+        indexes = [
+            models.Index(fields=['from_profile', 'to_profile']),
+            models.Index(fields=['status']),
+        ]
+
+    def __str__(self):
+        return f"{self.from_profile} → {self.to_profile} [{self.status}]"

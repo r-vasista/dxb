@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from profiles.models import (
-    Profile, ProfileField
+    Profile, ProfileField, ProfileFieldSection
 )
 
 @admin.register(Profile)
@@ -13,7 +13,15 @@ class ProfileAdmin(admin.ModelAdmin):
 
 @admin.register(ProfileField)
 class ProfileFieldAdmin(admin.ModelAdmin):
-    list_display = ['id', 'profile', 'field_name', 'field_type']
-    search_fields = ['profile', 'field_name', 'field_type']
-    list_filter = ['profile', 'field_name', 'field_type']
+    list_display = ['id', 'profile', 'section', 'field_name', 'field_type']
+    search_fields = ['id', 'profile', 'field_name', 'section', 'field_type']
+    list_filter = ['id', 'profile', 'field_name', 'section', 'field_type']
+
+
+@admin.register(ProfileFieldSection)
+class ProfileFieldSectionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'title']
+    search_fields = ['id', 'profile', 'title']
+    list_filter = ['id', 'profile', 'title']
+    
 
