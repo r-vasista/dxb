@@ -21,7 +21,7 @@ from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
 )
 from core.services import (
-    success_response, error_response
+    success_response, error_response, get_user_profile
 )
 from profiles.models import (
     Profile, ProfileField, FriendRequest, ProfileFieldSection,
@@ -226,27 +226,27 @@ class SendFriendRequestView(APIView):
 
     def post(self, request):
         try:
-            from_profile = request.user.profile
+            from_profile = get_user_profile(request.user)
             to_profile_id = request.data.get('to_profile_id')
 
             if not to_profile_id:
-                return error_response("to_profile_id is required.")
+                return Response(error_response("to_profile_id is required."), status=status.HTTP_404_NOT_FOUND)
 
             if from_profile.id == int(to_profile_id):
-                return error_response("Cannot send friend request to yourself.")
+                return Response(error_response("Cannot send friend request to yourself."), status=status.HTTP_404_NOT_FOUND)
 
             to_profile = get_object_or_404(Profile, id=to_profile_id)
 
             # Already friends
             if to_profile in from_profile.friends.all():
-                return error_response("You are already friends.")
+                return Response(error_response("You are already friends."), status=status.HTTP_404_NOT_FOUND)
 
             # Friend request already exists in either direction
             if FriendRequest.objects.filter(
                 Q(from_profile=from_profile, to_profile=to_profile) |
                 Q(from_profile=to_profile, to_profile=from_profile)
             ).exclude(status__in=['rejected', 'cancelled']).exists():
-                return error_response("A friend request already exists between these profiles.")
+                return Response(error_response("A friend request already exists between these profiles."),status=status.HTTP_404_NOT_FOUND)
 
             # Create friend request
             friend_request = FriendRequest.objects.create(
@@ -255,10 +255,14 @@ class SendFriendRequestView(APIView):
             )
 
             serializer = FriendRequestSerializer(friend_request)
-            return success_response("Friend request sent.", serializer.data, status=201)
+            return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return error_response("Failed to send friend request.", {"detail": str(e)}, status=500)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class CancelFriendRequestView(APIView):
@@ -272,24 +276,27 @@ class CancelFriendRequestView(APIView):
 
     def post(self, request):
         try:
-            profile = request.user.profile
+            profile = get_user_profile(request.user)
             request_id = request.data.get('request_id')
 
             if not request_id:
-                return error_response("request_id is required.")
+                return Response(error_response("request_id is required."), status=status.HTTP_400_BAD_REQUEST)
 
             friend_request = get_object_or_404(FriendRequest, id=request_id, from_profile=profile)
 
             if friend_request.status != 'pending':
-                return error_response("Only pending friend requests can be cancelled.")
+                return Response(error_response("Only pending friend requests can be cancelled."), status=status.HTTP_400_BAD_REQUEST)
 
-            friend_request.status = 'cancelled'
-            friend_request.save()
+            friend_request.delete()
 
-            return success_response("Friend request cancelled.")
+            return Response(success_response("Friend request cancelled."), status=status.HTTP_200_OK)
 
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return error_response("Failed to cancel friend request.", {"detail": str(e)}, status=500)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class RespondFriendRequestView(APIView):
@@ -304,20 +311,20 @@ class RespondFriendRequestView(APIView):
 
     def post(self, request):
         try:
-            profile = request.user.profile
+            profile = get_user_profile(request.user)
             request_id = request.data.get('request_id')
             action = request.data.get('action')
 
             if not request_id:
-                return error_response("request_id is required.")
+                return Response(error_response("request_id is required."), status=status.HTTP_404_NOT_FOUND)
 
             if action not in ['accept', 'reject']:
-                return error_response("Invalid action. Must be 'accept' or 'reject'.")
+                return Response(error_response("Invalid action. Must be 'accept' or 'reject'."), status=status.HTTP_404_NOT_FOUND)
 
             friend_request = get_object_or_404(FriendRequest, id=request_id, to_profile=profile)
 
             if friend_request.status != 'pending':
-                return error_response("Friend request is not pending.")
+                return Response(error_response("Friend request is not pending."), status=status.HTTP_404_NOT_FOUND)
 
             if action == 'accept':
                 friend_request.status = 'accepted'
@@ -330,15 +337,19 @@ class RespondFriendRequestView(APIView):
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
 
-                return success_response("Friend request accepted.")
+                return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
                 friend_request.status = 'rejected'
                 friend_request.save()
-                return success_response("Friend request rejected.")
+                return Response(success_response("Friend request rejected."), status=status.HTTP_200_OK)
 
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return error_response("Failed to respond to friend request.", {"detail": str(e)}, status=500)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class ProfileFieldSectionView(APIView):

@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from profiles.models import (
-    Profile, ProfileField, ProfileFieldSection
+    Profile, ProfileField, ProfileFieldSection, FriendRequest
 )
 
 @admin.register(Profile)
@@ -25,3 +25,8 @@ class ProfileFieldSectionAdmin(admin.ModelAdmin):
     list_filter = ['id', 'profile', 'title']
     
 
+@admin.register(FriendRequest)
+class FriendRequestAdmin(admin.ModelAdmin):
+    list_display = ['id', 'from_profile', 'to_profile', 'status']
+    search_fields = ['id', 'from_profile', 'to_profile', 'status']
+    list_filter = ['id', 'from_profile', 'to_profile', 'status']

@@ -30,3 +30,11 @@ def send_custom_email(subject, text_content, template_address, context, recipien
     except Exception as e:
         return False, str(e)
 
+def get_user_profile(user):
+    # Fetch profile (either directly or via organization)
+    profile = getattr(user, "profile", None)
+
+    if not profile and hasattr(user, "organization"):
+        profile = getattr(user.organization, "profile", None)
+    
+    return profile
