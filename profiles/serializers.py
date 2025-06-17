@@ -124,3 +124,8 @@ class UpdateProfileFieldSectionSerializer(serializers.ModelSerializer):
         model = ProfileFieldSection
         fields = ['title', 'description', 'display_order']
     
+
+class ProfileListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'profile_picture', 'bio']

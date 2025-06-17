@@ -28,7 +28,7 @@ from profiles.models import (
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
-    ProfileDetailSerializer, UpdateProfileFieldSectionSerializer
+    ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer
 )
 
 
@@ -387,8 +387,6 @@ class RespondFriendRequestView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-        
-
 class RemoveFriendView(APIView):
     """
     POST /api/friends/remove/
@@ -449,6 +447,85 @@ class PendingFriendRequestsView(APIView):
             ).select_related('from_profile')
 
             serializer = FriendRequestSerializer(pending_requests, many=True)
+
+            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+        
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class FollowProfileView(APIView):
+    """
+    POST /api/follow/
+    {
+        "profile_id": <int>
+    }
+
+    Authenticated user's profile will follow the given profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            current_profile = get_user_profile(request.user)
+            target_profile_id = request.data.get('profile_id')
+
+            if not target_profile_id:
+                return Response(error_response("profile_id is required."), status=status.HTTP_400_BAD_REQUEST)
+
+            target_profile = get_object_or_404(Profile, id=target_profile_id)
+
+            if current_profile == target_profile:
+                return Response(error_response("You cannot follow yourself."), status=status.HTTP_400_BAD_REQUEST)
+
+            if target_profile in current_profile.following.all():
+                return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
+
+            current_profile.following.add(target_profile)
+
+            return Response(success_response("Profile followed successfully."), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ListFriendsView(APIView):
+    """
+    GET /api/profile/<int:profile_id>/friends/
+
+    Returns all friends of the given profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+
+            friends = profile.friends.all().order_by('username')
+            serializer = ProfileListSerializer(friends, many=True)
+
+            return Response(success_response( data=serializer.data), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class ListFollowersView(APIView):
+    """
+    GET /api/profile/<int:profile_id>/followers/
+
+    Returns all followers of the given profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+
+            followers = profile.followers.all().order_by('username')
+            serializer = ProfileListSerializer(followers, many=True)
 
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
 

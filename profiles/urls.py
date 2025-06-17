@@ -4,7 +4,7 @@ from django.urls import path
 # Local imports
 from profiles.views import (
     ProfileView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
-    RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView
+    RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView
 )
 
 urlpatterns = [
@@ -17,4 +17,8 @@ urlpatterns = [
     path('respond-friend-request/', RespondFriendRequestView.as_view(), name='respond-friend-request'),
     path('remove-friend/', RemoveFriendView.as_view(), name='remove-friend'),
     path('pending-friend-requests/', PendingFriendRequestsView.as_view(), name='pending-friend-requests'),
+    path('follow-profile/', FollowProfileView.as_view(), name='follow-profile'),
+    path('friends-list/<int:profile_id>/', ListFriendsView.as_view(), name='list-friends'),
+    path('followers-list/<int:profile_id>/', ListFollowersView.as_view(), name='list-followers'),
+
 ]
