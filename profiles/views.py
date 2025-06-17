@@ -197,6 +197,41 @@ class ProfileFieldView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
+class ProfileFieldSectionView(APIView):
+    """
+    PUT /api/profiles/sections/<int:section_id>/
+    Updates title, description, or display_order of a profile section.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, section_id):
+        try:
+            section = get_object_or_404(ProfileFieldSection, id=section_id)
+            
+            serializer = UpdateProfileFieldSectionSerializer(section, data=request.data, partial=True)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, section_id):
+        try:
+            section = get_object_or_404(ProfileFieldSection, id=section_id)
+            section.delete()
+
+            return Response(success_response(f"Section '{section.title}' deleted successfully."), status=status.HTTP_200_OK)
+
+        except Http404:
+            return Response(error_response("Section not found."), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
 class ProfileDetailView(APIView):
     """
     GET /api/profiles/<username>/
@@ -245,7 +280,7 @@ class SendFriendRequestView(APIView):
             if FriendRequest.objects.filter(
                 Q(from_profile=from_profile, to_profile=to_profile) |
                 Q(from_profile=to_profile, to_profile=from_profile)
-            ).exclude(status__in=['rejected', 'cancelled']).exists():
+            ).exclude(status__in=['rejected', 'cancelled', 'accepted']).exists():
                 return Response(error_response("A friend request already exists between these profiles."),status=status.HTTP_404_NOT_FOUND)
 
             # Create friend request
@@ -352,36 +387,70 @@ class RespondFriendRequestView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class ProfileFieldSectionView(APIView):
+        
+
+class RemoveFriendView(APIView):
     """
-    PUT /api/profiles/sections/<int:section_id>/
-    Updates title, description, or display_order of a profile section.
+    POST /api/friends/remove/
+    {
+        "friend_profile_id": <int>
+    }
+
+    Removes a friend (mutually) from the current profile.
     """
     permission_classes = [IsAuthenticated]
 
-    def put(self, request, section_id):
+    def post(self, request):
         try:
-            section = get_object_or_404(ProfileFieldSection, id=section_id)
-            
-            serializer = UpdateProfileFieldSectionSerializer(section, data=request.data, partial=True)
-            serializer.is_valid(raise_exception=True)
-            serializer.save()
+            profile = get_user_profile(request.user)
+            friend_profile_id = request.data.get("friend_profile_id")
 
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            if not friend_profile_id:
+                return Response(error_response("friend_profile_id is required."), status=status.HTTP_400_BAD_REQUEST)
+
+            friend_profile = get_object_or_404(Profile, id=friend_profile_id)
+
+            if friend_profile == profile:
+                return Response(error_response("You cannot remove yourself as a friend."), status=status.HTTP_400_BAD_REQUEST)
+
+            if friend_profile not in profile.friends.all():
+                return Response(error_response("The specified profile is not your friend."), status=status.HTTP_400_BAD_REQUEST)
+
+            # Remove friendship symmetrically
+            profile.friends.remove(friend_profile)
+            friend_profile.friends.remove(profile)
+
+            return Response(success_response("Friend removed successfully."), status=status.HTTP_200_OK)
 
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def delete(self, request, section_id):
+        
+
+class PendingFriendRequestsView(APIView):
+    """
+    GET /api/friends/pending-requests/
+
+    Lists all friend requests where the current user's profile is the receiver (to_profile)
+    and the request status is 'pending'.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
         try:
-            section = get_object_or_404(ProfileFieldSection, id=section_id)
-            section.delete()
+            profile = get_user_profile(request.user)
 
-            return Response(success_response(f"Section '{section.title}' deleted successfully."), status=status.HTTP_200_OK)
+            pending_requests = FriendRequest.objects.filter(
+                to_profile=profile,
+                status='pending'
+            ).select_related('from_profile')
 
-        except Http404:
-            return Response(error_response("Section not found."), status=status.HTTP_404_NOT_FOUND)
+            serializer = FriendRequestSerializer(pending_requests, many=True)
+
+            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

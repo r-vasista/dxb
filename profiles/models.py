@@ -227,7 +227,13 @@ class FriendRequest(BaseModel):
     )
 
     class Meta:
-        unique_together = [('from_profile', 'to_profile')]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['from_profile', 'to_profile'],
+                condition=models.Q(status='pending'),
+                name='unique_pending_friend_request'
+            )
+        ]
         indexes = [
             models.Index(fields=['from_profile', 'to_profile']),
             models.Index(fields=['status']),

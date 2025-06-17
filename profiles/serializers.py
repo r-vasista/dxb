@@ -104,10 +104,19 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
         ]
 
 class FriendRequestSerializer(serializers.ModelSerializer):
+    from_profile_id = serializers.IntegerField(source='from_profile.id', read_only=True)
+    from_username = serializers.CharField(source='from_profile.username', read_only=True)
+    from_profile_pic = serializers.ImageField(source='from_profile.profile_picture', read_only=True)
+
     class Meta:
         model = FriendRequest
-        fields = ['id', 'from_profile', 'to_profile', 'status']
-        read_only_fields = ['id', 'status']
+        fields = [
+            'id',
+            'from_profile_id',
+            'from_username',
+            'from_profile_pic',
+            'status',
+        ]
 
 
 class UpdateProfileFieldSectionSerializer(serializers.ModelSerializer):
