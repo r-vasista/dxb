@@ -97,6 +97,7 @@ class ProfileFieldSectionSerializer(serializers.ModelSerializer):
 class ProfileDetailSerializer(serializers.ModelSerializer):
     field_sections = ProfileFieldSectionSerializer(many=True, read_only=True)
     is_friend = serializers.SerializerMethodField()
+    friend_request_status = serializers.SerializerMethodField()
 
 
     class Meta:
@@ -105,7 +106,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'bio', 'profile_picture', 'cover_picture',
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
-            'field_sections', 'is_friend'
+            'field_sections', 'is_friend', 'friend_request_status'
         ]
     
     def get_is_friend(self, obj):
@@ -121,6 +122,31 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             return obj in user_profile.friends.all()
         except Profile.DoesNotExist:
             return False
+        
+    def get_friend_request_status(self, obj):
+        """
+        Determine the current friend request status between the logged-in user's profile and the target profile.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        try:
+            user_profile = request.user.profile
+
+            if user_profile == obj:
+                return None  # You can't send a request to yourself
+
+            # Try to find a friend request either direction
+            friend_request = FriendRequest.objects.filter(
+                models.Q(from_profile=user_profile, to_profile=obj) |
+                models.Q(from_profile=obj, to_profile=user_profile)
+            ).order_by('-created_at').first()
+
+            return friend_request.status if friend_request else None
+
+        except Profile.DoesNotExist:
+            return None
 
 class FriendRequestSerializer(serializers.ModelSerializer):
     from_profile_id = serializers.IntegerField(source='from_profile.id', read_only=True)
