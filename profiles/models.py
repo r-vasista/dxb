@@ -90,6 +90,29 @@ class Profile(BaseModel):
         return f"Profile for {'User: ' + str(self.user) if self.user else 'Org: ' + str(self.organization)}"
 
 
+class ProfileCanvas(BaseModel):
+    """
+    Stores the canvas images of profile
+    """
+    profile = models.ForeignKey(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='profile_canvas'
+    )
+    image = models.ImageField(upload_to='profiles/canvas_picture/', blank=True, null=True)
+    display_order = models.PositiveIntegerField(default=0)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['profile'])
+        ]
+        ordering = ['display_order']
+    
+    def __str__(self):
+        return f"{self.profile} {self.image}"
+
+
 class ProfileFieldSection(BaseModel):
     """
     Represents a group/section for organizing profile fields (like tabs or grouped fields).

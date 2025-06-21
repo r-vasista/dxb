@@ -1,9 +1,12 @@
+# Django imports
+from django.db import models
+
 # Rest Framework imports
 from rest_framework import serializers
 
 # Local imports
 from profiles.models import (
-    ProfileField, Profile, FriendRequest, ProfileFieldSection
+    ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -129,3 +132,23 @@ class ProfileListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'username', 'profile_picture', 'bio']
+
+
+class ProfileCanvasSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProfileCanvas
+        fields = ['id', 'profile', 'image', 'display_order', 'created_by']
+        read_only_fields = ['id', 'profile', 'created_by']
+    
+    def create(self, validated_data):
+        profile = validated_data['profile']
+
+        # Get the highest existing display_order for this profile
+        last_order = ProfileCanvas.objects.filter(profile=profile).aggregate(
+            max_order=models.Max('display_order')
+        )['max_order'] or 0
+
+        # Set the next display_order
+        validated_data['display_order'] = last_order + 1
+
+        return super().create(validated_data)

@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from profiles.models import (
-    Profile, ProfileField, ProfileFieldSection, FriendRequest
+    Profile, ProfileField, ProfileFieldSection, FriendRequest, ProfileCanvas
 )
 
 @admin.register(Profile)
@@ -30,3 +30,10 @@ class FriendRequestAdmin(admin.ModelAdmin):
     list_display = ['id', 'from_profile', 'to_profile', 'status']
     search_fields = ['id', 'from_profile', 'to_profile', 'status']
     list_filter = ['id', 'from_profile', 'to_profile', 'status']
+
+
+@admin.register(ProfileCanvas)
+class ProfileCanvasAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'image', 'display_order']
+    search_fields = ['id', 'profile', 'image', 'display_order']
+    list_filter = ['id', 'profile', 'image', 'display_order']
