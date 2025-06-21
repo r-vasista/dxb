@@ -75,6 +75,68 @@ class ProfileView(APIView):
             return Response(error_response({str(e)}), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class ProfileCanvasView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            serializer = ProfileCanvasSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save(profile=profile, created_by=request.user)
+
+            return Response(success_response(data=serializer.data), status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            canvas_images = ProfileCanvas.objects.filter(profile=profile).order_by('display_order')
+            serializer = ProfileCanvasSerializer(canvas_images, many=True)
+            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def put(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            canvas = get_object_or_404(ProfileCanvas, id=pk, profile=profile)
+            serializer = ProfileCanvasSerializer(canvas, data=request.data)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+    def delete(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            canvas = get_object_or_404(ProfileCanvas, id=pk, profile=profile)
+            canvas.delete()
+            return Response(success_response("Canvas image deleted successfully."), status=status.HTTP_200_OK)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
 class ProfileFieldView(APIView):
     """
     POST /api/profiles/{profile_id}/fields/
@@ -491,6 +553,41 @@ class FollowProfileView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class UnfollowProfileView(APIView):
+    """
+    POST /api/unfollow/
+    {
+        "profile_id": <int>
+    }
+
+    Authenticated user's profile will unfollow the given profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            current_profile = get_user_profile(request.user)
+            target_profile_id = request.data.get('profile_id')
+
+            if not target_profile_id:
+                return Response(error_response("profile_id is required."), status=status.HTTP_400_BAD_REQUEST)
+
+            target_profile = get_object_or_404(Profile, id=target_profile_id)
+
+            if current_profile == target_profile:
+                return Response(error_response("You cannot unfollow yourself."), status=status.HTTP_400_BAD_REQUEST)
+
+            if target_profile not in current_profile.following.all():
+                return Response(error_response("You are not following this profile."), status=status.HTTP_400_BAD_REQUEST)
+
+            current_profile.following.remove(target_profile)
+
+            return Response(success_response("Profile unfollowed successfully."), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
 class ListFriendsView(APIView):
     """
     GET /api/profile/<int:profile_id>/friends/
@@ -534,63 +631,25 @@ class ListFollowersView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
 
-class ProfileCanvasView(APIView):
+
+class ListFollowingView(APIView):
+    """
+    GET /api/profile/<int:profile_id>/following/
+
+    Returns all profiles that the given profile is following.
+    """
     permission_classes = [IsAuthenticated]
 
-    def post(self, request):
-        try:
-            profile = get_user_profile(request.user)
-
-            serializer = ProfileCanvasSerializer(data=request.data)
-            serializer.is_valid(raise_exception=True)
-            serializer.save(profile=profile, created_by=request.user)
-
-            return Response(success_response(data=serializer.data), status=status.HTTP_201_CREATED)
-
-        except ValidationError as e:
-            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
-        except Http404 as e:
-            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
     def get(self, request, profile_id):
         try:
             profile = get_object_or_404(Profile, id=profile_id)
-            canvas_images = ProfileCanvas.objects.filter(profile=profile).order_by('display_order')
-            serializer = ProfileCanvasSerializer(canvas_images, many=True)
+
+            following = profile.following.all().order_by('username')
+            serializer = ProfileListSerializer(following, many=True)
+
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
-        
-        except Http404 as e:
-            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def put(self, request, pk):
-        try:
-            profile = get_user_profile(request.user)
-            canvas = get_object_or_404(ProfileCanvas, id=pk, profile=profile)
-            serializer = ProfileCanvasSerializer(canvas, data=request.data)
-            if serializer.is_valid():
-                serializer.save()
-                return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
-            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
-        except Http404 as e:
-            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
-        except ValidationError as e:
-            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-    
-    def delete(self, request, pk):
-        try:
-            profile = get_user_profile(request.user)
-            canvas = get_object_or_404(ProfileCanvas, id=pk, profile=profile)
-            canvas.delete()
-            return Response(success_response("Canvas image deleted successfully."), status=status.HTTP_200_OK)
-        
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:

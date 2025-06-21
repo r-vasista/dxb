@@ -44,23 +44,20 @@ class PostView(APIView):
 
     def post(self, request, org_id=None):
         try:
-            post_data = request.data.copy() 
-            profile_id = post_data.get('profile_id', None)
+            profile_id = request.data.get('profile_id')
 
-          
+            if not profile_id:
+                return Response(error_response("profile_id is required."), status=status.HTTP_400_BAD_REQUEST)
+
             profile = get_object_or_404(Profile, id=profile_id)
-            post_data['profile'] = profile_id
-            post_data['created_by'] = request.user.id
 
-            # Extract and remove media files (if any)
-            media_files = post_data.pop('media_files', [])
-
-            # Validate and save post
-            serializer = PostSerializer(data=post_data)
+            # Use request.data as-is — DO NOT copy!
+            serializer = PostSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
-            post = serializer.save()
+            post = serializer.save(profile=profile, created_by=request.user)
 
-            # Handle media attachments
+            # Handle media files safely
+            media_files = request.FILES.getlist('media_files')
             for idx, media_file in enumerate(media_files):
                 PostMedia.objects.create(
                     post=post,
@@ -77,6 +74,8 @@ class PostView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
     
     def put(self, request, post_id):
         try:
