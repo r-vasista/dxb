@@ -96,6 +96,8 @@ class ProfileFieldSectionSerializer(serializers.ModelSerializer):
 
 class ProfileDetailSerializer(serializers.ModelSerializer):
     field_sections = ProfileFieldSectionSerializer(many=True, read_only=True)
+    is_friend = serializers.SerializerMethodField()
+
 
     class Meta:
         model = Profile
@@ -103,8 +105,22 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'bio', 'profile_picture', 'cover_picture',
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
-            'field_sections'
+            'field_sections', 'is_friend'
         ]
+    
+    def get_is_friend(self, obj):
+        """
+        Check if the request user's profile is friends with the target profile.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        try:
+            user_profile = request.user.profile
+            return obj in user_profile.friends.all()
+        except Profile.DoesNotExist:
+            return False
 
 class FriendRequestSerializer(serializers.ModelSerializer):
     from_profile_id = serializers.IntegerField(source='from_profile.id', read_only=True)
