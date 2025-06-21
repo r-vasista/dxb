@@ -43,7 +43,7 @@ class ProfileView(APIView):
     def get(self, request, profile_id):
         try:
             profile = get_object_or_404(Profile, id=profile_id)
-            serializer = ProfileDetailSerializer(profile)
+            serializer = ProfileDetailSerializer(profile, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -303,7 +303,7 @@ class ProfileDetailView(APIView):
 
     def get(self, request, username):
         try:
-            profile = get_object_or_404(Profile, username=username)
+            profile = get_object_or_404(Profile, username=username, context={'request': request})
             serializer = ProfileDetailSerializer(profile)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:

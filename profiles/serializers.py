@@ -14,6 +14,7 @@ from profiles.utils import (
 from organization.serializers import (
     OrganizationSerializer
 )
+from core.services import get_user_profile
 
 class ProfileSerializer(serializers.ModelSerializer):
     profile_fields = serializers.SerializerMethodField()
@@ -130,9 +131,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return None
-
         try:
-            user_profile = request.user.profile
+            user_profile = get_user_profile(request.user)
 
             if user_profile == obj:
                 return None  # You can't send a request to yourself
@@ -143,9 +143,12 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
                 models.Q(from_profile=obj, to_profile=user_profile)
             ).order_by('-created_at').first()
 
+            print(friend_request, 'frdn')
+
             return friend_request.status if friend_request else None
 
         except Profile.DoesNotExist:
+            print('asdf')
             return None
 
 class FriendRequestSerializer(serializers.ModelSerializer):
