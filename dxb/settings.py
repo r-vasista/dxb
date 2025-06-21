@@ -71,6 +71,11 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'dxb.urls'
 
+CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8000",  # frontend origin
+]
+CORS_ALLOW_CREDENTIALS = True
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
