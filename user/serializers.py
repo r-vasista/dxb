@@ -28,9 +28,11 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
             profile = getattr(self.user.organization, "profile", None)
 
         if profile:
+            print(profile.profile_picture, 'profile')
             data["profile_id"] = profile.id
             data["profile_type"] = profile.profile_type
             data['username'] =  profile.username
+            data['profile_picture'] = str(profile.profile_picture) if profile.profile_picture else None
         else:
             data["profile_id"] = None
             data["profile_type"] = None
