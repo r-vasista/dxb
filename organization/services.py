@@ -20,18 +20,21 @@ def send_register_otp_to_email(email):
     """
     try:
         otp = generate_otp(email)
-        
+        # Extract name from email (before '@')
+        name = email.split('@')[0] if '@' in email else email
+
         # Send email
         subject = "OTP Verification"
         text_content = f"DXB OTP verification is: {otp}"
         template_address = "organization_register.html"
         context = {
-            'otp':otp
+            'otp': otp,
+            'name': name
         }
         status, message = send_custom_email(
             subject=subject, text_content=text_content, template_address=template_address, context=context,
             recipient_list=[email]
-            )
+        )
         if status:
             return True, 'success'
         else:
