@@ -158,7 +158,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             return False
 
         try:
-            user_profile = request.user.profile
+            user_profile = get_user_profile(request.user)
             return obj in user_profile.friends.all()
         except Profile.DoesNotExist:
             return False
