@@ -170,6 +170,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=5),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10),
+    'UPDATE_LAST_LOGIN':True
 }
 
 # Setting Custom User as the main User model

@@ -62,7 +62,7 @@ class RegisterAccountAPIView(APIView):
     def post(self, request):
         data = request.data
         user_type = data.get("user_type")
-        email = data.get("email")
+        email = data.get("email").lower()
         password = data.get("password")
         otp = data.get("otp", "")
         name = data.get("name", "")
