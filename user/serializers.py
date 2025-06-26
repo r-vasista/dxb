@@ -14,6 +14,12 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
     token_class = RefreshToken
 
     def validate(self, attrs):
+
+        # Lower email while logging in
+        email = attrs.get("email") or attrs.get("username")
+        if email:
+            attrs["email"] = email.lower()
+
         data = super().validate(attrs)
 
         refresh = self.get_token(self.user)
@@ -28,7 +34,6 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
             profile = getattr(self.user.organization, "profile", None)
 
         if profile:
-            print(profile.profile_picture, 'profile')
             data["profile_id"] = profile.id
             data["profile_type"] = profile.profile_type
             data['username'] =  profile.username

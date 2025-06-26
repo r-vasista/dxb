@@ -5,17 +5,162 @@ from rest_framework import status
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework_simplejwt.tokens import RefreshToken
 
 # Djano imports
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db.models import Q
+from django.db import transaction
+from django.core.exceptions import ObjectDoesNotExist
+from django.shortcuts import get_object_or_404
 
 # Local imports
 from core.services import success_response, error_response
-from user.models import Role, Permission
-from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer
+from user.models import Role, Permission, UserType
+from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer, UserSerializer
 from user.choices import PermissionScope
+
+from organization.serializers import RegisterOrganizationSerializer, AddressSerializer
+from organization.utils import (
+    verify_otp
+)
+
+from profiles.models import (
+    Profile
+)
+from profiles.choices import (
+    ProfileType
+)
+
+class RegisterAccountAPIView(APIView):
+    """
+    API to register either an organization or an user user.
+
+    Expected Request Format:
+    {
+        "user_type": "organization" | "user",
+        "email": "user@example.com",
+        "password": "strongpassword",
+        "otp": "123456",
+        "name": "John Doe",
+        "phone_number": "+1234567890",
+        "website": "https://example.com",
+        "organization_type": 1,
+        "industry_type": 1,
+        "address": { ... }
+    }
+
+    Response:
+    - 201: Registration successful with JWT token.
+    - 400: Bad request or invalid data.
+    """
+
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        data = request.data
+        user_type = data.get("user_type")
+        email = data.get("email")
+        password = data.get("password")
+        otp = data.get("otp", "")
+        name = data.get("name", "")
+        address_data = data.get("address", {})
+
+        try:
+            if not email or not password or not user_type:
+                raise ValueError("Email, password, and user_type are required.")
+
+            if not verify_otp(email, otp):
+                return Response(error_response("Invalid or expired OTP."), status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                if user_type == "organization":
+                    # Register as Organization
+                    user_type_obj, _ = UserType.objects.get_or_create(code="organization", defaults={"name": "Organization"})
+                    user_serializer = UserSerializer(data={
+                        "email": email,
+                        "password": password,
+                        "user_type": user_type_obj.id,
+                        "full_name": name
+                    })
+                    user_serializer.is_valid(raise_exception=True)
+                    user = user_serializer.save()
+
+                    role, _ = Role.objects.get_or_create(name='organization')
+                    user.roles.add(role)
+
+                    address = None
+                    if address_data:
+                        address_serializer = AddressSerializer(data=address_data)
+                        address_serializer.is_valid(raise_exception=True)
+                        address = address_serializer.save()
+
+                    organization_data = {
+                        "name": data.get("name"),
+                        "email": email,
+                        "phone_number": data.get("phone_number"),
+                        "website": data.get("website"),
+                        "organization_type": data.get("organization_type"),
+                        "industry_type": data.get("industry_type"),
+                        "address": address.id if address else None,
+                        "user": user.id
+                    }
+
+                    org_serializer = RegisterOrganizationSerializer(data=organization_data)
+                    org_serializer.is_valid(raise_exception=True)
+                    organization = org_serializer.save()
+
+                    profile = Profile.objects.create(
+                        organization=organization,
+                        profile_type=ProfileType.ORGANIZATION,
+                        username=name
+                    )
+
+                elif user_type == "user":
+                    # Register as user User
+                    user_type_obj, _ = UserType.objects.get_or_create(code="user", defaults={"name": "user"})
+                    user_serializer = UserSerializer(data={
+                        "email": email,
+                        "password": password,
+                        "user_type": user_type_obj.id,
+                        "full_name": name
+                    })
+                    user_serializer.is_valid(raise_exception=True)
+                    user = user_serializer.save()
+
+                    role, _ = Role.objects.get_or_create(name='user')
+                    user.roles.add(role)
+
+                    profile = Profile.objects.create(
+                        user=user,
+                        profile_type=ProfileType.USER,
+                        username=name
+                    )
+                else:
+                    raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
+
+                # Return token
+                refresh = RefreshToken.for_user(user)
+                token_data = {
+                    "access": str(refresh.access_token),
+                    "refresh": str(refresh),
+                    "profile_type": profile.profile_type,
+                    "profile_id": profile.id
+                }
+
+                return Response(success_response(token_data), status=status.HTTP_201_CREATED)
+
+        except ObjectDoesNotExist as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response({str(e)}), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class LoginView(TokenObtainPairView):
     serializer_class = CustomTokenObtainPairSerializer

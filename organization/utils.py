@@ -13,11 +13,11 @@ from organization.models import (
 
 def generate_otp(email):
     otp = str(random.randint(1000, 9999))
-    cache.set(f"otp:{email}", otp, timeout=300)
+    cache.set(f"otp:{email.lower()}", otp, timeout=300)
     return otp
 
 def verify_otp(email, otp):
-    saved_otp = cache.get(f"otp:{email}")
+    saved_otp = cache.get(f"otp:{email.lower()}")
     return saved_otp == otp
 
 def delete_otp(email):

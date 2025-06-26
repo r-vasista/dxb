@@ -268,7 +268,6 @@ class RegisterOrganizationAPIView(APIView):
             return Response(error_response({str(e)}), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class OrganizationDetailAPIView(APIView):
     """
     API for retrieving, updating, or deleting an organization.

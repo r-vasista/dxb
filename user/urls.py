@@ -1,8 +1,9 @@
 from django.urls import path
 
-from user.views import LoginView, RoleView, GlobalRoleView, PermissionListView
+from user.views import LoginView, RoleView, GlobalRoleView, PermissionListView, RegisterAccountAPIView
 
 urlpatterns = [
+    path('registration/', RegisterAccountAPIView.as_view(), name='registration'),
     path('login/', LoginView.as_view(), name='token_obtain_pair'),
     path('role/', RoleView.as_view(), name='role-list'),
     path('role/<int:pk>/', RoleView.as_view(), name='role-update'),
