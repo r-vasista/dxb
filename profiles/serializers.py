@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 # Local imports
 from profiles.models import (
-    ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas
+    ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -143,13 +143,11 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
                 models.Q(from_profile=obj, to_profile=user_profile)
             ).order_by('-created_at').first()
 
-            print(friend_request, 'frdn')
-
             return friend_request.status if friend_request else None
 
         except Profile.DoesNotExist:
-            print('asdf')
             return None
+
 
 class FriendRequestSerializer(serializers.ModelSerializer):
     from_profile_id = serializers.IntegerField(source='from_profile.id', read_only=True)
@@ -197,3 +195,13 @@ class ProfileCanvasSerializer(serializers.ModelSerializer):
         validated_data['display_order'] = last_order + 1
 
         return super().create(validated_data)
+
+
+class StaticFieldInputSerializer(serializers.Serializer):
+    static_field_id = serializers.IntegerField()
+    field_value = serializers.CharField(allow_blank=True, required=False)
+
+    def validate_static_field_id(self, value):
+        if not StaticProfileField.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Invalid static_field_id.")
+        return value

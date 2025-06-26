@@ -24,11 +24,12 @@ from core.services import (
     success_response, error_response, get_user_profile
 )
 from profiles.models import (
-    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas
+    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
-    ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer
+    ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
+    StaticFieldInputSerializer
 )
 
 
@@ -134,7 +135,6 @@ class ProfileCanvasView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 
 class ProfileFieldView(APIView):
@@ -652,5 +652,40 @@ class ListFollowingView(APIView):
 
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class StaticFieldValueView(APIView):
+    """
+    POST /api/profiles/<profile_id>/static-fields/
+    Stores or updates static profile field values for a given profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request,):
+        try:
+            profile = get_user_profile(request.user)
+
+            field_data = request.data.get("fields")
+            if isinstance(field_data, str):
+                import json
+                field_data = json.loads(field_data)
+
+            serializer = StaticFieldInputSerializer(data=field_data, many=True)
+            serializer.is_valid(raise_exception=True)
+
+            with transaction.atomic():
+                for item in serializer.validated_data:
+                    static_field = StaticProfileField.objects.get(id=item["static_field_id"])
+                    value, created = StaticFieldValue.objects.get_or_create(
+                        profile=profile,
+                        static_field=static_field
+                    )
+                    value.field_value = item.get("field_value", "")
+                    value.save()
+
+            return Response(success_response("Static field data saved."), status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
