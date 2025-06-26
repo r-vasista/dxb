@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ subject }}</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .header, .footer { background-color: #f4f4f4; padding: 10px; text-align: center; }
+        .logo { max-height: 60px; }
+        .content { margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        {% if company_logo_url %}
+            <img src="{{ company_logo_url }}" alt="{{ company_name }}" class="logo">
+        {% endif %}
+        <h2>{{ company_name }}</h2>
+        <p>{{ header_content }}</p>
+    </div>
+
+    <div class="content">
+        <h3>{{ title }}</h3>
+        <div>{{ main_content|safe }}</div>
+        {% if footer_block %}
+            <hr>
+            <p>{{ footer_block|safe }}</p>
+        {% endif %}
+    </div>
+
+    <div class="footer">
+        <p>{{ footer_content }}</p>
+        <p><small>{{ copy_right_notice }}</small></p>
+    </div>
+</body>
+</html>
+
+
