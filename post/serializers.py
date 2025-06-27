@@ -5,6 +5,7 @@ from rest_framework import serializers
 from post.models import (
     Post, PostMedia,PostReaction,Comment,CommentLike
 )
+from core.serializers import TimezoneAwareSerializerMixin
 
 class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,7 +13,7 @@ class PostMediaSerializer(serializers.ModelSerializer):
         fields = ['id', 'file', 'media_type', 'order']
 
 
-class PostSerializer(serializers.ModelSerializer):
+class PostSerializer(TimezoneAwareSerializerMixin):
     media = PostMediaSerializer(many=True, read_only=True)
     username = serializers.CharField(source='profile.username', read_only=True)
     profile_picture = serializers.CharField(source='profile.profile_picture', read_only=True)
