@@ -91,6 +91,11 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         indexes = [
             models.Index(fields=['is_active']),
         ]
+    
+    def save(self, *args, **kwargs):
+        if self.email:
+            self.email = self.email.lower()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return self.email

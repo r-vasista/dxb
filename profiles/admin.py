@@ -1,7 +1,7 @@
 from django.contrib import admin
 
 from profiles.models import (
-    Profile, ProfileField, ProfileFieldSection, FriendRequest, ProfileCanvas
+    Profile, ProfileField, ProfileFieldSection, FriendRequest, ProfileCanvas, StaticProfileSection, StaticProfileField, StaticFieldValue
 )
 
 @admin.register(Profile)
@@ -37,3 +37,23 @@ class ProfileCanvasAdmin(admin.ModelAdmin):
     list_display = ['id', 'profile', 'image', 'display_order']
     search_fields = ['id', 'profile', 'image', 'display_order']
     list_filter = ['id', 'profile', 'image', 'display_order']
+
+
+@admin.register(StaticProfileSection)
+class StaticProfileSectionAdmin(admin.ModelAdmin):
+    list_display = ['id', 'title', 'display_order']
+    search_fields = ['id', 'title', 'display_order']
+    list_filter = ['id', 'title', 'display_order']
+
+@admin.register(StaticProfileField)
+class StaticProfileFieldAdmin(admin.ModelAdmin):
+    list_display = ['id', 'section', 'field_name', 'display_order', 'is_public']
+    search_fields = ['id', 'section', 'field_name',  'display_order', 'is_public']
+    list_filter = ['id', 'section', 'field_name', 'display_order', 'is_public']
+
+
+@admin.register(StaticFieldValue)
+class StaticFieldValueAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'static_field', 'field_value']
+    search_fields = ['id', 'profile', 'static_field', 'field_value']
+    list_filter = ['id', 'profile', 'static_field', 'field_value']

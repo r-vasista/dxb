@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'ckeditor',
 
     # Local apps
     "core",
@@ -170,6 +171,7 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(days=5),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=10),
+    'UPDATE_LAST_LOGIN':True
 }
 
 # Setting Custom User as the main User model
@@ -180,11 +182,8 @@ REDIS_HOST = os.environ.get('REDIS_HOST', '')
 
 CACHES = {
     "default": {
-        "BACKEND": "django_redis.cache.RedisCache",
-        "LOCATION": REDIS_HOST,
-        "OPTIONS": {
-            "CLIENT_CLASS": "django_redis.client.DefaultClient",
-        }
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "127.0.0.1:11211",
     }
 }
 
@@ -202,3 +201,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 EMAIL_DOMAIL_URL = os.environ.get('EMAIL_DOMAIL_URL', '')
 
 FRONTEND_URL = 'http://127.0.0.1:8000'
+
+# CKEDITOR_BASEPATH = "/my_static/ckeditor/ckeditor/"
+
+# CKEDITOR_5_CONFIGS = {
+#     'default': {
+#         'toolbar': ['bold', 'italic', 'link', 'undo', 'redo'],
+#         'language': 'en',
+#     },
+# }

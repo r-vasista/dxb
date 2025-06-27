@@ -16,16 +16,17 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
 # Local imports
-from core.services import success_response, error_response
+from core.services import success_response, error_response, get_user_profile
 from core.pagination import PaginationMixin
+from post.models import ReactionType
 from profiles.models import (
     Profile
 )
 from post.models import (
-    Post, PostMedia
+    Post, PostMedia,PostReaction,CommentLike, Comment
 )
 from post.serializers import (
-    PostSerializer, ImageMediaSerializer
+    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -169,6 +170,7 @@ class AllPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 class ProfileImageMediaListView(APIView, PaginationMixin):
     """
     GET /api/profiles/{profile_id}/media/images/
@@ -194,6 +196,266 @@ class ProfileImageMediaListView(APIView, PaginationMixin):
 
             paginated_queryset = self.paginate_queryset(image_media, request)
             serializer = ImageMediaSerializer(paginated_queryset, many=True)
+
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class PostReactionView(APIView):
+    """
+    POST /api/posts/{post_id}/reactions/
+
+    Authenticated endpoint to create or update a user's reaction to a post.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+            profile = get_user_profile(request.user)
+
+            # Clean and validate reaction_type
+            reaction_type = request.data.get("reaction_type", "").strip().lower()
+            if reaction_type not in ReactionType.values:
+                return Response(
+                    error_response(f"Invalid reaction_type. Allowed values: {', '.join(ReactionType.values)}"),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Fetch existing reaction
+            existing_reaction = post.reactions.filter(profile=profile).first()
+
+            if existing_reaction:
+                if existing_reaction.reaction_type == reaction_type:
+                    return Response(success_response("Reaction unchanged."), status=status.HTTP_200_OK)
+
+                # Update reaction type
+                serializer = PostReactionSerializer(existing_reaction, data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type}, partial=True)
+                serializer.is_valid(raise_exception=True)
+                serializer.save()
+
+                return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+            # Create new reaction
+            serializer = PostReactionSerializer(data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+
+            # Optional: update reaction count on the post
+            post.reaction_count = post.reactions.count()
+            post.save(update_fields=["reaction_count"])
+
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+   
+
+class PostReactionDetailView(APIView):
+    """
+    GET /api/post-reactions/{reaction_id}/
+    DELETE /api/post-reactions/{reaction_id}/
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get_object(self, request, reaction_id):
+        profile = get_user_profile(request.user)
+        return get_object_or_404(PostReaction, id=reaction_id, profile=profile)
+
+    def get(self, request, reaction_id):
+        reaction = self.get_object(request, reaction_id)
+        serializer = PostReactionSerializer(reaction)
+        return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+    def delete(self, request, reaction_id):
+        reaction = self.get_object(request, reaction_id)
+        post = reaction.post
+        reaction.delete()
+
+        # Optional: update post.reaction_count
+        post.reaction_count = post.reactions.count()
+        post.save(update_fields=['reaction_count'])
+
+        return Response(success_response("Reaction deleted."), status=status.HTTP_204_NO_CONTENT)
+    
+class Postreactionlist(APIView, PaginationMixin):
+    """
+    GET /api/posts/{post_id}/reactions/
+    Fetch all reactions for a specific post with pagination.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+            reactions = post.reactions.all().order_by('-created_at')
+
+            # Apply pagination
+            paginated_queryset = self.paginate_queryset(reactions, request)
+            serializer = PostReactionSerializer(paginated_queryset, many=True)
+
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class CommentView(APIView, PaginationMixin):
+    """
+    GET /api/posts/{post_id}/comments/
+    POST /api/posts/{post_id}/comments/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+            comments = post.comments.filter(parent=None).select_related('profile').order_by('-created_at')
+
+            paginated_queryset = self.paginate_queryset(comments, request)
+            serializer = CommentSerializer(paginated_queryset, many=True)
+
+            return self.get_paginated_response(serializer.data)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+            profile = get_user_profile(request.user)
+
+            data = request.data.copy()
+            data['post'] = post.id
+            data['profile'] = profile.id
+
+            serializer = CommentSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            post.comment_count = post.comments.count()
+            post.save(update_fields=["comment_count"])
+
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class CommentLikeToggleView(APIView):
+    """
+    POST /api/comments/{comment_id}/like/
+    Toggles like for the given comment by the current user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        try:
+            comment = get_object_or_404(Comment, id=comment_id)
+            profile = get_user_profile(request.user)
+
+            like, created = CommentLike.objects.get_or_create(comment=comment, profile=profile)
+
+            if not created:
+                like.delete()
+                comment.like_count = comment.likes.count()
+                comment.save(update_fields=["like_count"])
+                return Response(success_response("Unliked"), status=status.HTTP_200_OK)
+
+            comment.like_count = comment.likes.count()
+            comment.save(update_fields=["like_count"])
+            return Response(success_response("Liked"), status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class CommentDetailView(APIView):
+    """
+    GET /api/comments/{comment_id}/
+    DELETE /api/comments/{comment_id}/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, request, comment_id):
+        profile = get_user_profile(request.user)
+        return get_object_or_404(Comment, id=comment_id, profile=profile)
+
+    def get(self, request, comment_id):
+        comment = self.get_object(request, comment_id)
+        serializer = CommentSerializer(comment)
+        return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+    def delete(self, request, comment_id):
+        profile= get_user_profile(request.user)
+        comment = self.get_object( comment_id, profile=profile)
+        post = comment.post
+        comment.delete()
+
+        post.comment_count = post.comments.count()
+        post.save(update_fields=["comment_count"])
+
+        return Response(success_response("Comment deleted."), status=status.HTTP_204_NO_CONTENT)
+
+class CommentReplyView(APIView):
+    """
+    POST /api/comments/{comment_id}/reply/
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, comment_id):
+        try:
+            parent_comment = get_object_or_404(Comment, id=comment_id)
+            post = parent_comment.post
+            profile = get_user_profile(request.user)
+
+            data = request.data.copy()
+            data['post'] = post.id
+            data['profile'] = profile.id
+            data['parent'] = parent_comment.id
+
+            serializer = CommentSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            # Update reply count
+            parent_comment.reply_count = parent_comment.replies.count()
+            parent_comment.save(update_fields=['reply_count'])
+
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CommentReplyListView(APIView, PaginationMixin):
+    """
+    GET /api/comments/{comment_id}/replies/
+    Fetch all replies for a specific comment with pagination.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, comment_id):
+        try:
+            parent_comment = get_object_or_404(Comment, id=comment_id)
+            replies = parent_comment.replies.filter(is_approved=True).select_related('profile').order_by('-created_at')
+
+            paginated_queryset = self.paginate_queryset(replies, request)
+            serializer = CommentSerializer(paginated_queryset, many=True)
 
             return self.get_paginated_response(serializer.data)
 
