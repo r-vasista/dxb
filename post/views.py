@@ -58,7 +58,7 @@ class PostView(APIView):
             profile = get_object_or_404(Profile, id=profile_id)
 
             # Use request.data as-is — DO NOT copy!
-            serializer = PostSerializer(data=request.data)
+            serializer = PostSerializer(data=request.data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
@@ -91,7 +91,7 @@ class PostView(APIView):
             if post.created_by != request.user:
                 return Response(error_response("You are not allowed to update this post."), status=status.HTTP_403_FORBIDDEN)
 
-            serializer = PostSerializer(post, data=request.data, partial=True)
+            serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
             handle_hashtags(post)
@@ -149,7 +149,7 @@ class ProfilePostListView(APIView, PaginationMixin):
 
             # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
 
             return self.get_paginated_response(serializer.data)
         
@@ -168,7 +168,7 @@ class AllPostsAPIView(APIView, PaginationMixin):
 
             # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
 
             return self.get_paginated_response(serializer.data)
         
@@ -499,7 +499,7 @@ class TrendingPostsAPIView(APIView, PaginationMixin):
                 .order_by('-reaction_count', '-view_count', '-comment_count')
 
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
 
         except Exception as e:
@@ -518,7 +518,7 @@ class FriendsPostsAPIView(APIView, PaginationMixin):
                 .order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
 
         except Profile.DoesNotExist:
@@ -533,7 +533,7 @@ class LatestPostsAPIView(APIView, PaginationMixin):
         try:
             posts = Post.objects.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
 
         except Exception as e:
@@ -551,7 +551,7 @@ class HashtagPostsView(APIView, PaginationMixin):
             posts = hashtag.posts.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
-            serializer = PostSerializer(paginated_queryset, many=True)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
 
         except Http404 as e:
