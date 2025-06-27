@@ -240,7 +240,10 @@ class PostReactionView(APIView):
 
             if existing_reaction:
                 if existing_reaction.reaction_type == reaction_type:
-                    return Response(success_response("Reaction unchanged."), status=status.HTTP_200_OK)
+                    existing_reaction.delete()
+                    post.reaction_count = post.reactions.count()
+                    post.save(update_fields=["reaction_count"])
+                    return Response(success_response("Reaction removed."), status=status.HTTP_200_OK)
 
                 # Update reaction type
                 serializer = PostReactionSerializer(existing_reaction, data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type}, partial=True)
