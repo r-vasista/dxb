@@ -28,6 +28,7 @@ class Profile(BaseModel):
         Organization, on_delete=models.CASCADE, null=True, blank=True, related_name='profile'
     )
     username = models.CharField(max_length=200, unique=True, blank=True, null=True)
+    phone_number = models.CharField(blank=True, null=True)
 
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profiles/profile_picture/', blank=True, null=True)
