@@ -49,6 +49,7 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework_simplejwt',
     'corsheaders',
+    'ckeditor',
 
     # Local apps
     "core",
@@ -200,3 +201,12 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 EMAIL_DOMAIL_URL = os.environ.get('EMAIL_DOMAIL_URL', '')
 
 FRONTEND_URL = 'http://127.0.0.1:8000'
+
+# CKEDITOR_BASEPATH = "/my_static/ckeditor/ckeditor/"
+
+# CKEDITOR_5_CONFIGS = {
+#     'default': {
+#         'toolbar': ['bold', 'italic', 'link', 'undo', 'redo'],
+#         'language': 'en',
+#     },
+# }

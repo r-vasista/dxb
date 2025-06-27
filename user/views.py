@@ -115,7 +115,8 @@ class RegisterAccountAPIView(APIView):
                     profile = Profile.objects.create(
                         organization=organization,
                         profile_type=ProfileType.ORGANIZATION,
-                        username=name
+                        username=name,
+                        phone_number= data.get("phone_number")
                     )
 
                 elif user_type == "user":
@@ -136,7 +137,8 @@ class RegisterAccountAPIView(APIView):
                     profile = Profile.objects.create(
                         user=user,
                         profile_type=ProfileType.USER,
-                        username=name
+                        username=name,
+                        phone_number= data.get("phone_number")
                     )
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")

@@ -2,6 +2,8 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.template.exceptions import TemplateDoesNotExist, TemplateSyntaxError
 from django.conf import settings
+from .models import EmailTemplate, EmailConfiguration
+from django.template import Template, Context
 
 def success_response(data):
     return {"status": True, "data":data}
@@ -38,3 +40,61 @@ def get_user_profile(user):
         profile = getattr(user.organization, "profile", None)
     
     return profile
+
+
+def send_dynamic_email_using_template(template_name, recipient_list, context={}):
+    """
+    send_dynamic_email_using_template(
+    template_name="register-otp",
+    recipient_list=["vasista.rachaputi@gmail.com"],
+    context={
+        "user_name": "Vasista",
+        "otp": "12345"
+        }
+    )
+    """
+    try:
+        email_template = EmailTemplate.objects.get(name=template_name)
+        email_config = EmailConfiguration.objects.first()
+
+        subject = email_template.subject
+
+        # Render main_content dynamically using Template engine
+        rendered_main_content = Template(email_template.main_content).render(Context(context))
+        rendered_footer_block = Template(email_template.footer_content).render(Context(context)) if email_template.footer_content else ""
+
+        # Build the final context for rendering the base template
+        template_context = {
+            "subject": subject,
+            "title": email_template.title,
+            "main_content": rendered_main_content,
+            "footer_block": rendered_footer_block,
+
+            # From EmailConfiguration
+            "header_content": email_config.header_content,
+            "footer_content": email_config.footer_content,
+            "company_name": email_config.company_name,
+            "company_logo_url": email_config.company_logo_url,
+            "contact_email": email_config.contact_email,
+            "copy_right_notice": email_config.copy_right_notice,
+        }
+
+        # Merge any additional context (optional)
+        template_context.update(context)
+
+        html_content = render_to_string("base_email.html", template_context)
+        text_content = f"{email_template.title}\n{rendered_main_content}"
+
+        email = EmailMultiAlternatives(subject, text_content, settings.EMAIL_HOST_USER, recipient_list)
+        email.attach_alternative(html_content, "text/html")
+        email.send()
+
+        return True, "Email sent successfully"
+
+    except EmailTemplate.DoesNotExist:
+        return False, f"EmailTemplate with name '{template_name}' not found"
+    except EmailConfiguration.DoesNotExist:
+        return False, "No EmailConfiguration found"
+    except Exception as e:
+        return False, str(e)
+    

@@ -2,6 +2,7 @@
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from ckeditor.fields import RichTextField
 
 class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -38,3 +39,35 @@ class BaseTypeModel(BaseModel):
 
     def __str__(self):
         return self.name
+
+
+class EmailTemplate(BaseModel):
+    """Model to store email template configurations"""
+    name = models.CharField(max_length=100, unique=True)
+    subject = RichTextField()
+    title = RichTextField()
+    main_content = RichTextField()
+    footer_content = RichTextField()
+    
+    def __str__(self):
+        return self.name
+    
+    class Meta:
+        db_table = 'email_templates'
+
+
+class EmailConfiguration(BaseModel):
+    """Model to store fixed header and footer content"""
+    header_content = models.TextField()
+    footer_content = models.TextField()
+    company_name = models.CharField(max_length=100)
+    company_logo_url = models.URLField(blank=True, null=True)
+    contact_email = models.EmailField()
+    copy_right_notice = models.TextField()
+    
+    def __str__(self):
+        return f"{self.company_name}"
+    
+    class Meta:
+        db_table = 'email_configurations'
+    

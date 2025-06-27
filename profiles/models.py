@@ -28,6 +28,7 @@ class Profile(BaseModel):
         Organization, on_delete=models.CASCADE, null=True, blank=True, related_name='profile'
     )
     username = models.CharField(max_length=200, unique=True, blank=True, null=True)
+    phone_number = models.CharField(blank=True, null=True)
 
     bio = models.TextField(blank=True, null=True)
     profile_picture = models.ImageField(upload_to='profiles/profile_picture/', blank=True, null=True)
@@ -264,3 +265,43 @@ class FriendRequest(BaseModel):
 
     def __str__(self):
         return f"{self.from_profile} → {self.to_profile} [{self.status}]"
+
+
+class StaticProfileSection(BaseModel):
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.title}"
+
+
+class StaticProfileField(BaseModel):
+    section = models.ForeignKey(StaticProfileSection, related_name='fields', on_delete=models.CASCADE)
+    field_name = models.CharField(max_length=100)
+    is_public = models.BooleanField(default=True)
+    description = models.TextField(blank=True, null=True)
+    display_order = models.PositiveIntegerField(default=0)
+
+    def __str__(self):
+        return f"{self.field_name}"
+
+
+class StaticFieldValue(BaseModel):
+    """
+    Stores the actual value entered by a Profile for a global FieldTemplate.
+    """
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='template_field_responses')
+    static_field = models.ForeignKey(StaticProfileField, on_delete=models.CASCADE, related_name='responses')
+    field_value = models.TextField(blank=True, null=True)
+
+    last_updated = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        unique_together = ('profile', 'static_field') 
+        indexes = [
+            models.Index(fields=['profile', 'static_field']),
+        ]
+
+    def __str__(self):
+        return f"{self.profile} - {self.static_field.field_name}"
