@@ -147,3 +147,11 @@ class CommentLike(BaseModel):
 
     class Meta:
         unique_together = ['comment', 'profile']
+
+
+class Hashtag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    posts = models.ManyToManyField('Post', related_name='hashtags', blank=True)
+
+    def __str__(self):
+        return f"#{self.name}"

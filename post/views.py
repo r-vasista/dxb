@@ -16,14 +16,17 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
 # Local imports
-from core.services import success_response, error_response, get_user_profile
+from core.services import success_response, error_response, get_user_profile, handle_hashtags
 from core.pagination import PaginationMixin
 from post.models import ReactionType
 from profiles.models import (
     Profile
 )
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment
+    Post, PostMedia,PostReaction,CommentLike, Comment, Hashtag
+)
+from post.choices import (
+    PostStatus
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer
@@ -56,6 +59,7 @@ class PostView(APIView):
             serializer = PostSerializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
+            handle_hashtags(post)
 
             # Handle media files safely
             media_files = request.FILES.getlist('media_files')
@@ -88,6 +92,8 @@ class PostView(APIView):
             serializer = PostSerializer(post, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            handle_hashtags(post)
+
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -463,3 +469,11 @@ class CommentReplyListView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class HashtagPostsView(APIView):
+    def get(self, request, hashtag_name):
+        hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
+        posts = hashtag.posts.filter(status=PostStatus.PUBLISHED)
+        serializer = PostSerializer(posts, many=True)
+        return Response(success_response(serializer.data), status=status.HTTP_200_OK)

@@ -16,6 +16,9 @@ class PostSerializer(serializers.ModelSerializer):
     media = PostMediaSerializer(many=True, read_only=True)
     username = serializers.CharField(source='profile.username', read_only=True)
     profile_picture = serializers.CharField(source='profile.profile_picture', read_only=True)
+    hashtags = serializers.SlugRelatedField(
+        many=True, read_only=True, slug_field='name'
+    )
 
     class Meta:
         model = Post

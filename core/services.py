@@ -2,8 +2,11 @@ from django.core.mail import EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.template.exceptions import TemplateDoesNotExist, TemplateSyntaxError
 from django.conf import settings
-from .models import EmailTemplate, EmailConfiguration
+from core.models import EmailTemplate, EmailConfiguration
 from django.template import Template, Context
+from post.models import Hashtag
+
+import re
 
 def success_response(data):
     return {"status": True, "data":data}
@@ -97,4 +100,19 @@ def send_dynamic_email_using_template(template_name, recipient_list, context={})
         return False, "No EmailConfiguration found"
     except Exception as e:
         return False, str(e)
-    
+
+def extract_hashtags(text):
+    """Extracts hashtags from the given text"""
+    return set(re.findall(r"#(\w+)", text))
+
+
+def handle_hashtags(post):
+    hashtag_text = f"{post.title} {post.caption} {post.content}"
+    hashtags = extract_hashtags(hashtag_text)
+
+    # Clear existing hashtags
+    post.hashtags.clear()
+
+    for tag in hashtags:
+        hashtag_obj, created = Hashtag.objects.get_or_create(name=tag.lower())
+        post.hashtags.add(hashtag_obj)
