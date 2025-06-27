@@ -11,6 +11,7 @@ from django.db.models import Q
 # Rest Framework imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.generics import ListAPIView
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
@@ -689,3 +690,15 @@ class StaticFieldValueView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
+class SearchProfilesAPIView(ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProfileSerializer  # Make sure you have this serializer
+
+    def get_queryset(self):
+        query = self.request.query_params.get('name', '')
+        return Profile.objects.filter(
+            Q(username__icontains=query) |
+            Q(bio__icontains=query)
+        ).distinct()

@@ -7,6 +7,7 @@ from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 
+
 # Rest Framework imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -22,8 +23,9 @@ from post.models import ReactionType
 from profiles.models import (
     Profile
 )
+from profiles.serializers import ProfileSerializer
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, Hashtag
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag
 )
 from post.choices import (
     PostStatus
@@ -470,6 +472,54 @@ class CommentReplyListView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+class TrendingPostsAPIView(APIView, PaginationMixin):
+    
+    def get(self, request):
+        try:
+            posts = Post.objects.filter(status=PostStatus.PUBLISHED)\
+                .order_by('-reaction_count', '-view_count', '-comment_count')
+
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class FriendsPostsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            friend_profiles = profile.friends.all()
+            
+            posts = Post.objects.filter(profile__in=friend_profiles, status=PostStatus.PUBLISHED)\
+                .order_by('-created_at')
+
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Profile.DoesNotExist:
+            return Response(error_response("Profile not found."), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class LatestPostsAPIView(APIView, PaginationMixin):
+    
+    def get(self, request):
+        try:
+            posts = Post.objects.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class HashtagPostsView(APIView):
     def get(self, request, hashtag_name):
