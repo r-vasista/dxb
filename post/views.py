@@ -386,7 +386,10 @@ class CommentLikeToggleView(APIView):
             comment.like_count = comment.likes.count()
             comment.save(update_fields=["like_count"])
             return Response(success_response("Liked"), status=status.HTTP_201_CREATED)
-
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -402,20 +405,30 @@ class CommentDetailView(APIView):
         return get_object_or_404(Comment, id=comment_id, profile=profile)
 
     def get(self, request, comment_id):
-        comment = self.get_object(request, comment_id)
-        serializer = CommentSerializer(comment)
-        return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        try:
+            comment = self.get_object(request, comment_id)
+            serializer = CommentSerializer(comment)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
     def delete(self, request, comment_id):
-        profile= get_user_profile(request.user)
-        comment = self.get_object( comment_id, profile=profile)
-        post = comment.post
-        comment.delete()
+        try:
+            profile= get_user_profile(request.user)
+            comment = self.get_object( comment_id, profile=profile)
+            post = comment.post
+            comment.delete()
 
-        post.comment_count = post.comments.count()
-        post.save(update_fields=["comment_count"])
+            post.comment_count = post.comments.count()
+            post.save(update_fields=["comment_count"])
 
-        return Response(success_response("Comment deleted."), status=status.HTTP_204_NO_CONTENT)
+            return Response(success_response("Comment deleted."), status=status.HTTP_204_NO_CONTENT)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class CommentReplyView(APIView):
     """
@@ -443,7 +456,9 @@ class CommentReplyView(APIView):
             parent_comment.save(update_fields=['reply_count'])
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
-
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -472,6 +487,7 @@ class CommentReplyListView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+
 class TrendingPostsAPIView(APIView, PaginationMixin):
     
     def get(self, request):
@@ -485,6 +501,7 @@ class TrendingPostsAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class FriendsPostsAPIView(APIView, PaginationMixin):
     permission_classes = [IsAuthenticated]
@@ -507,7 +524,6 @@ class FriendsPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-
 class LatestPostsAPIView(APIView, PaginationMixin):
     
     def get(self, request):
@@ -521,9 +537,22 @@ class LatestPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class HashtagPostsView(APIView):
+class HashtagPostsView(APIView, PaginationMixin):
+    """
+    GET /api/hashtags/<hashtag_name>/posts/
+    Returns paginated posts under the given hashtag.
+    """
     def get(self, request, hashtag_name):
-        hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
-        posts = hashtag.posts.filter(status=PostStatus.PUBLISHED)
-        serializer = PostSerializer(posts, many=True)
-        return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        try:
+            hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
+            posts = hashtag.posts.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
+
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
