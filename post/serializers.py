@@ -5,6 +5,8 @@ from rest_framework import serializers
 from post.models import (
     Post, PostMedia,PostReaction,Comment,CommentLike
 )
+from core.serializers import TimezoneAwareSerializerMixin
+from core.services import get_user_profile
 
 class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -12,18 +14,32 @@ class PostMediaSerializer(serializers.ModelSerializer):
         fields = ['id', 'file', 'media_type', 'order']
 
 
-class PostSerializer(serializers.ModelSerializer):
+class PostSerializer(TimezoneAwareSerializerMixin):
     media = PostMediaSerializer(many=True, read_only=True)
     username = serializers.CharField(source='profile.username', read_only=True)
     profile_picture = serializers.CharField(source='profile.profile_picture', read_only=True)
     hashtags = serializers.SlugRelatedField(
         many=True, read_only=True, slug_field='name'
     )
+    user_reaction_type = serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = '__all__'
         read_only_fields = ['id', 'created_by', 'profile']
+    
+    def get_user_reaction_type(self, post):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        profile = get_user_profile(request.user)
+        if not profile:
+            return None
+
+        # Check if the user reacted to this post
+        reaction = post.reactions.filter(profile=profile).first()
+        return reaction.reaction_type if reaction else None
 
 
 class ImageMediaSerializer(serializers.ModelSerializer):

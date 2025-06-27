@@ -22,10 +22,10 @@ urlpatterns = [
 
 
     path('posts-comments/<int:post_id>/', CommentView.as_view(), name='post-comments'),
-    path('comments/<int:comment_id>/like/', CommentLikeToggleView.as_view(), name='comment-like-toggle'),
-    path('comments/<int:comment_id>/', CommentDetailView.as_view(), name='comment-detail'),
-    path('comments/<int:comment_id>/replies/', CommentReplyListView.as_view(), name='comment-replies'),
-    path('comments/<int:comment_id>/reply/', CommentReplyView.as_view(), name='comment-reply'),
+    path('comments-like/<int:comment_id>/', CommentLikeToggleView.as_view(), name='comment-like-toggle'),
+    path('comment/<int:comment_id>/', CommentDetailView.as_view(), name='comment-detail'),
+    path('comment/replies/<int:comment_id>/', CommentReplyListView.as_view(), name='comment-replies'),
+    path('comment/reply/<int:comment_id>/', CommentReplyView.as_view(), name='comment-reply'),
 
 
     path('posts/latest/', LatestPostsAPIView.as_view(), name='latest-posts'),
