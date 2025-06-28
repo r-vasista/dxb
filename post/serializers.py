@@ -22,12 +22,25 @@ class PostSerializer(TimezoneAwareSerializerMixin):
         many=True, read_only=True, slug_field='name'
     )
     user_reaction_type = serializers.SerializerMethodField()
+    reaction_id=serializers.SerializerMethodField()
 
     class Meta:
         model = Post
         fields = '__all__'
         read_only_fields = ['id', 'created_by', 'profile']
     
+    def get_reaction_id(self,post):
+        request=self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+
+        profile = get_user_profile(request.user)
+        if not profile:
+            return None
+
+        reaction=post.reactions.filter(profile=profile).first()
+        return reaction.id if reaction else None
+
     def get_user_reaction_type(self, post):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
