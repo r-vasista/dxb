@@ -131,7 +131,7 @@ class PostView(APIView):
     def get(self, request, post_id):
         try:
             post = get_object_or_404(Post, id=post_id)
-            serializer = PostSerializer(post)
+            serializer = PostSerializer(post, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -264,10 +264,7 @@ class PostReactionView(APIView):
 
             if existing_reaction:
                 if existing_reaction.reaction_type == reaction_type:
-                    existing_reaction.delete()
-                    post.reaction_count = post.reactions.count()
-                    post.save(update_fields=["reaction_count"])
-                    return Response(success_response("Reaction removed."), status=status.HTTP_200_OK)
+                    return Response(success_response("Already Reacted."), status=status.HTTP_200_OK)
 
                 # Update reaction type
                 serializer = PostReactionSerializer(existing_reaction, data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type}, partial=True)
