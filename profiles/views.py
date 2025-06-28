@@ -694,11 +694,18 @@ class StaticFieldValueView(APIView):
             
 class SearchProfilesAPIView(ListAPIView):
     permission_classes = [AllowAny]
-    serializer_class = ProfileSerializer  # Make sure you have this serializer
+    serializer_class = ProfileSerializer
 
     def get_queryset(self):
         query = self.request.query_params.get('name', '')
-        return Profile.objects.filter(
+        qs = Profile.objects.filter(
             Q(username__icontains=query) |
             Q(bio__icontains=query)
         ).distinct()
+
+        # Exclude the request user's profile (if authenticated and has a profile)
+        user = self.request.user
+        if user.is_authenticated and hasattr(user, 'profile'):
+            qs = qs.exclude(id=user.profile.id)
+
+        return qs
