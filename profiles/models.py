@@ -5,7 +5,9 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 
 # Local import
-from core.models import BaseModel
+from core.models import (
+    BaseModel, Country, City, State
+)
 from organization.models import (
     Organization
 )
@@ -53,6 +55,10 @@ class Profile(BaseModel):
         related_name='followers',
         blank=True
     )
+
+    city = models.ForeignKey(City, blank=True, null=True, on_delete=models.SET_NULL)
+    state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)
+    country = models.ForeignKey(Country, blank=True, null=True, on_delete=models.SET_NULL)
 
     @property
     def followers_count(self):

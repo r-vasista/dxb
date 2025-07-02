@@ -58,7 +58,8 @@ INSTALLED_APPS = [
     "user",
     "organization",
     "post",
-    "profiles"
+    "profiles",
+    "event"
 ]
 
 MIDDLEWARE = [

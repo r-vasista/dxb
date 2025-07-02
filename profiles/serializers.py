@@ -80,10 +80,11 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status']
+        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state']
         extra_kwargs = {
             'username': {'required': False}, 
         }
+
 
 class ProfileFieldSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
@@ -137,8 +138,6 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     friend_request_status = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     
-
-
     class Meta:
         model = Profile
         fields = [

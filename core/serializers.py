@@ -2,6 +2,8 @@ import pytz
 from rest_framework import serializers
 from django.db.models.fields import DateTimeField
 
+from core.models import Country, State, City
+
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
     Converts all DateTimeFields from UTC → user's timezone in output,
@@ -51,3 +53,19 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                     pass
 
         return super().to_internal_value(data)
+    
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'code']
+
+class StateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = State
+        fields = ['id', 'name', 'code', 'country']
+
+class CitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'state', 'country', 'latitude', 'longitude']
