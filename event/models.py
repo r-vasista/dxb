@@ -22,7 +22,7 @@ class Event(models.Model):
     Events that can be created by profiles (users or organizations)
     """
     # Event organizer (the profile that created the event)
-    user = models.ForeignKey(
+    profile = models.ForeignKey(
         Profile, 
         on_delete=models.CASCADE, 
         related_name='organized_events'

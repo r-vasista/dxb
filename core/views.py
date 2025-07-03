@@ -1,10 +1,11 @@
 # Django imports
-from django.core.exceptions import ValidationError
 
 # Rest Framework imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.exceptions import ValidationError
+
 
 # Local imports
 from core.models import Country, State, City
