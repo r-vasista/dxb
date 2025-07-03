@@ -54,6 +54,6 @@ class StaticProfileFieldAdmin(admin.ModelAdmin):
 
 @admin.register(StaticFieldValue)
 class StaticFieldValueAdmin(admin.ModelAdmin):
-    list_display = ['id', 'profile', 'static_field', 'field_value']
-    search_fields = ['id', 'profile', 'static_field', 'field_value']
-    list_filter = ['id', 'profile', 'static_field', 'field_value']
+    list_display = ['id', 'profile', 'static_field',]
+    search_fields = ['id', 'profile', 'static_field',]
+    list_filter = ['id', 'profile', 'static_field',]

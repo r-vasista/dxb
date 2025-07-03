@@ -17,6 +17,10 @@ from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
 
+# Python imports
+from datetime import datetime
+from decimal import Decimal
+
 # Local imports
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -30,7 +34,10 @@ from profiles.models import (
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
-    StaticFieldInputSerializer
+    StaticFieldInputSerializer, StaticFieldValueSerializer
+)
+from profiles.choices import (
+    StaticFieldType
 )
 
 
@@ -305,7 +312,7 @@ class ProfileDetailView(APIView):
     def get(self, request, username):
         try:
             profile = get_object_or_404(Profile, username=username, context={'request': request})
-            serializer = ProfileDetailSerializer(profile)
+            serializer = ProfileDetailSerializer(profile, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -659,12 +666,14 @@ class ListFollowingView(APIView):
 
 class StaticFieldValueView(APIView):
     """
-    POST /api/profiles/<profile_id>/static-fields/
+    POST /api/profiles/static-fields/
     Stores or updates static profile field values for a given profile.
+    Supports both regular field values and file uploads in a single API.
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def post(self, request,):
+    def post(self, request):
         try:
             profile = get_user_profile(request.user)
 
@@ -678,16 +687,63 @@ class StaticFieldValueView(APIView):
 
             with transaction.atomic():
                 for item in serializer.validated_data:
-                    static_field = StaticProfileField.objects.get(id=item["static_field_id"])
-                    value, created = StaticFieldValue.objects.get_or_create(
+                    static_field = item['static_field']
+                    field_value = item.get("field_value", "")
+                    
+                    value_obj, created = StaticFieldValue.objects.get_or_create(
                         profile=profile,
                         static_field=static_field
                     )
-                    value.field_value = item.get("field_value", "")
-                    value.save()
+                    
+                    # Handle file uploads first (check if file is provided for this field)
+                    file_key = f"file_{static_field.id}"
+                    if file_key in request.FILES:
+                        file_data = request.FILES[file_key]
+                        
+                        # Check if field type supports file uploads
+                        if static_field.field_type not in [StaticFieldType.IMAGE, StaticFieldType.FILE]:
+                            raise ValueError(f"Field '{static_field.field_name}' does not support file uploads.")
+                        
+                        value_obj.set_value(file_data)
+                    
+                    # Handle other field types
+                    elif static_field.field_type == StaticFieldType.DATE and field_value:
+                        value_obj.set_value(datetime.strptime(field_value, '%Y-%m-%d').date())
+                    elif static_field.field_type == StaticFieldType.NUMBER and field_value:
+                        value_obj.set_value(Decimal(field_value))
+                    elif static_field.field_type == StaticFieldType.BOOLEAN and field_value:
+                        bool_value = field_value.lower() in ['true', '1']
+                        value_obj.set_value(bool_value)
+                    else:
+                        value_obj.set_value(field_value)
+                    
+                    value_obj.save()
 
             return Response(success_response("Static field data saved."), status=status.HTTP_200_OK)
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        """
+        GET /api/profiles/static-fields/
+        Retrieves static profile field values for the authenticated user's profile.
+        """
+        try:
+            profile = get_user_profile(request.user)
+            
+            # Get all static field values for this profile
+            static_values = StaticFieldValue.objects.filter(
+                profile=profile
+            ).select_related('static_field', 'static_field__section').order_by(
+                'static_field__section__display_order', 
+                'static_field__display_order'
+            )
+            
+            serializer = StaticFieldValueSerializer(static_values, many=True)
+            return Response(success_response("Static field data retrieved.", serializer.data), 
+                          status=status.HTTP_200_OK)
+            
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

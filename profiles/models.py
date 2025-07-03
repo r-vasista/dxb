@@ -12,7 +12,7 @@ from organization.models import (
     Organization
 )
 from profiles.choices import (
-    VisibilityStatus, FieldType, ProfileType
+    VisibilityStatus, FieldType, ProfileType, StaticFieldType
 )
 
 User = get_user_model()
@@ -285,9 +285,11 @@ class StaticProfileSection(BaseModel):
 class StaticProfileField(BaseModel):
     section = models.ForeignKey(StaticProfileSection, related_name='fields', on_delete=models.CASCADE)
     field_name = models.CharField(max_length=100)
+    field_type = models.CharField(max_length=10, choices=StaticFieldType.choices, default=StaticFieldType.TEXT)
     is_public = models.BooleanField(default=True)
     description = models.TextField(blank=True, null=True)
     display_order = models.PositiveIntegerField(default=0)
+    is_required = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.field_name}"
@@ -299,7 +301,14 @@ class StaticFieldValue(BaseModel):
     """
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='template_field_responses')
     static_field = models.ForeignKey(StaticProfileField, on_delete=models.CASCADE, related_name='responses')
-    field_value = models.TextField(blank=True, null=True)
+    
+    # Different value fields for different types
+    text_value = models.TextField(blank=True, null=True)
+    date_value = models.DateField(blank=True, null=True)
+    image_value = models.ImageField(upload_to='static_fields/images/', blank=True, null=True)
+    file_value = models.FileField(upload_to='static_fields/files/', blank=True, null=True)
+    number_value = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    boolean_value = models.BooleanField(blank=True, null=True)
 
     last_updated = models.DateTimeField(auto_now=True)
 
@@ -311,3 +320,47 @@ class StaticFieldValue(BaseModel):
 
     def __str__(self):
         return f"{self.profile} - {self.static_field.field_name}"
+    
+    def get_value(self):
+        """Get the value based on field type"""
+        field_type = self.static_field.field_type
+        
+        if field_type == StaticFieldType.TEXT or field_type == StaticFieldType.TEXTAREA or field_type == StaticFieldType.EMAIL or field_type == StaticFieldType.URL:
+            return self.text_value
+        elif field_type == StaticFieldType.DATE:
+            return self.date_value
+        elif field_type == StaticFieldType.IMAGE:
+            return self.image_value
+        elif field_type == StaticFieldType.FILE:
+            return self.file_value
+        elif field_type == StaticFieldType.NUMBER:
+            return self.number_value
+        elif field_type == StaticFieldType.BOOLEAN:
+            return self.boolean_value
+        
+        return None
+
+    def set_value(self, value):
+        """Set the value based on field type"""
+        field_type = self.static_field.field_type
+        
+        # Clear all values first
+        self.text_value = None
+        self.date_value = None
+        self.image_value = None
+        self.file_value = None
+        self.number_value = None
+        self.boolean_value = None
+        
+        if field_type == StaticFieldType.TEXT or field_type == StaticFieldType.TEXTAREA or field_type == StaticFieldType.EMAIL or field_type == StaticFieldType.URL:
+            self.text_value = value
+        elif field_type == StaticFieldType.DATE:
+            self.date_value = value
+        elif field_type == StaticFieldType.IMAGE:
+            self.image_value = value
+        elif field_type == StaticFieldType.FILE:
+            self.file_value = value
+        elif field_type == StaticFieldType.NUMBER:
+            self.number_value = value
+        elif field_type == StaticFieldType.BOOLEAN:
+            self.boolean_value = value
