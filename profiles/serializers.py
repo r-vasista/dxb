@@ -186,6 +186,11 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     friend_request_status = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     organized_events = serializers.SerializerMethodField()
+
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    country_name = serializers.CharField(source='country.name', read_only=True)
+
     
     class Meta:
         model = Profile
@@ -194,7 +199,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
             'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
-            'got_friend_request', 'organized_events'
+            'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
+            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name'
         ]
     
     def get_is_friend(self, obj):

@@ -60,6 +60,14 @@ class Profile(BaseModel):
     state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)
     country = models.ForeignKey(Country, blank=True, null=True, on_delete=models.SET_NULL)
 
+    facebook_url = models.URLField(blank=True, null=True)
+    twitter_url = models.URLField(blank=True, null=True)
+    instagram_url = models.URLField(blank=True, null=True)
+    linkedin_url = models.URLField(blank=True, null=True)
+    youtube_url = models.URLField(blank=True, null=True)
+    tiktok_url = models.URLField(blank=True, null=True)
+    website_url = models.URLField(blank=True, null=True)
+
     @property
     def followers_count(self):
         return self.followers.count()
