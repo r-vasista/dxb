@@ -59,7 +59,8 @@ INSTALLED_APPS = [
     "organization",
     "post",
     "profiles",
-    "event"
+    "event",
+    "notification",
 ]
 
 MIDDLEWARE = [

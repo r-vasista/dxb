@@ -39,6 +39,9 @@ from user.permissions import (
 from organization.models import (
     OrganizationMember
 )
+from notification.utils import (
+    create_post_reaction_notification
+)
 
 User = get_user_model()
 
@@ -276,8 +279,9 @@ class PostReactionView(APIView):
             # Create new reaction
             serializer = PostReactionSerializer(data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type})
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            post_reaction = serializer.save()
 
+            create_post_reaction_notification(post_reaction)
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()

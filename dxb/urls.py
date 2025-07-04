@@ -28,6 +28,7 @@ urlpatterns = [
     path('profile/', include('profiles.urls')),
     path('event/', include('event.urls')),
     path('general/', include('core.urls')),
+    path('notification/', include('notification.urls')),
 ]
 
 if settings.DEBUG:
