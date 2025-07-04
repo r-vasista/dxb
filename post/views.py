@@ -31,7 +31,7 @@ from post.choices import (
     PostStatus
 )
 from post.serializers import (
-    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer
+    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer, HashtagSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -594,3 +594,25 @@ class HashtagPostsView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class HashtagsListView(APIView, PaginationMixin):
+    """
+    GET /api/hashtags-list/?search=art
+    Returns a paginated list of hashtags, filtered by optional search query.
+    """
+    def get(self, request):
+        try:
+            search_query = request.query_params.get('search', '').strip()
+            
+            hashtags = Hashtag.objects.all()
+            if search_query:
+                hashtags = hashtags.filter(name__icontains=search_query)
+
+            paginated_queryset = self.paginate_queryset(hashtags, request)
+            serializer = HashtagSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
