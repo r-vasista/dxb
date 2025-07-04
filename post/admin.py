@@ -3,7 +3,7 @@ from post.models import Post, PostMedia, Hashtag, PostReaction, Comment, Comment
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ['id', 'profile', 'title']
+    list_display = ['id', 'profile', 'title', 'gallery_order']
 
 
 @admin.register(PostMedia)
