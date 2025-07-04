@@ -26,6 +26,11 @@ class PostSerializer(TimezoneAwareSerializerMixin):
     allow_comments = serializers.BooleanField(default=True)
     allow_reactions = serializers.BooleanField(default=True)
 
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    country_name = serializers.CharField(source='country.name', read_only=True)
+
+
     class Meta:
         model = Post
         fields = '__all__'

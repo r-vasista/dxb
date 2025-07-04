@@ -36,6 +36,12 @@ from post.serializers import (
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
 )
+from organization.models import (
+    OrganizationMember
+)
+from notification.utils import (
+    create_post_reaction_notification
+)
 
 User = get_user_model()
 
@@ -57,6 +63,27 @@ class PostView(APIView):
 
             profile = get_object_or_404(Profile, id=profile_id)
 
+            user = request.user
+            is_allowed = False
+
+            # Case 1: Individual profile
+            if profile.user and profile.user == user:
+                is_allowed = True
+
+            # Case 2: Organization profile
+            elif profile.organization:
+                org = profile.organization
+
+                # Check if user is the org owner
+                if org.user == user:
+                    is_allowed = True
+                # Check if user is a member of the org
+                elif OrganizationMember.objects.filter(organization=org, user=user).exists():
+                    is_allowed = True
+
+            if not is_allowed:
+                return Response(error_response("You are not allowed to post for this profile."), status=status.HTTP_403_FORBIDDEN)
+
             # Use request.data as-is — DO NOT copy!
             serializer = PostSerializer(data=request.data, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -73,7 +100,7 @@ class PostView(APIView):
                     order=idx
                 )
 
-            return Response(success_response(PostSerializer(post).data), status=status.HTTP_201_CREATED)
+            return Response(success_response(PostSerializer(post, context={'request': request}).data), status=status.HTTP_201_CREATED)
 
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
@@ -255,8 +282,9 @@ class PostReactionView(APIView):
             # Create new reaction
             serializer = PostReactionSerializer(data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type})
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            post_reaction = serializer.save()
 
+            create_post_reaction_notification(post_reaction)
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()

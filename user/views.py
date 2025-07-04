@@ -71,9 +71,8 @@ class RegisterAccountAPIView(APIView):
 
         # Location data
         timezone_str = data.get("timezone", "UTC")
-        print(timezone_str, 'timzone')
-        latitude = data.get("latitude", '')
-        longitude = data.get("longitude", '')
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
         ip_address = get_client_ip(request)
 
         try:

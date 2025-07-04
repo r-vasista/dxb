@@ -1,6 +1,9 @@
 import pytz
 from rest_framework import serializers
 from django.db.models.fields import DateTimeField
+from datetime import datetime
+
+from core.models import Country, State, City
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
@@ -43,11 +46,37 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
             if isinstance(field, serializers.DateTimeField) and field_name in data:
                 try:
                     raw = data[field_name]
-                    dt = field.to_internal_value(raw)
-                    if dt.tzinfo is None:
-                        dt = user_tz.localize(dt)
-                    data[field_name] = dt.astimezone(pytz.UTC)
-                except Exception:
+
+                    # Parse raw string manually to ignore DRF’s UTC parsing
+                    if isinstance(raw, str):
+                        naive_dt = datetime.strptime(raw, '%Y-%m-%d %H:%M:%S')
+                        local_dt = user_tz.localize(naive_dt)
+                        data[field_name] = local_dt.astimezone(pytz.UTC)
+                    else:
+                        dt = field.to_internal_value(raw)
+                        if dt.tzinfo is None:
+                            dt = user_tz.localize(dt)
+                        else:
+                            dt = dt.astimezone(user_tz)
+                        data[field_name] = dt.astimezone(pytz.UTC)
+
+                except Exception as e:
                     pass
 
         return super().to_internal_value(data)
+        
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ['id', 'name', 'code']
+
+class StateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = State
+        fields = ['id', 'name', 'code', 'country']
+
+class CitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = City
+        fields = ['id', 'name', 'state', 'country', 'latitude', 'longitude']

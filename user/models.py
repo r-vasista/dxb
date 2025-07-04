@@ -14,6 +14,7 @@ from user.choices import PermissionType, PermissionScope
 # Python imports 
 import pytz
 
+
 class Permission(BaseModel):
     code = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
