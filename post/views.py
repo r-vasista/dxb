@@ -121,6 +121,8 @@ class PostView(APIView):
 
             if post.created_by != request.user:
                 return Response(error_response("You are not allowed to update this post."), status=status.HTTP_403_FORBIDDEN)
+            
+            print(request.data)
 
             serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -176,7 +178,7 @@ class ProfilePostListView(APIView, PaginationMixin):
             else:
                 return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
 
-            posts = Post.objects.filter(profile=profile.id).order_by('-created_at')
+            posts = Post.objects.filter(profile=profile.id).order_by('-is_pinned', '-created_at')
 
             # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
