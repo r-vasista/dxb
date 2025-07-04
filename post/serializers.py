@@ -23,6 +23,8 @@ class PostSerializer(TimezoneAwareSerializerMixin):
     )
     user_reaction_type = serializers.SerializerMethodField()
     reaction_id=serializers.SerializerMethodField()
+    allow_comments = serializers.BooleanField(default=True)
+    allow_reactions = serializers.BooleanField(default=True)
 
     class Meta:
         model = Post

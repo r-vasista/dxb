@@ -227,6 +227,9 @@ class PostReactionView(APIView):
             post = get_object_or_404(Post, id=post_id)
             profile = get_user_profile(request.user)
 
+            if not post.allow_reactions:
+                return Response(error_response("Reactions are Disabled for this Post"),status=status.HTTP_403_FORBIDDEN)
+
             # Clean and validate reaction_type
             reaction_type = request.data.get("reaction_type", "").strip().lower()
             if reaction_type not in ReactionType.values:
@@ -344,7 +347,8 @@ class CommentView(APIView, PaginationMixin):
         try:
             post = get_object_or_404(Post, id=post_id)
             profile = get_user_profile(request.user)
-
+            if not post.allow_comments:
+                return Response(error_response("Comments are disable for this Post"),status=status.HTTP_403_FORBIDDEN)
             data = request.data.copy()
             data['post'] = post.id
             data['profile'] = profile.id
