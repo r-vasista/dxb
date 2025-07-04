@@ -25,13 +25,13 @@ from profiles.models import (
 )
 from profiles.serializers import ProfileSerializer
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag,SharePost
 )
 from post.choices import (
     PostStatus
 )
 from post.serializers import (
-    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer
+    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,SharePostSerailizer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -525,7 +525,7 @@ class TrendingPostsAPIView(APIView, PaginationMixin):
     def get(self, request):
         try:
             posts = Post.objects.filter(status=PostStatus.PUBLISHED)\
-                .order_by('-reaction_count', '-view_count', '-comment_count')
+                .order_by('-reaction_count', '-view_count', '-comment_count','-share_count')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
@@ -588,3 +588,39 @@ class HashtagPostsView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+
+class PostShareView(APIView):
+    """
+    Post/share/posts/{post_id}
+
+    Authenticated endpoint to share a post by a profile 
+    Only one share per profile is allowed; duplicate attempts are ignored
+    
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try: 
+            post=get_object_or_404(Post,id=post_id)
+            profile= get_user_profile(request.user)
+
+            existing_share = SharePost.objects.filter(post=post, profile=profile).first()
+            if existing_share:
+                return Response(success_response("Post already shared. "),status=status.HTTP_201_CREATED)
+            
+            serializer=SharePostSerailizer(data={"post":post.id,"profile":profile.id})
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+
+            post.share_count=SharePost.objects.filter(post=post).count()
+            post.save(update_fields=["share_count"])
+
+            return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
+        
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

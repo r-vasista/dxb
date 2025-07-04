@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from post.models import (
-    Post, PostMedia,PostReaction,Comment,CommentLike
+    Post, PostMedia,PostReaction,Comment,CommentLike,SharePost
 )
 from core.serializers import TimezoneAwareSerializerMixin
 from core.services import get_user_profile
@@ -100,3 +100,9 @@ class CommentLikeSerializer(serializers.ModelSerializer):
         model = CommentLike
         fields = ['id', 'comment', 'profile', 'created_at']
         read_only_fields = ['created_at']
+
+
+class SharePostSerailizer(serializers.ModelSerializer):
+    class Meta:
+        model = SharePost 
+        fields = '__all__'
