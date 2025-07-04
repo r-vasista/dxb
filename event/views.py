@@ -29,7 +29,7 @@ class CreateEventAPIView(APIView):
         try:
             profile = get_user_profile(request.user)
             data=request.data
-            data['profile'] = profile.id
+            data['host'] = profile.id
 
             serializer = EventCreateSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
