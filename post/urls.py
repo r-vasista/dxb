@@ -2,7 +2,7 @@ from django.urls import path
 from post.views import (
     PostView, ProfilePostListView, AllPostsAPIView, ProfileImageMediaListView, PostReactionView, Postreactionlist,PostReactionDetailView,
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView, TrendingPostsAPIView,
-    HashtagPostsView,PostShareView
+    HashtagPostsView, HashtagsListView,PostShareView
     )
 
 
@@ -32,6 +32,7 @@ urlpatterns = [
     path('posts/trending/', TrendingPostsAPIView.as_view(), name='trending-posts'),
     path('posts/friends/', FriendsPostsAPIView.as_view(), name='friends-posts'),
     path('posts/hashtags/<str:hashtag_name>/', HashtagPostsView.as_view(), name='posts-hashtag'),
+    path('hashtags-list/', HashtagsListView.as_view(), name='hashtags-list'),
 
     path('share/posts/<int:post_id>/',PostShareView.as_view(),name='post-share'),
 ]

@@ -31,7 +31,7 @@ from post.choices import (
     PostStatus
 )
 from post.serializers import (
-    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,SharePostSerailizer
+    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer, HashtagSerializer,SharePostSerailizer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -270,7 +270,13 @@ class PostReactionView(APIView):
 
             if existing_reaction:
                 if existing_reaction.reaction_type == reaction_type:
-                    return Response(success_response("Already Reacted."), status=status.HTTP_200_OK)
+                    # Same reaction exists — remove it (toggle off)
+                    existing_reaction.delete()
+
+                    # Update post reaction count
+                    post.reaction_count = post.reactions.count()
+                    post.save(update_fields=["reaction_count"])
+                    return Response(success_response("Reaction removed."), status=status.HTTP_200_OK)
 
                 # Update reaction type
                 serializer = PostReactionSerializer(existing_reaction, data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type}, partial=True)
@@ -588,6 +594,28 @@ class HashtagPostsView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class HashtagsListView(APIView, PaginationMixin):
+    """
+    GET /api/hashtags-list/?search=art
+    Returns a paginated list of hashtags, filtered by optional search query.
+    """
+    def get(self, request):
+        try:
+            search_query = request.query_params.get('search', '').strip()
+            
+            hashtags = Hashtag.objects.all()
+            if search_query:
+                hashtags = hashtags.filter(name__icontains=search_query)
+
+            paginated_queryset = self.paginate_queryset(hashtags, request)
+            serializer = HashtagSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class PostShareView(APIView):
