@@ -52,6 +52,7 @@ class LocationHierarchyAPIView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class CountrySearchView(APIView, PaginationMixin):
     def get(self, request):
         try:
