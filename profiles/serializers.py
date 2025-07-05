@@ -110,7 +110,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'bio', 'profile_picture', 'profile_type', 'cover_picture', 'visibility_status',
             'followers_count', 'friends_count', 'following_count',
-            'organization', 'profile_fields'
+            'organization', 'profile_fields', 'awards', 'tools'
         ]
 
     def get_profile_fields(self, obj):
@@ -200,7 +200,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'followers_count', 'following_count', 'friends_count',
             'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
-            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name'
+            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools'
         ]
     
     def get_is_friend(self, obj):
