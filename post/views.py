@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-
+from django.db.models import Q
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Local imports
 from core.services import success_response, error_response, get_user_profile, handle_hashtags
@@ -24,11 +24,12 @@ from profiles.models import (
     Profile
 )
 from profiles.serializers import ProfileSerializer
+from profiles.choices import VisibilityStatus
 from post.models import (
     Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag,SharePost
 )
 from post.choices import (
-    PostStatus
+    PostStatus,PostVisibility
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer, HashtagSerializer,SharePostSerailizer
@@ -48,6 +49,10 @@ from core.permissions import (
 
 
 User = get_user_model()
+
+from .utils import get_post_visibility_filter,get_profile_from_request,get_visible_profile_posts
+
+
 
 class PostView(APIView):
     """
@@ -139,8 +144,20 @@ class PostView(APIView):
     def get(self, request, post_id):
         try:
             post = get_object_or_404(Post, id=post_id)
+            user = request.user
+            requester_profile = get_user_profile(user) if user.is_authenticated else None
+
+            if post.visibility == PostVisibility.FOLLOWERS_ONLY:
+                if not user.is_authenticated or post.profile not in requester_profile.following.all():
+                    return Response(error_response("You are not allowed to view this post."), status=status.HTTP_403_FORBIDDEN)
+
+            elif post.visibility == PostVisibility.PRIVATE:
+                if not user.is_authenticated or post.created_by != user:
+                    return Response(error_response("This post is private."), status=status.HTTP_403_FORBIDDEN)
+
             serializer = PostSerializer(post, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -170,75 +187,66 @@ class ProfilePostListView(APIView, PaginationMixin):
     """
     def get(self, request, profile_id=None, username=None):
         try:
-            if profile_id:
-                profile = get_object_or_404(Profile, id=profile_id)
-            elif username:
-                profile = get_object_or_404(Profile, username=username)
-            else:
-                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+            profile = get_profile_from_request(profile_id, username)
 
-            posts = Post.objects.filter(profile=profile.id).order_by('-is_pinned', '-created_at')
+            posts = get_visible_profile_posts(
+                request, profile, ordering=['-is_pinned', '-created_at']
+            )
 
-            # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
-
             return self.get_paginated_response(serializer.data)
-        
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-            
+          
 
 class AllPostsAPIView(APIView, PaginationMixin):
-    
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
     def get(self, request):
         try:
+            visibility_filter = get_post_visibility_filter(request.user)
 
-            posts = Post.objects.all().order_by('-created_at')
+            posts = Post.objects.filter(visibility_filter).order_by('-created_at')
 
-            # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
-
             return self.get_paginated_response(serializer.data)
-        
-        except Http404 as e:
-            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+
         except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 class ProfileImageMediaListView(APIView, PaginationMixin):
     """
     GET /api/profiles/{profile_id}/media/images/
-    Returns only image media files for a given profile.
+    GET /api/profiles/username/{username}/media/images/
+    Returns only image media files for a given profile, respecting post and profile visibility.
     """
-
     def get(self, request, profile_id=None, username=None):
         try:
-            if profile_id:
-                profile = get_object_or_404(Profile, id=profile_id)
-            elif username:
-                profile = get_object_or_404(Profile, username=username)
-            else:
-                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+            profile = get_profile_from_request(profile_id, username)
+            allowed_post_ids = get_visible_profile_posts(request, profile, only_ids=True)
 
-            # Get all post IDs for this profile
-            post_ids = Post.objects.filter(profile=profile).values_list('id', flat=True)
-
-            # Filter PostMedia by those post IDs and media_type='image'
             image_media = PostMedia.objects.filter(
-                post_id__in=post_ids
+                post_id__in=allowed_post_ids,
+                media_type='image'
             ).order_by('order')
 
             paginated_queryset = self.paginate_queryset(image_media, request)
             serializer = ImageMediaSerializer(paginated_queryset, many=True)
-
             return self.get_paginated_response(serializer.data)
 
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -532,11 +540,16 @@ class CommentReplyListView(APIView, PaginationMixin):
         
 
 class TrendingPostsAPIView(APIView, PaginationMixin):
-    
+    """
+    GET /api/posts/trending/
+    Returns trending posts sorted by reactions, views, comments, shares, while enforcing visibility.
+    """
     def get(self, request):
         try:
-            posts = Post.objects.filter(status=PostStatus.PUBLISHED)\
-                .order_by('-reaction_count', '-view_count', '-comment_count','-share_count')
+            visibility_filter = get_post_visibility_filter(request.user)
+
+            posts = Post.objects.filter(visibility_filter)\
+                .order_by('-reaction_count', '-view_count', '-comment_count', '-share_count')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
@@ -546,16 +559,27 @@ class TrendingPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 class FriendsPostsAPIView(APIView, PaginationMixin):
+    """
+    GET /api/posts/friends/
+    Shows published posts from your friends, with visibility enforced.
+    """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         try:
             profile = get_user_profile(request.user)
             friend_profiles = profile.friends.all()
-            
-            posts = Post.objects.filter(profile__in=friend_profiles, status=PostStatus.PUBLISHED)\
-                .order_by('-created_at')
+            following_profiles = profile.following.all()
+
+            posts = Post.objects.filter(
+                status=PostStatus.PUBLISHED
+            ).filter(
+                Q(profile__in=friend_profiles, visibility=PostVisibility.PUBLIC) |
+                Q(profile__in=friend_profiles.intersection(following_profiles), visibility=PostVisibility.FOLLOWERS_ONLY) |
+                Q(profile__in=friend_profiles, visibility=PostVisibility.PRIVATE, created_by=request.user)
+            ).order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
@@ -568,10 +592,16 @@ class FriendsPostsAPIView(APIView, PaginationMixin):
 
 
 class LatestPostsAPIView(APIView, PaginationMixin):
-    
+    """
+    GET /api/posts/latest/
+    Returns latest published posts, respecting post visibility.
+    """
     def get(self, request):
         try:
-            posts = Post.objects.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
+            visibility_filter = get_post_visibility_filter(request.user)
+
+            posts = Post.objects.filter(visibility_filter).order_by('-created_at')
+
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
@@ -580,15 +610,19 @@ class LatestPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+
 class HashtagPostsView(APIView, PaginationMixin):
     """
     GET /api/hashtags/<hashtag_name>/posts/
-    Returns paginated posts under the given hashtag.
+    Returns paginated posts under the given hashtag, respecting visibility.
     """
     def get(self, request, hashtag_name):
         try:
             hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
-            posts = hashtag.posts.filter(status=PostStatus.PUBLISHED).order_by('-created_at')
+
+            visibility_filter = get_post_visibility_filter(request.user)
+
+            posts = hashtag.posts.filter(visibility_filter).order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
@@ -598,6 +632,7 @@ class HashtagPostsView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class HashtagsListView(APIView, PaginationMixin):
@@ -660,34 +695,23 @@ class PostShareView(APIView):
 
 
 class ProfileGalleryView(APIView, PaginationMixin):
-    """
-    Fetch posts in gallery view with custom ordering.
-    """
     def get(self, request, profile_id=None, username=None):
         try:
-            if profile_id:
-                profile = get_object_or_404(Profile, id=profile_id)
-            elif username:
-                profile = get_object_or_404(Profile, username=username)
-            else:
-                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+            profile = get_profile_from_request(profile_id, username)
+            posts = get_visible_profile_posts(request, profile, ordering=['gallery_order', '-created_at'])
 
-            posts = Post.objects.filter(
-                profile=profile.id,
-                status=PostStatus.PUBLISHED
-            ).order_by('gallery_order', '-created_at')
-
-            # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
-
             return self.get_paginated_response(serializer.data)
-        
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class UpdateGalleryOrderView(APIView):
     """
@@ -724,30 +748,29 @@ class UpdateGalleryOrderView(APIView):
 
 class ProfilePostTrengingListView(APIView, PaginationMixin):
     """
-    GET /api/profiles/{profile_id}/posts/
-    GET /api/profiles/username/{username}/posts/
-    Fetch all posts created by a specific profile (with pagination).
+    GET /api/profiles/{profile_id}/posts/trending/
+    Trending posts from a specific profile, ordered by engagement.
     """
     def get(self, request, profile_id=None, username=None):
         try:
-            if profile_id:
-                profile = get_object_or_404(Profile, id=profile_id)
-            elif username:
-                profile = get_object_or_404(Profile, username=username)
-            else:
-                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+            profile = get_profile_from_request(profile_id, username)
+            
+            ordering = [
+                '-is_pinned', '-reaction_count', '-view_count',
+                '-comment_count', '-created_at', '-share_count'
+            ]
+            posts = get_visible_profile_posts(request, profile, ordering=ordering)
 
-            posts = Post.objects.filter(profile=profile.id).order_by(
-                '-is_pinned', '-reaction_count', '-view_count', '-comment_count', '-created_at', '-share_count'
-                )
-
-            # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
-
             return self.get_paginated_response(serializer.data)
-        
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
