@@ -102,7 +102,7 @@ class Profile(BaseModel):
         ]
 
     def __str__(self):
-        return f"Profile for {'User: ' + str(self.user) if self.user else 'Org: ' + str(self.organization)}"
+        return f"{'User: ' + str(self.username), self.id if self.user else 'Org: ' + str(self.username), self.id}"
 
 
 class ProfileCanvas(BaseModel):

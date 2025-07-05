@@ -42,6 +42,10 @@ from organization.models import (
 from notification.utils import (
     create_post_reaction_notification
 )
+from core.permissions import (
+    is_owner_or_org_member
+)
+
 
 User = get_user_model()
 
@@ -117,6 +121,8 @@ class PostView(APIView):
 
             if post.created_by != request.user:
                 return Response(error_response("You are not allowed to update this post."), status=status.HTTP_403_FORBIDDEN)
+            
+            print(request.data)
 
             serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -172,7 +178,7 @@ class ProfilePostListView(APIView, PaginationMixin):
             else:
                 return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
 
-            posts = Post.objects.filter(profile=profile.id).order_by('-created_at')
+            posts = Post.objects.filter(profile=profile.id).order_by('-is_pinned', '-created_at')
 
             # Apply pagination
             paginated_queryset = self.paginate_queryset(posts, request)
@@ -648,6 +654,69 @@ class PostShareView(APIView):
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfileGalleryView(APIView, PaginationMixin):
+    """
+    Fetch posts in gallery view with custom ordering.
+    """
+    def get(self, request, profile_id=None, username=None):
+        try:
+            if profile_id:
+                profile = get_object_or_404(Profile, id=profile_id)
+            elif username:
+                profile = get_object_or_404(Profile, username=username)
+            else:
+                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+
+            posts = Post.objects.filter(
+                profile=profile.id,
+                status=PostStatus.PUBLISHED
+            ).order_by('gallery_order', '-created_at')
+
+            # Apply pagination
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
+
+            return self.get_paginated_response(serializer.data)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UpdateGalleryOrderView(APIView):
+    """
+    POST /api/profiles/{profile_id}/gallery/order/
+
+    Body: { "ordered_post_ids": [5, 2, 9, 3] }
+    Updates gallery order for posts belonging to this profile.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+
+            allowed = is_owner_or_org_member(profile=profile, user=request.user)
+
+            if not allowed:
+                return Response(error_response("Permission denied."), status=status.HTTP_403_FORBIDDEN)
+
+            ordered_ids = request.data.get('ordered_post_ids', [])
+            if not isinstance(ordered_ids, list):
+                return Response(error_response("Invalid format. Provide list of post IDs."), status=status.HTTP_400_BAD_REQUEST)
+
+            for index, post_id in enumerate(ordered_ids):
+                Post.objects.filter(id=post_id, profile=profile).update(gallery_order=index)
+
+            return Response(success_response("Gallery order updated."), status=status.HTTP_200_OK)
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:

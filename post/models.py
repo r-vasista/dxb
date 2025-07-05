@@ -50,6 +50,9 @@ class Post(BaseModel):
     status = models.CharField(max_length=20, choices=PostStatus.choices, default=PostStatus.PUBLISHED)
     visibility = models.CharField(max_length=20, choices=PostVisibility.choices, default=PostVisibility.PUBLIC)
 
+    # Gallery order
+    gallery_order = models.PositiveIntegerField(blank=True, null=True)
+
     # Engagement metrics (denormalized)
     reaction_count = models.PositiveIntegerField(default=0)
     comment_count = models.PositiveIntegerField(default=0)
@@ -98,6 +101,12 @@ class Post(BaseModel):
         # Set published_at when first going live
         if self.status == PostStatus.PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
+
+        if not self.gallery_order and self.profile:
+            max_order = Post.objects.filter(profile=self.profile).aggregate(
+                max_order=models.Max('gallery_order')
+            )['max_order'] or 0
+            self.gallery_order = max_order + 1
 
         super().save(*args, **kwargs)
 
