@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-from django.db.models import Q
+from django.db.models import Q, F, Sum
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -38,6 +38,15 @@ from profiles.serializers import (
 )
 from profiles.choices import (
     StaticFieldType
+)
+from post.models import (
+    Post
+)
+from post.choices import (
+    PostStatus
+)
+from core.permissions import (
+    is_owner_or_org_member
 )
 
 
@@ -765,3 +774,67 @@ class SearchProfilesAPIView(ListAPIView):
             qs = qs.exclude(id=user.profile.id)
 
         return qs
+
+
+class InspiredByFromProfileView(APIView):
+    """
+    GET /api/profiles/{profile_id}/inspired-by/
+
+    Suggest profiles based on hashtags from top-performing posts of the given profile.
+    """
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+
+            allowed = is_owner_or_org_member(profile=profile, user=request.user)
+
+            if not allowed:
+                return Response(error_response("Permission denied."), status=status.HTTP_403_FORBIDDEN)
+
+            # Step 1: Get top 5 most engaged posts of this profile
+            top_posts = Post.objects.filter(
+                profile=profile,
+                status=PostStatus.PUBLISHED
+            ).annotate(
+                engagement=F('reaction_count') + F('comment_count') + F('view_count')
+            ).order_by('-engagement')[:5]
+
+            # Step 2: Collect all hashtags used in those posts
+            tag_ids = top_posts.values_list('hashtags', flat=True)
+            tag_ids = list(set(tag_ids))  # Remove duplicates
+
+            if not tag_ids:
+                return Response(success_response({"profiles": []}))
+
+            # Step 3: Find other posts with those hashtags (exclude self)
+            related_posts = Post.objects.filter(
+                hashtags__in=tag_ids,
+                status=PostStatus.PUBLISHED
+            ).exclude(profile=profile).annotate(
+                engagement=F('reaction_count') + F('comment_count') + F('view_count')
+            )
+
+            # Step 4: Group by profile, sum engagement, get top
+            exclude_ids = set()
+            exclude_ids.add(profile.id)
+            exclude_ids.update(profile.friends.values_list('id', flat=True))
+            exclude_ids.update(profile.following.values_list('id', flat=True))
+
+            # Step 5: Group by profile, sum engagement, get top
+            top_profiles = (
+                related_posts.exclude(profile_id__in=exclude_ids)
+                .values('profile')
+                .annotate(total_engagement=Sum('engagement'))
+                .order_by('-total_engagement')[:10]
+            )
+
+            profile_ids = [entry['profile'] for entry in top_profiles]
+            profiles = Profile.objects.filter(id__in=profile_ids)
+
+            serializer = ProfileSerializer(profiles, many=True, context={'request': request})
+            return Response(success_response({"profiles": serializer.data}))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
