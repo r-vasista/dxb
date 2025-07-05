@@ -122,7 +122,6 @@ class PostView(APIView):
             if post.created_by != request.user:
                 return Response(error_response("You are not allowed to update this post."), status=status.HTTP_403_FORBIDDEN)
             
-            print(request.data)
 
             serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -717,6 +716,37 @@ class UpdateGalleryOrderView(APIView):
 
             return Response(success_response("Gallery order updated."), status=status.HTTP_200_OK)
 
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ProfilePostTrengingListView(APIView, PaginationMixin):
+    """
+    GET /api/profiles/{profile_id}/posts/
+    GET /api/profiles/username/{username}/posts/
+    Fetch all posts created by a specific profile (with pagination).
+    """
+    def get(self, request, profile_id=None, username=None):
+        try:
+            if profile_id:
+                profile = get_object_or_404(Profile, id=profile_id)
+            elif username:
+                profile = get_object_or_404(Profile, username=username)
+            else:
+                return Response(error_response("username or profile id is required"), status=status.HTTP_400_BAD_REQUEST)
+
+            posts = Post.objects.filter(profile=profile.id).order_by(
+                '-is_pinned', '-reaction_count', '-view_count', '-comment_count', '-created_at', '-share_count'
+                )
+
+            # Apply pagination
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
+
+            return self.get_paginated_response(serializer.data)
+        
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
