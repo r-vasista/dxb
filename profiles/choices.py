@@ -4,6 +4,7 @@ class VisibilityStatus(models.TextChoices):
     """Visibility status choices."""
     PUBLIC = 'public', 'Public'
     PRIVATE = 'private', 'Private'
+    
 
 
 class FieldType(models.TextChoices):
