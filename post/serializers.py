@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from post.models import (
-    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag
+    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SharePost
 )
 from core.serializers import TimezoneAwareSerializerMixin
 from core.services import get_user_profile
@@ -110,3 +110,19 @@ class HashtagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Hashtag
         fields = ['name']
+
+
+class HashtagSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Hash Tags
+    """
+    
+    class Meta:
+        model = Hashtag
+        fields = ['name']
+
+
+class SharePostSerailizer(serializers.ModelSerializer):
+    class Meta:
+        model = SharePost 
+        fields = '__all__'

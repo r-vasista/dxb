@@ -125,6 +125,10 @@ class PostReaction(BaseModel):
         indexes = [models.Index(fields=['post', 'reaction_type'])]
 
 
+class SharePost(BaseModel):
+    post=models.ForeignKey(Post, on_delete=models.CASCADE,related_name="share")
+    profile=models.ForeignKey(Profile,on_delete=models.CASCADE,related_name="profile_share")
+
 class Comment(BaseModel):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
@@ -134,8 +138,7 @@ class Comment(BaseModel):
     is_flagged = models.BooleanField(default=False)
     like_count = models.PositiveIntegerField(default=0)
     reply_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
 
     class Meta:
         ordering = ['created_at']
