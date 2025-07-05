@@ -56,6 +56,9 @@ class Profile(BaseModel):
         blank=True
     )
 
+    tools=models.TextField( blank=True,null=True)
+    awards=models.TextField(blank=True,null=True)
+
     city = models.ForeignKey(City, blank=True, null=True, on_delete=models.SET_NULL)
     state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)
     country = models.ForeignKey(Country, blank=True, null=True, on_delete=models.SET_NULL)
