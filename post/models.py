@@ -127,7 +127,7 @@ class PostReaction(BaseModel):
 
 class SharePost(BaseModel):
     post=models.ForeignKey(Post, on_delete=models.CASCADE,related_name="share")
-    profile=models.ForeignKey(Profile,on_delete=models.CASCADE)
+    profile=models.ForeignKey(Profile,on_delete=models.CASCADE,related_name="profile_share")
 
 class Comment(BaseModel):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
