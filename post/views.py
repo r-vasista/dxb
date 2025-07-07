@@ -28,13 +28,14 @@ from profiles.models import (
 from profiles.serializers import ProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag,SharePost
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag, SharePost, ArtType
 )
 from post.choices import (
     PostStatus,PostVisibility
 )
 from post.serializers import (
-    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer, HashtagSerializer,SharePostSerailizer
+    PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
+    HashtagSerializer, SharePostSerailizer, ArtTypeSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -94,6 +95,8 @@ class PostView(APIView):
 
             if not is_allowed:
                 return Response(error_response("You are not allowed to post for this profile."), status=status.HTTP_403_FORBIDDEN)
+            
+            print(request.data)
 
             # Use request.data as-is — DO NOT copy!
             serializer = PostSerializer(data=request.data, context={'request': request})
@@ -776,15 +779,10 @@ class ProfilePostTrengingListView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-class MyDraftPostsView(APIView):
+class MyDraftPostsView(APIView, PaginationMixin):
     """
     GET /api/posts/my-drafts/
-
     Returns draft posts created by the current user in the last 7 days.
-    Does NOT delete any drafts — just hides older ones.
-
-    Requirements:
-    - Authenticated user
     """
 
     permission_classes = [IsAuthenticated]
@@ -793,20 +791,23 @@ class MyDraftPostsView(APIView):
         try:
             user = request.user
             seven_days_ago = timezone.now() - timedelta(days=7)
+
+            # Auto delete older drafts
             Post.objects.filter(
                 status=PostStatus.DRAFT,
                 created_by=user,
                 created_at__lt=seven_days_ago
             ).delete()
-            # Filter drafts created within last 7 days only
+
             recent_drafts = Post.objects.filter(
                 status=PostStatus.DRAFT,
                 created_by=user,
                 created_at__gte=seven_days_ago
             ).order_by('-created_at')
 
-            serializer = PostSerializer(recent_drafts, many=True, context={'request': request})
-            return Response(serializer.data, status=status.HTTP_200_OK)
+            paginated = self.paginate_queryset(recent_drafts, request)
+            serializer = PostSerializer(paginated, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
 
         except ValueError as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
@@ -814,5 +815,27 @@ class MyDraftPostsView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ArtTypeListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/art-types/?q=painting
+    Returns paginated ArtTypes, optionally filtered by search.
+    """
+    def get(self, request):
+        try:
+            query = request.query_params.get('q', '')
+            queryset = ArtType.objects.all()
+            if query:
+                queryset = queryset.filter(Q(name__icontains=query) | Q(slug__icontains=query))
+
+            queryset = queryset.order_by('name')
+            paginated = self.paginate_queryset(queryset, request)
+            serializer = ArtTypeSerializer(paginated, many=True)
+
+            return self.get_paginated_response(serializer.data)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
