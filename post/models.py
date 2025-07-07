@@ -14,12 +14,44 @@ from post.choices import (
 from profiles.models import (
     Profile
 )
-from core.models import(
+from core.models import (
     Country, State, City
+)
+from core.utils import (
+    normalize_name
 )
 
 
 User = get_user_model()
+
+class CustomArtType(BaseModel):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip().lower()
+        self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class ArtType(BaseModel):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
+
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip().lower()
+        self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
 
 class Post(BaseModel):
     """
@@ -44,6 +76,8 @@ class Post(BaseModel):
     title = models.CharField(max_length=255, blank=True)
     content = models.TextField(blank=True)
     caption = models.TextField(blank=True)
+    art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
+    custom_art_types = models.ManyToManyField(CustomArtType, related_name='custom_art_type_posts', blank=True)
 
     # Slug & Status
     slug = models.SlugField(max_length=150, blank=True)

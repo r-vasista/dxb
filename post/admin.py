@@ -1,5 +1,7 @@
 from django.contrib import admin
-from post.models import Post, PostMedia, Hashtag, PostReaction, Comment, CommentLike
+from post.models import (
+    Post, PostMedia, Hashtag, PostReaction, Comment, CommentLike, ArtType
+)
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
@@ -37,3 +39,11 @@ class CommentLikeAdmin(admin.ModelAdmin):
     list_display = ['id', 'comment', 'profile']
     search_fields = ['id', 'comment', 'profile']
     list_filter = ['id', 'comment', 'profile']
+
+
+@admin.register(ArtType)
+class ArtTypeAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name']
+    search_fields = ['id', 'name']
+    list_filter = ['id', 'name']
+
