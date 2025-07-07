@@ -54,7 +54,12 @@ def get_visible_profile_posts(request, profile, ordering=None, only_ids=False):
             visibility=PostVisibility.PRIVATE,
             created_by=user
         )
-
+        post_filter |= Q(
+            profile=profile,
+            status=PostStatus.PUBLISHED,
+            visibility=PostVisibility.FRIENDS_ONLY,
+            profile__in=requester_profile.friends.all()
+        )
     qs = Post.objects.filter(post_filter)
     if ordering:
         qs = qs.order_by(*ordering)
@@ -73,12 +78,21 @@ def get_post_visibility_filter(user):
     if not requester_profile:
         return base_filter
 
-    return base_filter | Q(
-        status=PostStatus.PUBLISHED,
-        visibility=PostVisibility.FOLLOWERS_ONLY,
-        profile__in=requester_profile.following.all()
-    ) | Q(
-        status=PostStatus.PUBLISHED,
-        visibility=PostVisibility.PRIVATE,
-        created_by=user
+    return (
+        base_filter |
+        Q(
+            status=PostStatus.PUBLISHED,
+            visibility=PostVisibility.FOLLOWERS_ONLY,
+            profile__in=requester_profile.following.all()
+        ) |
+        Q(
+            status=PostStatus.PUBLISHED,
+            visibility=PostVisibility.FRIENDS_ONLY,
+            profile__in=requester_profile.friends.all()
+        ) |
+        Q(
+            status=PostStatus.PUBLISHED,
+            visibility=PostVisibility.PRIVATE,
+            created_by=user
+        )
     )

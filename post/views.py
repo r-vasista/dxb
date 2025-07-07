@@ -44,7 +44,7 @@ from organization.models import (
     OrganizationMember
 )
 from notification.utils import (
-    create_post_reaction_notification
+    create_post_reaction_notification,create_dynamic_notification
 )
 from core.permissions import (
     is_owner_or_org_member
@@ -95,8 +95,6 @@ class PostView(APIView):
 
             if not is_allowed:
                 return Response(error_response("You are not allowed to post for this profile."), status=status.HTTP_403_FORBIDDEN)
-            
-            print(request.data)
 
             # Use request.data as-is — DO NOT copy!
             serializer = PostSerializer(data=request.data, context={'request': request})
@@ -308,7 +306,8 @@ class PostReactionView(APIView):
             serializer.is_valid(raise_exception=True)
             post_reaction = serializer.save()
 
-            create_post_reaction_notification(post_reaction)
+            create_dynamic_notification('like', post_reaction)
+
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()
@@ -407,8 +406,10 @@ class CommentView(APIView, PaginationMixin):
 
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            comment = serializer.save()
 
+            create_dynamic_notification('comment', comment)
+            
             post.comment_count = post.comments.count()
             post.save(update_fields=["comment_count"])
 

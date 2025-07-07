@@ -70,7 +70,7 @@ class Profile(BaseModel):
     youtube_url = models.URLField(blank=True, null=True)
     tiktok_url = models.URLField(blank=True, null=True)
     website_url = models.URLField(blank=True, null=True)
-
+    notify_email = models.BooleanField(default=True)
     @property
     def followers_count(self):
         return self.followers.count()
