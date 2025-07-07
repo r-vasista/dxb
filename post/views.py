@@ -7,6 +7,8 @@ from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q
+from datetime import timedelta
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -774,3 +776,39 @@ class ProfilePostTrengingListView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class MyDraftPostsView(APIView):
+    """
+    GET /api/posts/my-drafts/
+
+    Returns draft posts created by the current user in the last 7 days.
+    Does NOT delete any drafts — just hides older ones.
+
+    Requirements:
+    - Authenticated user
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            user = request.user
+            seven_days_ago = timezone.now() - timedelta(days=7)
+
+            # Filter drafts created within last 7 days only
+            recent_drafts = Post.objects.filter(
+                status=PostStatus.DRAFT,
+                created_by=user,
+                created_at__gte=seven_days_ago
+            ).order_by('-created_at')
+
+            serializer = PostSerializer(recent_drafts, many=True, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -2,7 +2,7 @@ from django.urls import path
 from post.views import (
     PostView, ProfilePostListView, AllPostsAPIView, ProfileImageMediaListView, PostReactionView, Postreactionlist,PostReactionDetailView,
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView, TrendingPostsAPIView,
-    HashtagPostsView, HashtagsListView,PostShareView, ProfileGalleryView, UpdateGalleryOrderView, ProfilePostTrengingListView
+    HashtagPostsView, HashtagsListView,PostShareView, ProfileGalleryView, UpdateGalleryOrderView, ProfilePostTrengingListView,MyDraftPostsView
     )
 
 
@@ -42,5 +42,7 @@ urlpatterns = [
 
     path('profile-trending-posts/username/<str:username>/', ProfilePostTrengingListView.as_view(), name='profile-post-trending-username'),
     path('profile-trending-posts/profile-id/<str:profile_id>/', ProfilePostTrengingListView.as_view(), name='profile-post-trending-profile_id'),
+
+    path('posts/my-drafts/',MyDraftPostsView.as_view(),name='my-draft'),
 
 ]
