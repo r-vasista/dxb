@@ -793,7 +793,11 @@ class MyDraftPostsView(APIView):
         try:
             user = request.user
             seven_days_ago = timezone.now() - timedelta(days=7)
-
+            Post.objects.filter(
+                status=PostStatus.DRAFT,
+                created_by=user,
+                created_at__lt=seven_days_ago
+            ).delete()
             # Filter drafts created within last 7 days only
             recent_drafts = Post.objects.filter(
                 status=PostStatus.DRAFT,
