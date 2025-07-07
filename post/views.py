@@ -700,11 +700,37 @@ class PostShareView(APIView):
 
 
 class ProfileGalleryView(APIView, PaginationMixin):
+    """
+    GET /api/profiles/{profile_id}/gallery/?art_type_ids=1,2&sort=popular
+
+    Filters:
+    - art_type_ids: Filter by one or more ArtType IDs (comma separated)
+    - sort: 'recent', 'popular', or 'gallery_order' (default: gallery_order)
+    """
+
     def get(self, request, profile_id=None, username=None):
         try:
             profile = get_profile_from_request(profile_id, username)
-            posts = get_visible_profile_posts(request, profile, ordering=['gallery_order', '-created_at'])
+            posts = get_visible_profile_posts(request, profile)
 
+            # Apply art type filter
+            art_type_ids = request.query_params.get('art_type_ids')
+            if art_type_ids:
+                art_type_ids = [int(id.strip()) for id in art_type_ids.split(',') if id.strip().isdigit()]
+                posts = posts.filter(art_types__in=art_type_ids).distinct()
+
+            # Apply sorting
+            sort = request.query_params.get('sort', 'gallery_order')
+            if sort == 'popular':
+                ordering = ['-reaction_count', '-view_count', '-comment_count', '-created_at']
+            elif sort == 'recent':
+                ordering = ['-created_at']
+            else:  # Default: gallery_order
+                ordering = ['gallery_order', '-created_at']
+
+            posts = posts.order_by(*ordering)
+
+            # Paginate & serialize
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
@@ -717,6 +743,7 @@ class ProfileGalleryView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class UpdateGalleryOrderView(APIView):
     """
