@@ -5,6 +5,7 @@ class PostStatus(models.TextChoices):
     PUBLISHED = 'published', 'Published'
     ARCHIVED = 'archived', 'Archived'
     REMOVED = 'removed', 'Removed'
+    DRAFT = 'draft', 'Draft' 
 
 
 class PostVisibility(models.TextChoices):
