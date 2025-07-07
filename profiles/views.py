@@ -39,6 +39,11 @@ from profiles.serializers import (
 from profiles.choices import (
     StaticFieldType
 )
+from notification.utils import (
+    create_dynamic_notification
+)
+from django.contrib.contenttypes.models import ContentType
+from notification.models import Notification
 from post.models import (
     Post
 )
@@ -48,7 +53,6 @@ from post.choices import (
 from core.permissions import (
     is_owner_or_org_member
 )
-
 
 class ProfileView(APIView):
     """
@@ -367,7 +371,7 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-
+            create_dynamic_notification('friend_request', friend_request)
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -400,6 +404,14 @@ class CancelFriendRequestView(APIView):
 
             if friend_request.status != 'pending':
                 return Response(error_response("Only pending friend requests can be cancelled."), status=status.HTTP_400_BAD_REQUEST)
+
+            Notification.objects.filter(
+                sender=friend_request.from_profile,
+                recipient=friend_request.to_profile,
+                notification_type='friend_request',
+                content_type=ContentType.objects.get_for_model(friend_request),
+                object_id=friend_request.id
+            ).delete()
 
             friend_request.delete()
 
@@ -450,7 +462,7 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-
+                create_dynamic_notification('friend_accept', friend_request)
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
@@ -563,7 +575,10 @@ class FollowProfileView(APIView):
                 return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.add(target_profile)
-
+            create_dynamic_notification(
+                'follow',
+                {'sender': current_profile, 'target': target_profile}
+            )
             return Response(success_response("Profile followed successfully."), status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -598,6 +613,11 @@ class UnfollowProfileView(APIView):
                 return Response(error_response("You are not following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.remove(target_profile)
+            Notification.objects.filter(
+                sender=current_profile,
+                recipient=target_profile,
+                notification_type='follow'
+            ).delete()
 
             return Response(success_response("Profile unfollowed successfully."), status=status.HTTP_200_OK)
 
@@ -774,8 +794,8 @@ class SearchProfilesAPIView(ListAPIView):
             qs = qs.exclude(id=user.profile.id)
 
         return qs
-
-
+    
+    
 class InspiredByFromProfileView(APIView):
     """
     GET /api/profiles/{profile_id}/inspired-by/
