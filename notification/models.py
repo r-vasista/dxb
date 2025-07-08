@@ -7,6 +7,7 @@ from django.utils import timezone
 # Local imports
 from user.models import CustomUser
 from profiles.models import Profile
+from core.models import BaseModel
 
 
 class Notification(models.Model):
@@ -51,3 +52,25 @@ class Notification(models.Model):
         self.save()
 
 # Create your models here.
+
+class DailyQuote(models.Model):
+    """
+    A single quote entry for the Daily Muse system.
+    Admins can upload these via Excel or Django Admin.
+    """
+    text = models.TextField()
+    author = models.CharField(max_length=255, blank=True, null=True)
+
+    def __str__(self):
+        return f"{self.text[:60]}..."
+
+class DailyQuoteSeen(BaseModel):
+    """
+    Tracks which user (profile) has seen which quote and when.
+    """
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    quote = models.ForeignKey(DailyQuote, on_delete=models.CASCADE)
+    email_sent = models.BooleanField(default=False)
+    
+    class Meta:
+        unique_together = ('profile', 'quote')

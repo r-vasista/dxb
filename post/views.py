@@ -506,7 +506,9 @@ class CommentReplyView(APIView):
 
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            comment = serializer.save()
+
+            create_dynamic_notification('comment', comment)
 
             # Update reply count
             parent_comment.reply_count = parent_comment.replies.count()
