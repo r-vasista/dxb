@@ -6,7 +6,7 @@ from profiles.views import (
     ProfileAPIView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
     ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
-    CreateProfileViewAPIView
+    CreateProfileViewAPIView, ProfileStatsAPIView
 )
 
 urlpatterns = [
@@ -36,5 +36,6 @@ urlpatterns = [
 
     path('inspired-profiles/<str:profile_id>/', InspiredByFromProfileView.as_view(), name='inspired-profiles'),
     path('profile-view/<int:profile_id>/', CreateProfileViewAPIView.as_view(), name='create-profile-view'),
+    path('profile-stats/', ProfileStatsAPIView.as_view(), name='profile-stats'),
     
 ]

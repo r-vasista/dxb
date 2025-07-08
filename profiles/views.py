@@ -46,7 +46,7 @@ from notification.utils import (
 from django.contrib.contenttypes.models import ContentType
 from notification.models import Notification
 from post.models import (
-    Post
+    Post, PostReaction, Comment, SharePost, PostView
 )
 from post.choices import (
     PostStatus
@@ -894,3 +894,58 @@ class CreateProfileViewAPIView(APIView):
                 return Response(success_response("Post view tracked already"), status=201)
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+class ProfileStatsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Posts created by the user
+            posts_created = Post.objects.filter(profile=profile).count()
+
+            # Likes received on posts
+            likes_received = PostReaction.objects.filter(post__profile=profile).count()
+
+            # Likes given by the user
+            likes_given = PostReaction.objects.filter(profile=profile).count()
+
+            # Comments made by the user
+            comments_made = Comment.objects.filter(profile=profile).count()
+
+            # Comments received on user's posts
+            comments_received = Comment.objects.filter(post__profile=profile).count()
+
+            # Shares made by the user
+            shares = SharePost.objects.filter(profile=profile).count()
+
+            # Followers / Following / Friends
+            followers_count = profile.followers.count()
+            following_count = profile.following.count()
+            friends_count = profile.friends.count()
+
+            # Profile views
+            profile_views = ProfileView.objects.filter(profile=profile).count()
+
+            # Post views
+            post_views = PostView.objects.filter(post__profile=profile).count()
+
+            return Response({
+                "posts_created": posts_created,
+                "likes_received": likes_received,
+                "likes_given": likes_given,
+                "comments_made": comments_made,
+                "comments_received": comments_received,
+                "shares": shares,
+                "followers": followers_count,
+                "following": following_count,
+                "friends": friends_count,
+                "profile_views": profile_views,
+                "post_views": post_views,
+            })
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
