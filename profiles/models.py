@@ -55,6 +55,7 @@ class Profile(BaseModel):
         related_name='followers',
         blank=True
     )
+    view_count = models.PositiveIntegerField(default=0)
 
     tools=models.TextField( blank=True,null=True)
     awards=models.TextField(blank=True,null=True)
@@ -71,6 +72,7 @@ class Profile(BaseModel):
     tiktok_url = models.URLField(blank=True, null=True)
     website_url = models.URLField(blank=True, null=True)
     notify_email = models.BooleanField(default=True)
+
     @property
     def followers_count(self):
         return self.followers.count()
@@ -375,3 +377,14 @@ class StaticFieldValue(BaseModel):
             self.number_value = value
         elif field_type == StaticFieldType.BOOLEAN:
             self.boolean_value = value
+
+
+class ProfileView(BaseModel):
+    viewer = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='views')
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('viewer', 'profile')
+        indexes = [models.Index(fields=['profile', 'viewed_at'])]
+        ordering = ['-viewed_at']

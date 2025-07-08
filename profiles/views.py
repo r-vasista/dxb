@@ -7,6 +7,7 @@ from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q, F, Sum
+from django.db import IntegrityError
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -15,7 +16,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Python imports
 from datetime import datetime
@@ -29,7 +30,7 @@ from core.services import (
     success_response, error_response, get_user_profile
 )
 from profiles.models import (
-    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue
+    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
@@ -45,7 +46,7 @@ from notification.utils import (
 from django.contrib.contenttypes.models import ContentType
 from notification.models import Notification
 from post.models import (
-    Post
+    Post, PostReaction, Comment, SharePost, PostView
 )
 from post.choices import (
     PostStatus
@@ -54,7 +55,7 @@ from core.permissions import (
     is_owner_or_org_member
 )
 
-class ProfileView(APIView):
+class ProfileAPIView(APIView):
     """
     GET /api/profiles/<profile_id>/
     PUT /api/profiles/<profile_id>/
@@ -854,6 +855,96 @@ class InspiredByFromProfileView(APIView):
             serializer = ProfileSerializer(profiles, many=True, context={'request': request})
             return Response(success_response({"profiles": serializer.data}))
 
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreateProfileViewAPIView(APIView):
+    """
+    POST /api/profiles/<profile_id>/view/
+
+    Tracks a view to a profile and increments view_count.
+    Accepts both authenticated and anonymous users.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def post(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            viewer = request.user if request.user.is_authenticated else None
+            viewer_profile = get_user_profile(viewer)
+
+            # Prevent self-views from being tracked
+            if viewer and profile == viewer_profile:
+                return Response(success_response("Self view ignored"), status=200)
+
+            # Save view
+            ProfileView.objects.create(profile=profile, viewer=viewer_profile)
+
+            # Increment view count (denormalized for performance)
+            profile.view_count = profile.view_count + 1
+            profile.save(update_fields=["view_count"])
+
+            return Response(success_response("Profile view tracked"), status=201)
+        
+        except IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e) or "unique constraint" in str(e).lower():
+                return Response(success_response("Post view tracked already"), status=201)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+
+
+class ProfileStatsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Posts created by the user
+            posts_created = Post.objects.filter(profile=profile).count()
+
+            # Likes received on posts
+            likes_received = PostReaction.objects.filter(post__profile=profile).count()
+
+            # Likes given by the user
+            likes_given = PostReaction.objects.filter(profile=profile).count()
+
+            # Comments made by the user
+            comments_made = Comment.objects.filter(profile=profile).count()
+
+            # Comments received on user's posts
+            comments_received = Comment.objects.filter(post__profile=profile).count()
+
+            # Shares made by the user
+            shares = SharePost.objects.filter(profile=profile).count()
+
+            # Followers / Following / Friends
+            followers_count = profile.followers.count()
+            following_count = profile.following.count()
+            friends_count = profile.friends.count()
+
+            # Profile views
+            profile_views = ProfileView.objects.filter(profile=profile).count()
+
+            # Post views
+            post_views = PostView.objects.filter(post__profile=profile).count()
+
+            return Response({
+                "posts_created": posts_created,
+                "likes_received": likes_received,
+                "likes_given": likes_given,
+                "comments_made": comments_made,
+                "comments_received": comments_received,
+                "shares": shares,
+                "followers": followers_count,
+                "following": following_count,
+                "friends": friends_count,
+                "profile_views": profile_views,
+                "post_views": post_views,
+            })
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
