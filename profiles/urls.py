@@ -3,13 +3,14 @@ from django.urls import path
 
 # Local imports
 from profiles.views import (
-    ProfileView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
+    ProfileAPIView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
-    ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView
+    ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
+    CreateProfileViewAPIView
 )
 
 urlpatterns = [
-    path('profile/<str:profile_id>/', ProfileView.as_view(), name='profile'),
+    path('profile/<str:profile_id>/', ProfileAPIView.as_view(), name='profile'),
     path('profile-detail/<str:username>/', ProfileDetailView.as_view(), name='profile-detail'),
     path('profile-fields/<str:profile_id>/', ProfileFieldView.as_view(), name='profile-fields/'),
     path('profile-fields-section/<str:section_id>/', ProfileFieldSectionView.as_view(), name='profile-fields-section/'),
@@ -34,4 +35,6 @@ urlpatterns = [
     path('static-fields/', StaticFieldValueView.as_view(), name='static-fields'),
 
     path('inspired-profiles/<str:profile_id>/', InspiredByFromProfileView.as_view(), name='inspired-profiles'),
+    path('profile-view/<int:profile_id>/', CreateProfileViewAPIView.as_view(), name='create-profile-view'),
+    
 ]

@@ -172,6 +172,7 @@ class SharePost(BaseModel):
     post=models.ForeignKey(Post, on_delete=models.CASCADE,related_name="share")
     profile=models.ForeignKey(Profile,on_delete=models.CASCADE,related_name="profile_share")
 
+
 class Comment(BaseModel):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
@@ -210,3 +211,14 @@ class Hashtag(models.Model):
 
     def __str__(self):
         return f"#{self.name}"
+
+
+class PostView(BaseModel):
+    viewer = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='views')
+    viewed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('viewer', 'post')
+        indexes = [models.Index(fields=['post', 'viewed_at'])]
+        ordering = ['-viewed_at']

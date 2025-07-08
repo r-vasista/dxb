@@ -7,6 +7,7 @@ from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q, F, Sum
+from django.db import IntegrityError
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -15,7 +16,7 @@ from rest_framework.generics import ListAPIView
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Python imports
 from datetime import datetime
@@ -29,7 +30,7 @@ from core.services import (
     success_response, error_response, get_user_profile
 )
 from profiles.models import (
-    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue
+    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
@@ -54,7 +55,7 @@ from core.permissions import (
     is_owner_or_org_member
 )
 
-class ProfileView(APIView):
+class ProfileAPIView(APIView):
     """
     GET /api/profiles/<profile_id>/
     PUT /api/profiles/<profile_id>/
@@ -858,3 +859,38 @@ class InspiredByFromProfileView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreateProfileViewAPIView(APIView):
+    """
+    POST /api/profiles/<profile_id>/view/
+
+    Tracks a view to a profile and increments view_count.
+    Accepts both authenticated and anonymous users.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def post(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            viewer = request.user if request.user.is_authenticated else None
+            viewer_profile = get_user_profile(viewer)
+
+            # Prevent self-views from being tracked
+            if viewer and profile == viewer_profile:
+                return Response(success_response("Self view ignored"), status=200)
+
+            # Save view
+            ProfileView.objects.create(profile=profile, viewer=viewer_profile)
+
+            # Increment view count (denormalized for performance)
+            profile.view_count = profile.view_count + 1
+            profile.save(update_fields=["view_count"])
+
+            return Response(success_response("Profile view tracked"), status=201)
+        
+        except IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e) or "unique constraint" in str(e).lower():
+                return Response(success_response("Post view tracked already"), status=201)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
