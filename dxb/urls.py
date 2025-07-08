@@ -25,7 +25,10 @@ urlpatterns = [
     path('organization/', include('organization.urls')),
     path('user/', include('user.urls')),
     path('media/', include('post.urls')),
-    path('profile/', include('profiles.urls'))
+    path('profile/', include('profiles.urls')),
+    path('event/', include('event.urls')),
+    path('general/', include('core.urls')),
+    path('notification/', include('notification.urls')),
 ]
 
 if settings.DEBUG:

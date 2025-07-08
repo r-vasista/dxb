@@ -18,9 +18,10 @@ from django.shortcuts import get_object_or_404
 
 # Local imports
 from core.services import success_response, error_response
-from user.models import Role, Permission, UserType
+from user.models import Role, Permission, UserType, UserLog
 from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer, UserSerializer
 from user.choices import PermissionScope
+from user.utils import get_client_ip
 
 from organization.serializers import RegisterOrganizationSerializer, AddressSerializer
 from organization.utils import (
@@ -62,11 +63,17 @@ class RegisterAccountAPIView(APIView):
     def post(self, request):
         data = request.data
         user_type = data.get("user_type")
-        email = data.get("email").lower()
+        email = data.get("email", "").lower()
         password = data.get("password")
         otp = data.get("otp", "")
         name = data.get("name", "")
         address_data = data.get("address", {})
+
+        # Location data
+        timezone_str = data.get("timezone", "UTC")
+        latitude = data.get("latitude")
+        longitude = data.get("longitude")
+        ip_address = get_client_ip(request)
 
         try:
             if not email or not password or not user_type:
@@ -77,13 +84,13 @@ class RegisterAccountAPIView(APIView):
 
             with transaction.atomic():
                 if user_type == "organization":
-                    # Register as Organization
                     user_type_obj, _ = UserType.objects.get_or_create(code="organization", defaults={"name": "Organization"})
                     user_serializer = UserSerializer(data={
                         "email": email,
                         "password": password,
                         "user_type": user_type_obj.id,
-                        "full_name": name
+                        "full_name": name,
+                        "timezone": timezone_str
                     })
                     user_serializer.is_valid(raise_exception=True)
                     user = user_serializer.save()
@@ -116,17 +123,17 @@ class RegisterAccountAPIView(APIView):
                         organization=organization,
                         profile_type=ProfileType.ORGANIZATION,
                         username=name,
-                        phone_number= data.get("phone_number")
+                        phone_number=data.get("phone_number")
                     )
 
                 elif user_type == "user":
-                    # Register as user User
                     user_type_obj, _ = UserType.objects.get_or_create(code="user", defaults={"name": "user"})
                     user_serializer = UserSerializer(data={
                         "email": email,
                         "password": password,
                         "user_type": user_type_obj.id,
-                        "full_name": name
+                        "full_name": name,
+                        "timezone": timezone_str
                     })
                     user_serializer.is_valid(raise_exception=True)
                     user = user_serializer.save()
@@ -138,10 +145,19 @@ class RegisterAccountAPIView(APIView):
                         user=user,
                         profile_type=ProfileType.USER,
                         username=name,
-                        phone_number= data.get("phone_number")
+                        phone_number=data.get("phone_number")
                     )
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
+
+                # Log user registration as login
+                UserLog.objects.create(
+                    user=user,
+                    ip_address=ip_address,
+                    latitude=latitude,
+                    longitude=longitude,
+                    timezone=timezone_str
+                )
 
                 # Return token
                 refresh = RefreshToken.for_user(user)
@@ -172,6 +188,23 @@ class LoginView(TokenObtainPairView):
             serializer = self.get_serializer(data=request.data)
             serializer.is_valid(raise_exception=True)
             response_data = serializer.validated_data
+            
+            user = serializer.user
+
+            # Get IP and optional location/timezone from frontend
+            ip = get_client_ip(request)
+            lat = request.data.get('latitude')
+            lon = request.data.get('longitude')
+            tz = request.data.get('timezone', user.timezone)  # frontend detected or user default
+
+            UserLog.objects.create(
+                user=user,
+                ip_address=ip,
+                latitude=lat,
+                longitude=lon,
+                timezone=tz
+            )
+
             return Response(success_response(response_data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_401_UNAUTHORIZED)

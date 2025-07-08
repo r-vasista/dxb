@@ -5,7 +5,7 @@ from django.urls import path
 from profiles.views import (
     ProfileView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
-    ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView
+    ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView
 )
 
 urlpatterns = [
@@ -13,6 +13,8 @@ urlpatterns = [
     path('profile-detail/<str:username>/', ProfileDetailView.as_view(), name='profile-detail'),
     path('profile-fields/<str:profile_id>/', ProfileFieldView.as_view(), name='profile-fields/'),
     path('profile-fields-section/<str:section_id>/', ProfileFieldSectionView.as_view(), name='profile-fields-section/'),
+    path('profiles/search/', SearchProfilesAPIView.as_view(), name='search-profiles'),
+
     path('send-friend-request/', SendFriendRequestView.as_view(), name='send-friend-request'),
     path('cancel-friend-request/', CancelFriendRequestView.as_view(), name='cancel-friend-request'),
     path('respond-friend-request/', RespondFriendRequestView.as_view(), name='respond-friend-request'),
@@ -29,5 +31,7 @@ urlpatterns = [
     path('canvas-update/<int:pk>/', ProfileCanvasView.as_view(), name='canvas-update'),
     path('canvas-delete/<int:pk>/', ProfileCanvasView.as_view(), name='canvas-delete'),
     
-    path('static-fields/', StaticFieldValueView.as_view(), name='static-fields/'),
+    path('static-fields/', StaticFieldValueView.as_view(), name='static-fields'),
+
+    path('inspired-profiles/<str:profile_id>/', InspiredByFromProfileView.as_view(), name='inspired-profiles'),
 ]

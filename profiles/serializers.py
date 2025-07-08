@@ -5,6 +5,10 @@ from django.db.models import Prefetch
 # Rest Framework imports
 from rest_framework import serializers
 
+# Python imports
+from datetime import datetime
+from decimal import Decimal, InvalidOperation
+
 # Local imports
 from profiles.models import (
     ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection
@@ -12,16 +16,60 @@ from profiles.models import (
 from profiles.utils import (
     validate_profile_field_data
 )
+from profiles.choices import(
+    StaticFieldType
+)
 from organization.serializers import (
     OrganizationSerializer
 )
 from core.services import get_user_profile
+from event.serializers import (
+    EventListSerializer
+)
 
 
 class StaticFieldValueSerializer(serializers.ModelSerializer):
+    field_name = serializers.CharField(source='static_field.field_name', read_only=True)
+    field_type = serializers.CharField(source='static_field.field_type', read_only=True)
+    section_title = serializers.CharField(source='static_field.section.title', read_only=True)
+    is_public = serializers.BooleanField(source='static_field.is_public', read_only=True)
+    display_order = serializers.IntegerField(source='static_field.display_order', read_only=True)
+    field_value = serializers.SerializerMethodField()
+
     class Meta:
         model = StaticFieldValue
-        fields = ['field_value']
+        fields = ['id', 'field_name', 'field_type', 'section_title', 'is_public', 
+                 'display_order', 'field_value', 'last_updated']
+
+    def get_field_value(self, obj):
+        """Return the appropriate value based on field type"""
+        value = obj.get_value()
+        
+        if obj.static_field.field_type == StaticFieldType.DATE and value:
+            return value.strftime('%Y-%m-%d')
+        elif obj.static_field.field_type == StaticFieldType.IMAGE and value:
+            if value:
+                # Build absolute URL using request context
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(value.url)
+                return value.url
+            return None
+        elif obj.static_field.field_type == StaticFieldType.FILE and value:
+            if value:
+                # Build absolute URL using request context
+                request = self.context.get('request')
+                if request:
+                    return request.build_absolute_uri(value.url)
+                return value.url
+            return None
+        elif obj.static_field.field_type == StaticFieldType.NUMBER and value:
+            return str(value)
+        elif obj.static_field.field_type == StaticFieldType.BOOLEAN and value is not None:
+            return value
+        
+        return value
+
 
 
 class StaticProfileFieldSerializer(serializers.ModelSerializer):
@@ -29,14 +77,14 @@ class StaticProfileFieldSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = StaticProfileField
-        fields = ['id', 'field_name', 'description', 'is_public', 'display_order', 'field_value']
+        fields = ['id', 'field_name', 'field_type', 'description', 'is_public', 'display_order', 'field_value']
 
     def get_field_value(self, field):
         profile = self.context.get('profile')
         if not profile:
             return None
         response = StaticFieldValue.objects.filter(profile=profile, static_field=field).first()
-        return StaticFieldValueSerializer(response).data['field_value'] if response else None
+        return StaticFieldValueSerializer(response, context=self.context).data['field_value'] if response else None
     
 
 class StaticProfileSectionSerializer(serializers.ModelSerializer):
@@ -62,7 +110,7 @@ class ProfileSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'username', 'bio', 'profile_picture', 'profile_type', 'cover_picture', 'visibility_status',
             'followers_count', 'friends_count', 'following_count',
-            'organization', 'profile_fields'
+            'organization', 'profile_fields', 'awards', 'tools'
         ]
 
     def get_profile_fields(self, obj):
@@ -80,10 +128,11 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status']
+        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state', 'awards', 'tools']
         extra_kwargs = {
             'username': {'required': False}, 
         }
+
 
 class ProfileFieldSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
@@ -136,9 +185,13 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     is_friend = serializers.SerializerMethodField()
     friend_request_status = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
+    organized_events = serializers.SerializerMethodField()
+
+    city_name = serializers.CharField(source='city.name', read_only=True)
+    state_name = serializers.CharField(source='state.name', read_only=True)
+    country_name = serializers.CharField(source='country.name', read_only=True)
+
     
-
-
     class Meta:
         model = Profile
         fields = [
@@ -146,7 +199,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
             'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
-            'got_friend_request'
+            'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
+            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools'
         ]
     
     def get_is_friend(self, obj):
@@ -216,9 +270,14 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
                 queryset=StaticProfileField.objects.all().order_by('display_order')
             )
         ).order_by('display_order')
-        
-        serializer = StaticProfileSectionSerializer(sections, many=True, context={'profile': obj})
+        context = self.context.copy()
+        context['profile'] = obj
+        serializer = StaticProfileSectionSerializer(sections, many=True, context=context)
         return serializer.data
+    
+    def get_organized_events(self, obj):
+        events = obj.organized_events.all()
+        return EventListSerializer(events, many=True).data 
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
@@ -271,9 +330,57 @@ class ProfileCanvasSerializer(serializers.ModelSerializer):
 
 class StaticFieldInputSerializer(serializers.Serializer):
     static_field_id = serializers.IntegerField()
-    field_value = serializers.CharField(allow_blank=True, required=False)
+    field_value = serializers.CharField(allow_blank=True, required=False, allow_null=True)
 
     def validate_static_field_id(self, value):
         if not StaticProfileField.objects.filter(id=value).exists():
             raise serializers.ValidationError("Invalid static_field_id.")
         return value
+
+    def validate(self, attrs):
+        static_field_id = attrs.get('static_field_id')
+        field_value = attrs.get('field_value')
+        
+        try:
+            static_field = StaticProfileField.objects.get(id=static_field_id)
+        except StaticProfileField.DoesNotExist:
+            raise serializers.ValidationError("Invalid static_field_id.")
+        
+        # Validate based on field type
+        if static_field.field_type == StaticFieldType.DATE and field_value:
+            try:
+                # Try to parse the date
+                datetime.strptime(field_value, '%Y-%m-%d')
+            except ValueError:
+                raise serializers.ValidationError("Invalid date format. Use YYYY-MM-DD.")
+        
+        elif static_field.field_type == StaticFieldType.NUMBER and field_value:
+            try:
+                Decimal(field_value)
+            except InvalidOperation:
+                raise serializers.ValidationError("Invalid number format.")
+        
+        elif static_field.field_type == StaticFieldType.BOOLEAN and field_value:
+            if field_value.lower() not in ['true', 'false', '1', '0']:
+                raise serializers.ValidationError("Boolean value must be 'true', 'false', '1', or '0'.")
+        
+        elif static_field.field_type == StaticFieldType.EMAIL and field_value:
+            email_validator = serializers.EmailField()
+            try:
+                email_validator.run_validation(field_value)
+            except serializers.ValidationError:
+                raise serializers.ValidationError("Invalid email format.")
+        
+        elif static_field.field_type == StaticFieldType.URL and field_value:
+            url_validator = serializers.URLField()
+            try:
+                url_validator.run_validation(field_value)
+            except serializers.ValidationError:
+                raise serializers.ValidationError("Invalid URL format.")
+        
+        # Check required fields
+        if static_field.is_required and not field_value:
+            raise serializers.ValidationError(f"Field '{static_field.field_name}' is required.")
+        
+        attrs['static_field'] = static_field
+        return attrs

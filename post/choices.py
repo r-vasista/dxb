@@ -5,13 +5,15 @@ class PostStatus(models.TextChoices):
     PUBLISHED = 'published', 'Published'
     ARCHIVED = 'archived', 'Archived'
     REMOVED = 'removed', 'Removed'
+    DRAFT = 'draft', 'Draft' 
 
 
 class PostVisibility(models.TextChoices):
     """Visibility settings for posts."""
     PUBLIC = 'public', 'Public'
     FOLLOWERS_ONLY = 'followers', 'Followers Only'
-    PRIVATE = 'private', 'Private'
+    PRIVATE = 'private', 'Private',
+    FRIENDS_ONLY = 'friends_only', 'Friends Only'
 
 
 class ReactionType(models.TextChoices):

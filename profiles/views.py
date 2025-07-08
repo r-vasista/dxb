@@ -6,15 +6,20 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-from django.db.models import Q
+from django.db.models import Q, F, Sum
 
 # Rest Framework imports
 from rest_framework.views import APIView
 from rest_framework.response import Response
+from rest_framework.generics import ListAPIView
 from rest_framework import status
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny
+
+# Python imports
+from datetime import datetime
+from decimal import Decimal
 
 # Local imports
 from user.permissions import (
@@ -29,9 +34,25 @@ from profiles.models import (
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
-    StaticFieldInputSerializer
+    StaticFieldInputSerializer, StaticFieldValueSerializer
 )
-
+from profiles.choices import (
+    StaticFieldType
+)
+from notification.utils import (
+    create_dynamic_notification
+)
+from django.contrib.contenttypes.models import ContentType
+from notification.models import Notification
+from post.models import (
+    Post
+)
+from post.choices import (
+    PostStatus
+)
+from core.permissions import (
+    is_owner_or_org_member
+)
 
 class ProfileView(APIView):
     """
@@ -304,7 +325,7 @@ class ProfileDetailView(APIView):
     def get(self, request, username):
         try:
             profile = get_object_or_404(Profile, username=username, context={'request': request})
-            serializer = ProfileDetailSerializer(profile)
+            serializer = ProfileDetailSerializer(profile, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
@@ -350,7 +371,7 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-
+            create_dynamic_notification('friend_request', friend_request)
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -383,6 +404,14 @@ class CancelFriendRequestView(APIView):
 
             if friend_request.status != 'pending':
                 return Response(error_response("Only pending friend requests can be cancelled."), status=status.HTTP_400_BAD_REQUEST)
+
+            Notification.objects.filter(
+                sender=friend_request.from_profile,
+                recipient=friend_request.to_profile,
+                notification_type='friend_request',
+                content_type=ContentType.objects.get_for_model(friend_request),
+                object_id=friend_request.id
+            ).delete()
 
             friend_request.delete()
 
@@ -433,7 +462,7 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-
+                create_dynamic_notification('friend_accept', friend_request)
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
@@ -546,7 +575,10 @@ class FollowProfileView(APIView):
                 return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.add(target_profile)
-
+            create_dynamic_notification(
+                'follow',
+                {'sender': current_profile, 'target': target_profile}
+            )
             return Response(success_response("Profile followed successfully."), status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -581,6 +613,11 @@ class UnfollowProfileView(APIView):
                 return Response(error_response("You are not following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.remove(target_profile)
+            Notification.objects.filter(
+                sender=current_profile,
+                recipient=target_profile,
+                notification_type='follow'
+            ).delete()
 
             return Response(success_response("Profile unfollowed successfully."), status=status.HTTP_200_OK)
 
@@ -658,12 +695,14 @@ class ListFollowingView(APIView):
 
 class StaticFieldValueView(APIView):
     """
-    POST /api/profiles/<profile_id>/static-fields/
+    POST /api/profiles/static-fields/
     Stores or updates static profile field values for a given profile.
+    Supports both regular field values and file uploads in a single API.
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
-    def post(self, request,):
+    def post(self, request):
         try:
             profile = get_user_profile(request.user)
 
@@ -677,15 +716,145 @@ class StaticFieldValueView(APIView):
 
             with transaction.atomic():
                 for item in serializer.validated_data:
-                    static_field = StaticProfileField.objects.get(id=item["static_field_id"])
-                    value, created = StaticFieldValue.objects.get_or_create(
+                    static_field = item['static_field']
+                    field_value = item.get("field_value", "")
+                    
+                    value_obj, created = StaticFieldValue.objects.get_or_create(
                         profile=profile,
                         static_field=static_field
                     )
-                    value.field_value = item.get("field_value", "")
-                    value.save()
+                    
+                    # Handle file uploads first (check if file is provided for this field)
+                    file_key = f"file_{static_field.id}"
+                    if file_key in request.FILES:
+                        file_data = request.FILES[file_key]
+                        
+                        # Check if field type supports file uploads
+                        if static_field.field_type not in [StaticFieldType.IMAGE, StaticFieldType.FILE]:
+                            raise ValueError(f"Field '{static_field.field_name}' does not support file uploads.")
+                        
+                        value_obj.set_value(file_data)
+                    
+                    # Handle other field types
+                    elif static_field.field_type == StaticFieldType.DATE and field_value:
+                        value_obj.set_value(datetime.strptime(field_value, '%Y-%m-%d').date())
+                    elif static_field.field_type == StaticFieldType.NUMBER and field_value:
+                        value_obj.set_value(Decimal(field_value))
+                    elif static_field.field_type == StaticFieldType.BOOLEAN and field_value:
+                        bool_value = field_value.lower() in ['true', '1']
+                        value_obj.set_value(bool_value)
+                    else:
+                        value_obj.set_value(field_value)
+                    
+                    value_obj.save()
 
             return Response(success_response("Static field data saved."), status=status.HTTP_200_OK)
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def get(self, request):
+        """
+        GET /api/profiles/static-fields/
+        Retrieves static profile field values for the authenticated user's profile.
+        """
+        try:
+            profile = get_user_profile(request.user)
+            
+            # Get all static field values for this profile
+            static_values = StaticFieldValue.objects.filter(
+                profile=profile
+            ).select_related('static_field', 'static_field__section').order_by(
+                'static_field__section__display_order', 
+                'static_field__display_order'
+            )
+            
+            serializer = StaticFieldValueSerializer(static_values, many=True)
+            return Response(success_response("Static field data retrieved.", serializer.data), 
+                          status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
+class SearchProfilesAPIView(ListAPIView):
+    permission_classes = [AllowAny]
+    serializer_class = ProfileSerializer
+
+    def get_queryset(self):
+        query = self.request.query_params.get('name', '')
+        qs = Profile.objects.filter(
+            Q(username__icontains=query) |
+            Q(bio__icontains=query)
+        ).distinct()
+
+        # Exclude the request user's profile (if authenticated and has a profile)
+        user = self.request.user
+        if user.is_authenticated and hasattr(user, 'profile'):
+            qs = qs.exclude(id=user.profile.id)
+
+        return qs
+    
+    
+class InspiredByFromProfileView(APIView):
+    """
+    GET /api/profiles/{profile_id}/inspired-by/
+
+    Suggest profiles based on hashtags from top-performing posts of the given profile.
+    """
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+
+            allowed = is_owner_or_org_member(profile=profile, user=request.user)
+
+            if not allowed:
+                return Response(error_response("Permission denied."), status=status.HTTP_403_FORBIDDEN)
+
+            # Step 1: Get top 5 most engaged posts of this profile
+            top_posts = Post.objects.filter(
+                profile=profile,
+                status=PostStatus.PUBLISHED
+            ).annotate(
+                engagement=F('reaction_count') + F('comment_count') + F('view_count')
+            ).order_by('-engagement')[:5]
+
+            # Step 2: Collect all hashtags used in those posts
+            tag_ids = top_posts.values_list('hashtags', flat=True)
+            tag_ids = list(set(tag_ids))  # Remove duplicates
+
+            if not tag_ids:
+                return Response(success_response({"profiles": []}))
+
+            # Step 3: Find other posts with those hashtags (exclude self)
+            related_posts = Post.objects.filter(
+                hashtags__in=tag_ids,
+                status=PostStatus.PUBLISHED
+            ).exclude(profile=profile).annotate(
+                engagement=F('reaction_count') + F('comment_count') + F('view_count')
+            )
+
+            # Step 4: Group by profile, sum engagement, get top
+            exclude_ids = set()
+            exclude_ids.add(profile.id)
+            exclude_ids.update(profile.friends.values_list('id', flat=True))
+            exclude_ids.update(profile.following.values_list('id', flat=True))
+
+            # Step 5: Group by profile, sum engagement, get top
+            top_profiles = (
+                related_posts.exclude(profile_id__in=exclude_ids)
+                .values('profile')
+                .annotate(total_engagement=Sum('engagement'))
+                .order_by('-total_engagement')[:10]
+            )
+
+            profile_ids = [entry['profile'] for entry in top_profiles]
+            profiles = Profile.objects.filter(id__in=profile_ids)
+
+            serializer = ProfileSerializer(profiles, many=True, context={'request': request})
+            return Response(success_response({"profiles": serializer.data}))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

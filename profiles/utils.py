@@ -1,5 +1,6 @@
-# Djangi imports
-from django.core.exceptions import ValidationError
+# Rest Framework imports
+from rest_framework.exceptions import ValidationError
+
 
 # Python imports
 import random

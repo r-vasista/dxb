@@ -14,8 +14,44 @@ from post.choices import (
 from profiles.models import (
     Profile
 )
+from core.models import (
+    Country, State, City
+)
+from core.utils import (
+    normalize_name
+)
+
 
 User = get_user_model()
+
+class CustomArtType(BaseModel):
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=100, unique=True)
+
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip().lower()
+        self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
+class ArtType(BaseModel):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    slug = models.SlugField(max_length=100, unique=True, blank=True)
+
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        self.name = self.name.strip().lower()
+        self.slug = slugify(self.name)
+        super().save(*args, **kwargs)
+
+
 
 class Post(BaseModel):
     """
@@ -40,11 +76,16 @@ class Post(BaseModel):
     title = models.CharField(max_length=255, blank=True)
     content = models.TextField(blank=True)
     caption = models.TextField(blank=True)
+    art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
+    custom_art_types = models.ManyToManyField(CustomArtType, related_name='custom_art_type_posts', blank=True)
 
     # Slug & Status
     slug = models.SlugField(max_length=150, blank=True)
     status = models.CharField(max_length=20, choices=PostStatus.choices, default=PostStatus.PUBLISHED)
     visibility = models.CharField(max_length=20, choices=PostVisibility.choices, default=PostVisibility.PUBLIC)
+
+    # Gallery order
+    gallery_order = models.PositiveIntegerField(blank=True, null=True)
 
     # Engagement metrics (denormalized)
     reaction_count = models.PositiveIntegerField(default=0)
@@ -63,6 +104,11 @@ class Post(BaseModel):
     is_featured = models.BooleanField(default=False)
     allow_comments = models.BooleanField(default=True)
     allow_reactions = models.BooleanField(default=True)
+
+    city = models.ForeignKey(City, blank=True, null=True, on_delete=models.SET_NULL)
+    state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)
+    country = models.ForeignKey(Country, blank=True, null=True, on_delete=models.SET_NULL)
+
 
     class Meta:
         ordering = ['-created_at']
@@ -90,6 +136,12 @@ class Post(BaseModel):
         if self.status == PostStatus.PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
 
+        if not self.gallery_order and self.profile:
+            max_order = Post.objects.filter(profile=self.profile).aggregate(
+                max_order=models.Max('gallery_order')
+            )['max_order'] or 0
+            self.gallery_order = max_order + 1
+
         super().save(*args, **kwargs)
 
 
@@ -116,6 +168,10 @@ class PostReaction(BaseModel):
         indexes = [models.Index(fields=['post', 'reaction_type'])]
 
 
+class SharePost(BaseModel):
+    post=models.ForeignKey(Post, on_delete=models.CASCADE,related_name="share")
+    profile=models.ForeignKey(Profile,on_delete=models.CASCADE,related_name="profile_share")
+
 class Comment(BaseModel):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
@@ -125,8 +181,7 @@ class Comment(BaseModel):
     is_flagged = models.BooleanField(default=False)
     like_count = models.PositiveIntegerField(default=0)
     reply_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
+
 
     class Meta:
         ordering = ['created_at']
@@ -147,3 +202,11 @@ class CommentLike(BaseModel):
 
     class Meta:
         unique_together = ['comment', 'profile']
+
+
+class Hashtag(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    posts = models.ManyToManyField('Post', related_name='hashtags', blank=True)
+
+    def __str__(self):
+        return f"#{self.name}"
