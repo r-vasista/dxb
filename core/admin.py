@@ -1,8 +1,12 @@
 from django.contrib import admin
+from import_export.admin import ImportExportModelAdmin
+
 from core.models import (
     EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge
 )
-
+from core.resource import (
+    WeeklyChallengeResource
+)
 @admin.register(EmailTemplate)
 class EmailTemplateAdmin(admin.ModelAdmin):
     list_display = ['id', 'name', 'subject', 'title', 'main_content']
@@ -37,7 +41,7 @@ class CityAdmin(admin.ModelAdmin):
 
 
 @admin.register(WeeklyChallenge)
-class WeeklyChallengeAdmin(admin.ModelAdmin):
-    list_display = ['id', 'title', 'hashtag', 'start_date', 'end_date']
-    search_fields = ['id', 'title', 'hashtag', 'start_date', 'end_date']
-    list_filter = ['id', 'title', 'hashtag', 'start_date', 'end_date']
+class WeeklyChallengeAdmin(ImportExportModelAdmin):
+    resource_class = WeeklyChallengeResource
+    list_display = ('title', 'hashtag', 'start_date', 'end_date', 'is_active')
+    search_fields = ('title', 'hashtag')
