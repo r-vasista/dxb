@@ -3,7 +3,9 @@ from rest_framework import serializers
 from django.db.models.fields import DateTimeField
 from datetime import datetime
 
-from core.models import Country, State, City
+from core.models import (
+    Country, State, City, WeeklyChallenge
+)
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
@@ -80,3 +82,9 @@ class CitySerializer(serializers.ModelSerializer):
     class Meta:
         model = City
         fields = ['id', 'name', 'state', 'country', 'latitude', 'longitude']
+
+
+class WeeklyChallengeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = WeeklyChallenge
+        fields = '__all__'
