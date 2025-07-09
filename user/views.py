@@ -35,6 +35,8 @@ from profiles.choices import (
     ProfileType
 )
 
+from notification.utils import send_welcome_email
+
 class RegisterAccountAPIView(APIView):
     """
     API to register either an organization or an user user.
@@ -125,6 +127,7 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
+                    send_welcome_email(profile)
 
                 elif user_type == "user":
                     user_type_obj, _ = UserType.objects.get_or_create(code="user", defaults={"name": "user"})
@@ -147,6 +150,7 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
+                    send_welcome_email(profile)
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
 

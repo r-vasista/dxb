@@ -23,6 +23,7 @@ from datetime import datetime
 from decimal import Decimal
 
 # Local imports
+from post.serializers import PostSerializer
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
 )
@@ -949,3 +950,58 @@ class ProfileStatsAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class RecentlyInteractedAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+        interaction_type = request.query_params.get('type')
+
+        data = {}
+
+        # Recently liked posts
+        if not interaction_type or interaction_type == 'liked':
+            liked_post_ids = (
+                PostReaction.objects
+                .filter(profile=profile)
+                .order_by('-created_at')
+                .values_list('post_id', flat=True)[:20]
+            )
+            liked_posts = Post.objects.filter(id__in=liked_post_ids)
+            data['liked_posts'] = PostSerializer(liked_posts, many=True, context={'request': request}).data
+
+        # Recently commented posts
+        if not interaction_type or interaction_type == 'commented':
+            commented_post_ids = (
+                Comment.objects
+                .filter(profile=profile)
+                .order_by('-created_at')
+                .values_list('post_id', flat=True)[:20]
+            )
+            commented_posts = Post.objects.filter(id__in=commented_post_ids)
+            data['commented_posts'] = PostSerializer(commented_posts, many=True, context={'request': request}).data
+
+        # Recently shared posts
+        if not interaction_type or interaction_type == 'shared':
+            shared_post_ids = (
+                SharePost.objects
+                .filter(profile=profile)
+                .order_by('-created_at')
+                .values_list('post_id', flat=True)[:20]
+            )
+            shared_posts = Post.objects.filter(id__in=shared_post_ids)
+            data['shared_posts'] = PostSerializer(shared_posts, many=True, context={'request': request}).data
+
+        # Recently viewed posts
+        if not interaction_type or interaction_type == 'viewed':
+            viewed_post_ids = (
+                PostView.objects
+                .filter(viewer=profile)
+                .order_by('-viewed_at')
+                .values_list('post_id', flat=True)[:20]
+            )
+            viewed_posts = Post.objects.filter(id__in=viewed_post_ids)
+            data['viewed_posts'] = PostSerializer(viewed_posts, many=True, context={'request': request}).data
+
+        return Response(data)
