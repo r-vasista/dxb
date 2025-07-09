@@ -115,15 +115,16 @@ class CitySearchView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class WeeklyChallengeAPIView(APIView):
+class WeeklyChallengeAPIView(APIView, PaginationMixin):
     
     def get(self, request):
         try:
-            today = timezone.now().date
-            weekly_challange = WeeklyChallenge.objects.filter(
+            today = timezone.now().date()
+            weekly_challanges = WeeklyChallenge.objects.filter(
                 start_date__lte=today, end_date__gte=today, is_active=True
             ).order_by('-start_date')
-            serializer = WeeklyChallengeSerializer(weekly_challange, many=True)
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            paginated = self.paginate_queryset(weekly_challanges, request)
+            serializer = WeeklyChallengeSerializer(paginated, many=True)
+            return self.get_paginated_response(serializer.data)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
