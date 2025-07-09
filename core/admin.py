@@ -1,6 +1,6 @@
 from django.contrib import admin
 from core.models import (
-    EmailConfiguration, EmailTemplate, City, Country, State
+    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge
 )
 
 @admin.register(EmailTemplate)
@@ -35,3 +35,9 @@ class CityAdmin(admin.ModelAdmin):
     search_fields = ['id', 'name',]
     list_filter = ['id', 'name',]
 
+
+@admin.register(WeeklyChallenge)
+class WeeklyChallengeAdmin(admin.ModelAdmin):
+    list_display = ['id', 'title', 'hashtag', 'start_date', 'end_date']
+    search_fields = ['id', 'title', 'hashtag', 'start_date', 'end_date']
+    list_filter = ['id', 'title', 'hashtag', 'start_date', 'end_date']
