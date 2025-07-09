@@ -61,7 +61,7 @@ INSTALLED_APPS = [
     "profiles",
     "event",
     "notification",
-    "import_export",
+    'import_export',
 ]
 
 MIDDLEWARE = [
