@@ -1,5 +1,6 @@
 # Django imports
 from django.db.models import Q
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -8,8 +9,12 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 
 # Local imports
-from core.models import Country, State, City
-from core.serializers import CountrySerializer, StateSerializer, CitySerializer
+from core.models import (
+    Country, State, City, WeeklyChallenge
+)
+from core.serializers import (
+    CountrySerializer, StateSerializer, CitySerializer, WeeklyChallengeSerializer
+)
 from core.services import success_response, error_response
 from core.pagination import PaginationMixin
 
@@ -106,5 +111,20 @@ class CitySearchView(APIView, PaginationMixin):
             serializer = CitySerializer(paginated, many=True)
             return self.get_paginated_response(serializer.data)
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class WeeklyChallengeAPIView(APIView, PaginationMixin):
+    
+    def get(self, request):
+        try:
+            today = timezone.now().date()
+            weekly_challanges = WeeklyChallenge.objects.filter(
+                start_date__lte=today, end_date__gte=today, is_active=True
+            ).order_by('-start_date')
+            paginated = self.paginate_queryset(weekly_challanges, request)
+            serializer = WeeklyChallengeSerializer(paginated, many=True)
+            return self.get_paginated_response(serializer.data)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

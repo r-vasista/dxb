@@ -1,15 +1,15 @@
 from django.urls import path
 from post.views import (
-    PostView, ProfilePostListView, AllPostsAPIView, ProfileImageMediaListView, PostReactionView, Postreactionlist,PostReactionDetailView,
+    PostAPIView, ProfilePostListView, AllPostsAPIView, ProfileImageMediaListView, PostReactionView, Postreactionlist,PostReactionDetailView,
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView,
     TrendingPostsAPIView, HashtagPostsView, HashtagsListView, PostShareView, ProfileGalleryView, UpdateGalleryOrderView,
-    ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView
+    ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView
     )
 
 
 urlpatterns = [
-    path('post/', PostView.as_view(), name='post'),
-    path('post/<int:post_id>/', PostView.as_view(), name='post'),
+    path('post/', PostAPIView.as_view(), name='post'),
+    path('post/<int:post_id>/', PostAPIView.as_view(), name='post'),
     path('profile-posts/username/<str:username>/', ProfilePostListView.as_view(), name='profile-post-username'),
     path('profile-posts/profile-id/<str:profile_id>/', ProfilePostListView.as_view(), name='profile-post-profile_id'),
     path('all-posts/', AllPostsAPIView.as_view(), name='all-post'),
@@ -46,5 +46,6 @@ urlpatterns = [
 
     path('posts/my-drafts/', MyDraftPostsView.as_view(), name='my-draft'),
     path('art-types/', ArtTypeListAPIView.as_view(), name='my-draft'),
+    path('post-view/<int:post_id>/', CreatePostViewAPIView.as_view(), name='post-view'),
 
 ]

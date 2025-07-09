@@ -108,3 +108,21 @@ class City(models.Model):
     class Meta:
         verbose_name_plural = "Cities"
         unique_together = ['name', 'state', 'country']
+
+
+class WeeklyChallenge(BaseModel):
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    hashtag = models.CharField(max_length=100, unique=True)
+    start_date = models.DateField()
+    end_date = models.DateField()
+    banner_image = models.ImageField(upload_to="weekly_challenges/banners/", blank=True, null=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.title
+
+    @property
+    def is_current(self):
+        today = timezone.now().date()
+        return self.start_date <= today <= self.end_date
