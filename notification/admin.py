@@ -2,7 +2,7 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
 from notification.models import (
-    Notification,DailyQuote
+    Notification,DailyQuote,DailyQuoteSeen
 )
 from .resources import DailyQuoteResource
 
@@ -16,3 +16,7 @@ class NotificationAdmin(admin.ModelAdmin):
 class DailyQuoteAdmin(ImportExportModelAdmin):
     resource_class = DailyQuoteResource
     list_display = ['text', 'author']
+
+@admin.register(DailyQuoteSeen)
+class DailyQuoteSeenAdmin(admin.ModelAdmin):
+    list_display=['profile','quote','email_sent']

@@ -172,3 +172,17 @@ def send_daily_muse_email(profile, quote):
         }
         template_name = "generic-notification"
         send_dynamic_email_using_template(template_name, [user.email], context)
+
+def send_welcome_email(profile):
+    user = getattr(profile, 'user', None)
+    if not user and hasattr(profile, 'organization'):
+        user = getattr(profile.organization, 'user', None)
+
+    if user and user.email:
+        context = {
+            "user_name": profile.username,
+
+        }
+
+        template_name = "welcome-email"  # Should match the EmailTemplate entry name
+        send_dynamic_email_using_template(template_name, [user.email], context)
