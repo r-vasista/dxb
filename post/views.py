@@ -9,6 +9,7 @@ from django.utils.dateparse import parse_datetime
 from django.db.models import Q
 from datetime import timedelta
 from django.utils import timezone
+from django.db import IntegrityError
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -21,7 +22,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 # Local imports
 from core.services import success_response, error_response, get_user_profile, handle_hashtags
 from core.pagination import PaginationMixin
-from post.models import ReactionType
+from post.models import ReactionType, PostView
 from profiles.models import (
     Profile
 )
@@ -57,7 +58,7 @@ from .utils import get_post_visibility_filter,get_profile_from_request,get_visib
 
 
 
-class PostView(APIView):
+class PostAPIView(APIView):
     """
     POST /api/posts/
     POST /api/organizations/{org_id}/posts/
@@ -869,3 +870,36 @@ class ArtTypeListAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreatePostViewAPIView(APIView):
+    """
+    POST /api/posts/<post_id>/view/
+
+    Tracks a view on a post and increments view_count.
+    Accepts both authenticated and anonymous users.
+    """
+    permission_classes = [IsAuthenticatedOrReadOnly]
+
+    def post(self, request, post_id):
+        try:
+            post = get_object_or_404(Post.objects.select_related("profile", "created_by"), id=post_id)
+            viewer = get_user_profile(request.user) if request.user.is_authenticated else None
+
+            # Prevent self-views from being tracked
+            if viewer and post.profile == viewer:
+                return Response(success_response("Self view ignored"), status=200)
+
+            # Save post view
+            PostView.objects.create(post=post, viewer=viewer)
+
+            # Update view count
+            post.view_count = post.view_count + 1
+            post.save(update_fields=["view_count"])
+
+            return Response(success_response("Post view tracked"), status=201)
+        except IntegrityError as e:
+            if "UNIQUE constraint failed" in str(e) or "unique constraint" in str(e).lower():
+                return Response(success_response("Post view tracked already"), status=201)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
