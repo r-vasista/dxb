@@ -7,7 +7,7 @@ from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q
-from datetime import timedelta
+from datetime import timedelta,datetime, time
 from django.utils import timezone
 from django.db import IntegrityError
 
@@ -22,7 +22,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 # Local imports
 from core.services import success_response, error_response, get_user_profile, handle_hashtags
 from core.pagination import PaginationMixin
-from post.models import ReactionType, PostView
+from post.models import ReactionType, PostView, SavedPost
 from profiles.models import (
     Profile
 )
@@ -36,7 +36,7 @@ from post.choices import (
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
-    HashtagSerializer, SharePostSerailizer, ArtTypeSerializer
+    HashtagSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -307,8 +307,10 @@ class PostReactionView(APIView):
             serializer.is_valid(raise_exception=True)
             post_reaction = serializer.save()
 
-            create_dynamic_notification('like', post_reaction)
-
+            try:
+                create_dynamic_notification('like', post_reaction)
+            except:
+                pass
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()
@@ -409,8 +411,11 @@ class CommentView(APIView, PaginationMixin):
             serializer.is_valid(raise_exception=True)
             comment = serializer.save()
 
-            create_dynamic_notification('comment', comment)
-            
+            try:
+                create_dynamic_notification('comment', comment)
+            except:
+                pass
+
             post.comment_count = post.comments.count()
             post.save(update_fields=["comment_count"])
 
@@ -508,9 +513,11 @@ class CommentReplyView(APIView):
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             comment = serializer.save()
+            try:
 
-            create_dynamic_notification('comment', comment)
-
+                create_dynamic_notification('comment', comment)
+            except:
+                pass
             # Update reply count
             parent_comment.reply_count = parent_comment.replies.count()
             parent_comment.save(update_fields=['reply_count'])
@@ -903,3 +910,144 @@ class CreatePostViewAPIView(APIView):
                 return Response(success_response("Post view tracked already"), status=201)
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+class SavePostAPIView(APIView):
+    """ POST /api/posts/{post_id}/save/
+    Authenticated endpoint to save or unsave a post.
+    If the post is already saved, it will be unsaved.               
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            profile = get_user_profile(request.user)
+            if not profile:
+                raise Http404("Profile not found.")
+
+            try:
+                post = Post.objects.get(id=post_id)
+            except Post.DoesNotExist:
+                raise Http404("Post not found.")
+
+            saved_obj, created = SavedPost.objects.get_or_create(profile=profile, post=post)
+            if not created:
+                saved_obj.delete()
+                return Response({"message": "Post unsaved"}, status=status.HTTP_200_OK)
+
+            return Response({"message": "Post saved"}, status=status.HTTP_201_CREATED)
+
+        except Http404 as e:
+            return Response({"error": str(e)}, status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response({"error": str(e)}, status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    
+class SavedPostsListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/saved-posts/
+    Returns a list of posts saved by the authenticated user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            if not profile:
+                raise Http404("Profile not found.")
+
+            saved_posts = SavedPost.objects.filter(profile=profile).select_related('post').order_by('-created_at')
+            page = self.paginate_queryset(saved_posts, request)
+            serializer = SavedPostSerializer(page, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GlobalSearchAPIView(APIView, PaginationMixin):
+    """
+    GET /api/global-search/?search=art&type=post&start_date=2025-07-01&end_date=2025-07-10
+    Query Params:
+    - search: keyword
+    - type: post | profile | hashtag | all
+    - start_date: YYYY-MM-DD
+    - end_date: YYYY-MM-DD
+    """
+
+    permission_classes = []
+
+    def get(self, request):
+        try:
+            search = request.query_params.get('search', '').strip()
+            search_type = request.query_params.get('type', 'all').lower()
+            start_date_str = request.query_params.get('start_date')
+            end_date_str = request.query_params.get('end_date')
+
+            start_date = datetime.strptime(start_date_str, "%Y-%m-%d") if start_date_str else None
+            end_date = datetime.combine(datetime.strptime(end_date_str, "%Y-%m-%d").date(), time.max) if end_date_str else None
+
+            data = {}
+
+            # --- POSTS ---
+            if search_type in ['post', 'all']:
+                posts = Post.objects.filter(
+                    visibility=PostVisibility.PUBLIC,
+                    profile__visibility_status=VisibilityStatus.PUBLIC
+                )
+
+                if search:
+                    posts = posts.filter(
+                        Q(title__icontains=search) |
+                        Q(caption__icontains=search) |
+                        Q(hashtags__name__icontains=search)
+                    )
+
+                if start_date:
+                    posts = posts.filter(created_at__gte=start_date)
+                if end_date:
+                    posts = posts.filter(created_at__lte=end_date)
+
+                paginated_posts = self.paginate_queryset(posts.order_by('-created_at'), request)
+                data['posts'] = PostSerializer(paginated_posts, many=True, context={'request': request}).data
+
+            # --- PROFILES ---
+            if search_type in ['profile', 'all']:
+
+
+                if search:
+                    profiles = Profile.objects.filter(
+                        Q(username__icontains=search)
+                    )
+                else:
+                    profiles = Profile.objects.all()
+
+                paginated_profiles = self.paginate_queryset(profiles.order_by('-created_at'), request)
+                data['profiles'] = ProfileSerializer(paginated_profiles, many=True, context={'request': request}).data
+
+            # --- HASHTAGS ---
+            if search_type in ['hashtag', 'all']:
+                hashtags = Hashtag.objects.all()
+                if search:
+                    hashtags = hashtags.filter(name__icontains=search)
+
+                paginated_hashtags = self.paginate_queryset(hashtags.order_by('-id'), request)
+                data['hashtags'] = HashtagSerializer(paginated_hashtags, many=True, context={'request': request}).data
+
+            return Response(success_response(data), status=status.HTTP_200_OK)
+
+        except ValueError:
+            return Response(error_response("Invalid date format. Expected YYYY-MM-DD."), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            
