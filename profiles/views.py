@@ -31,12 +31,13 @@ from core.services import (
     success_response, error_response, get_user_profile
 )
 from profiles.models import (
-    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView
+    Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView,
+    ArtService, ArtServiceInquiry
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
-    StaticFieldInputSerializer, StaticFieldValueSerializer
+    StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer
 )
 from profiles.choices import (
     StaticFieldType
@@ -373,7 +374,10 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-            create_dynamic_notification('friend_request', friend_request)
+            try:
+                create_dynamic_notification('friend_request', friend_request, sender=from_profile)
+            except:
+                pass
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -464,7 +468,10 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-                create_dynamic_notification('friend_accept', friend_request)
+                try:
+                    create_dynamic_notification('friend_accept', friend_request)
+                except:
+                    pass
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
@@ -577,10 +584,13 @@ class FollowProfileView(APIView):
                 return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.add(target_profile)
-            create_dynamic_notification(
-                'follow',
-                {'sender': current_profile, 'target': target_profile}
-            )
+            try:
+                create_dynamic_notification(
+                    'follow',
+                    {'sender': current_profile, 'target': target_profile}
+                )
+            except:
+                pass
             return Response(success_response("Profile followed successfully."), status=status.HTTP_200_OK)
 
         except Exception as e:
@@ -1005,3 +1015,154 @@ class RecentlyInteractedAPIView(APIView):
             data['viewed_posts'] = PostSerializer(viewed_posts, many=True, context={'request': request}).data
 
         return Response(data)
+
+
+class EnableOrUpdateArtServiceAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            
+            is_allowed = is_owner_or_org_member(profile=profile, user=request.user)
+            if not is_allowed:
+                return Response(error_response('You are not allowed to perform this action'), status=status.HTTP_403_FORBIDDEN)
+
+            serializer = ArtServiceSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+
+            art_service, created = ArtService.objects.update_or_create(
+                profile=profile,
+                defaults=serializer.validated_data
+            )
+
+            # Enable art service on profile
+            profile.art_service_enabled = True
+            profile.save(update_fields=["art_service_enabled"])
+
+            return Response(success_response("Art service enabled successfully."), status=status.HTTP_200_OK)
+            
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:return Response({"status": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GetArtServiceAPIView(APIView):
+    """
+    GET /api/art-service/?profile_id=<id> OR ?username=<username>
+    Returns art service details for the given profile.
+    """
+    def get(self, request):
+        try:
+            profile_id = request.query_params.get('profile_id')
+            username = request.query_params.get('username')
+
+            if not profile_id and not username:
+                return Response(error_response("Provide either profile_id or username"), status=status.HTTP_400_BAD_REQUEST)
+
+            profile = None
+            if profile_id:
+                profile = get_object_or_404(Profile, id=profile_id)
+            elif username:
+                profile = get_object_or_404(Profile, username=username)
+
+            if not profile.art_service_enabled:
+                return Response(error_response("This artist has not enabled art services."), status=status.HTTP_404_NOT_FOUND)
+
+            art_service = get_object_or_404(ArtService, profile=profile)
+            serializer = ArtServiceSerializer(art_service)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SendArtServiceInquiryAPIView(APIView):
+    """
+    POST /api/art-service/inquire/
+    Authenticated users can send an inquiry to an artist.
+    Request data:
+    {
+        "artist_profile_id": 5,
+        "message": "I would like to commission a painting."
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            artist_profile_id = request.data.get("artist_profile_id")
+            message = request.data.get("message", "").strip()
+
+            if not artist_profile_id:
+                return Response(error_response("artist_profile_id is required."), status=status.HTTP_400_BAD_REQUEST)
+
+            artist_profile = get_object_or_404(Profile, id=artist_profile_id)
+            inquirer_profile = get_user_profile(request.user)
+
+            if artist_profile == inquirer_profile:
+                return Response(error_response("You cannot send an inquiry to yourself."), status=status.HTTP_400_BAD_REQUEST)
+            
+            if not artist_profile.art_service_enabled:
+                return Response(error_response("This artist has not enabled art services."),status=status.HTTP_403_FORBIDDEN)
+
+            # Prevent duplicate inquiries
+            inquiry, created = ArtServiceInquiry.objects.get_or_create(
+                artist_profile=artist_profile,
+                inquirer_profile=inquirer_profile,
+                defaults={"message": message}
+            )
+
+            if not created:
+                return Response(success_response("You have already sent an inquiry to this artist."), status=status.HTTP_200_OK)
+
+            serializer = ArtServiceInquirySerializer(inquiry)
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ArtServiceInquiriesAPIView(APIView):
+    """
+    GET /api/art-service/inquiries/
+    Returns:
+    - Inquiries sent by the logged-in user (as inquirer)
+    - Inquiries received by the logged-in user (as artist)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            is_allowed = is_owner_or_org_member(profile=profile, user=request.user)
+            if not is_allowed:
+                return Response(error_response('You are not allowed to perform this action'), status=status.HTTP_403_FORBIDDEN)
+
+            sent_inquiries = ArtServiceInquiry.objects.filter(
+                inquirer_profile=profile
+            ).select_related('artist_profile').order_by('-created_at')
+
+            received_inquiries = ArtServiceInquiry.objects.filter(
+                artist_profile=profile
+            ).select_related('inquirer_profile').order_by('-created_at')
+
+            sent_serializer = ArtServiceInquirySerializer(sent_inquiries, many=True)
+            received_serializer = ArtServiceInquirySerializer(received_inquiries, many=True)
+
+            return Response(success_response({
+                "sent": sent_serializer.data,
+                "received": received_serializer.data
+            }), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

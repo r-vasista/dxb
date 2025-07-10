@@ -126,3 +126,25 @@ class WeeklyChallenge(BaseModel):
     def is_current(self):
         today = timezone.now().date()
         return self.start_date <= today <= self.end_date
+
+
+class UpcomingFeature(BaseModel):
+    title = models.CharField(max_length=255)
+    description = RichTextField()
+    status = models.BooleanField(default=True)  
+
+    def __str__(self):
+        return self.title
+
+class FeatureStep(models.Model):
+    feature = models.ForeignKey(UpcomingFeature, on_delete=models.CASCADE, related_name='steps')
+    image = models.ImageField(upload_to='feature_steps/', blank=True, null=True)
+    title = models.CharField(max_length=255)
+    description = RichTextField(null=True, blank=True)
+    order = models.PositiveIntegerField(default=0)
+    class Meta:
+        ordering = ['order']    
+        unique_together = ('feature', 'order')
+
+    def __str__(self):
+        return f"{self.feature.title} - Step {self.order}: {self.title}"

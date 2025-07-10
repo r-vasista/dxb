@@ -4,7 +4,7 @@ from django.db.models.fields import DateTimeField
 from datetime import datetime
 
 from core.models import (
-    Country, State, City, WeeklyChallenge
+    Country, State, City, WeeklyChallenge,UpcomingFeature, FeatureStep
 )
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
@@ -88,3 +88,24 @@ class WeeklyChallengeSerializer(serializers.ModelSerializer):
     class Meta:
         model = WeeklyChallenge
         fields = '__all__'
+
+
+
+class FeatureStepSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = FeatureStep
+        fields = '__all__'
+    
+    def create(self, validated_data):
+        steps_data = validated_data.pop('steps', [])
+        feature = UpcomingFeature.objects.create(**validated_data)
+        for step in steps_data:
+            FeatureStep.objects.create(feature=feature, **step)
+        return feature
+
+class UpcomingFeatureSerializer(serializers.ModelSerializer):
+    steps = FeatureStepSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = UpcomingFeature
+        fields = ['id', 'title', 'description', 'status', 'steps', 'created_at']

@@ -6,7 +6,8 @@ from profiles.views import (
     ProfileAPIView, ProfileDetailView, ProfileFieldView, ProfileFieldSectionView, SendFriendRequestView, CancelFriendRequestView,
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
     ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
-    CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView
+    CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView, EnableOrUpdateArtServiceAPIView, GetArtServiceAPIView,
+    SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView
 )
 
 urlpatterns = [
@@ -37,6 +38,10 @@ urlpatterns = [
     path('inspired-profiles/<str:profile_id>/', InspiredByFromProfileView.as_view(), name='inspired-profiles'),
     path('profile-view/<int:profile_id>/', CreateProfileViewAPIView.as_view(), name='create-profile-view'),
     path('profile-stats/', ProfileStatsAPIView.as_view(), name='profile-stats'),
-    path('post/recent-interactions/', RecentlyInteractedAPIView.as_view(), name='post-recent-interactions')
+    path('post/recent-interactions/', RecentlyInteractedAPIView.as_view(), name='post-recent-interactions'),
+    path('art-service/<int:profile_id>/', EnableOrUpdateArtServiceAPIView.as_view(), name='art-service'),
+    path('user-art-service/', GetArtServiceAPIView.as_view(), name='user-art-service'),
+    path('art-service-inquire/', SendArtServiceInquiryAPIView.as_view(), name='send-art-service-inquiry'),
+    path('art-service-inquiries/<int:profile_id>/', ArtServiceInquiriesAPIView.as_view(), name='art-service-inquiries/')
 
 ]

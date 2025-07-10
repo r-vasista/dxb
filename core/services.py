@@ -5,6 +5,7 @@ from django.conf import settings
 from django.template import Template, Context
 
 from core.models import EmailTemplate, EmailConfiguration
+from post.models import Hashtag
 
 
 import re

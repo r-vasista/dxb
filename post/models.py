@@ -222,3 +222,15 @@ class PostView(BaseModel):
         unique_together = ('viewer', 'post')
         indexes = [models.Index(fields=['post', 'viewed_at'])]
         ordering = ['-viewed_at']
+
+
+class SavedPost(BaseModel):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='saved_posts')
+    post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='saved_by')
+    
+    class Meta:
+        unique_together = ('profile', 'post')
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.profile} saved {self.post}"
