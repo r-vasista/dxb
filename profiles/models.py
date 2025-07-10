@@ -75,6 +75,7 @@ class Profile(BaseModel):
     
     last_active_at = models.DateTimeField(null=True, blank=True)
     last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
+    art_service_enabled = models.BooleanField(default=False)
 
     @property
     def followers_count(self):
@@ -391,3 +392,80 @@ class ProfileView(BaseModel):
         unique_together = ('viewer', 'profile')
         indexes = [models.Index(fields=['profile', 'viewed_at'])]
         ordering = ['-viewed_at']
+
+
+class ArtService(BaseModel):
+    """Separate model to handle all art service related data"""
+    profile = models.OneToOneField(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='art_service'
+    )
+    
+    # Contact information
+    service_phone = models.CharField(max_length=20, blank=True, null=True)
+    service_email = models.EmailField(blank=True, null=True)
+    
+    # Service details
+    description = models.TextField(blank=True, null=True)
+    pricing = models.TextField(blank=True, null=True)
+    specialties = models.TextField(blank=True, null=True)
+    portfolio_url = models.URLField(blank=True, null=True)
+    
+    # Additional service fields - easily extensible
+    years_of_experience = models.PositiveIntegerField(blank=True, null=True)
+    availability_hours = models.TextField(blank=True, null=True)
+    min_budget = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    max_budget = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    
+    # Service preferences
+    accepts_rush_orders = models.BooleanField(default=False)
+    offers_consultations = models.BooleanField(default=True)
+    offers_revisions = models.BooleanField(default=True)
+    max_revisions = models.PositiveIntegerField(blank=True, null=True)
+    
+    # Social proof
+    client_testimonials = models.TextField(blank=True, null=True)
+    certifications = models.TextField(blank=True, null=True)
+    
+    # Metrics
+    total_projects_completed = models.PositiveIntegerField(default=0)
+    response_time_hours = models.PositiveIntegerField(default=24)
+    
+    class Meta:
+        verbose_name = "Art Service"
+        verbose_name_plural = "Art Services"
+    
+    def __str__(self):
+        return f"{self.profile.username}'s Art Service"
+    
+    @property
+    def total_inquiries(self):
+        """Get total number of inquiries"""
+        return self.profile.art_service_inquiries.count()
+
+
+class ArtServiceInquiry(models.Model):
+    """Track when users inquire about an artist's contact info"""
+
+    artist_profile = models.ForeignKey(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='art_service_inquiries'
+    )
+    inquirer_profile = models.ForeignKey(
+        Profile, 
+        on_delete=models.CASCADE, 
+        related_name='my_art_inquiries'
+    )
+    message = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    artist_notified = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ['artist_profile', 'inquirer_profile']
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.inquirer_profile.username} -> {self.artist_profile.username}"

@@ -11,7 +11,8 @@ from decimal import Decimal, InvalidOperation
 
 # Local imports
 from profiles.models import (
-    ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection
+    ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection,
+    ArtService, ArtServiceInquiry
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -384,3 +385,16 @@ class StaticFieldInputSerializer(serializers.Serializer):
         
         attrs['static_field'] = static_field
         return attrs
+
+
+class ArtServiceSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ArtService
+        exclude = ['profile']
+
+
+class ArtServiceInquirySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ArtServiceInquiry
+        fields = ['id', 'artist_profile', 'inquirer_profile', 'message', 'created_at']
+        read_only_fields = ['id', 'created_at', 'inquirer_profile']
