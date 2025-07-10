@@ -72,6 +72,9 @@ class Profile(BaseModel):
     tiktok_url = models.URLField(blank=True, null=True)
     website_url = models.URLField(blank=True, null=True)
     notify_email = models.BooleanField(default=True)
+    
+    last_active_at = models.DateTimeField(null=True, blank=True)
+    last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
 
     @property
     def followers_count(self):

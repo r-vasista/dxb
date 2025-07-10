@@ -1,5 +1,6 @@
 import json
-from core.models import Country, State, City  # Replace 'core' with your app name
+from django.utils import timezone
+from core.models import Country, State, City, WeeklyChallenge
 
 def normalize_name(name):
     return name.strip().lower()
@@ -54,3 +55,32 @@ def import_location_data(json_path):
                 )
 
     print("✅ Data import completed.")
+
+def get_user(profile):
+    if profile.user:
+        user=profile.user
+    else:
+        user=profile.organization.user
+    return user
+
+def update_last_active(profile):
+    profile.last_active_at = timezone.now()
+    profile.save(update_fields=["last_active_at"])
+
+def get_inactivity_email_context(profile):
+    
+    # To avoid circular import error
+    from post.models import Post
+    
+    user_name = profile.username or "Artist"
+    challenge = WeeklyChallenge.objects.filter(is_active=True).first()
+    challenge_hashtag = challenge.hashtag if challenge else "weeklychallenge"
+
+    top_posts = Post.objects.filter(status='published').order_by('-reaction_count')[:3]
+    top_titles = [p.title or p.caption[:40] for p in top_posts]
+
+    return {
+        "user_name": user_name,
+        "challenge_hashtag": challenge_hashtag,
+        "top_posts": top_titles,
+    }

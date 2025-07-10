@@ -78,7 +78,6 @@ class PostSerializer(TimezoneAwareSerializerMixin):
     def create(self, validated_data):
         art_type_ids = validated_data.pop('art_type_ids', [])
         custom_names = validated_data.pop('custom_art_type_names', [])
-        print('custom names', custom_names)
         post = Post.objects.create(**validated_data)
         self._assign_art_types(post, art_type_ids, custom_names)
         return post
