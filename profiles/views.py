@@ -373,7 +373,10 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-            create_dynamic_notification('friend_request', friend_request)
+            try:
+                create_dynamic_notification('friend_request', friend_request, sender=from_profile)
+            except:
+                pass
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -464,7 +467,10 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-                create_dynamic_notification('friend_accept', friend_request)
+                try:
+                    create_dynamic_notification('friend_accept', friend_request)
+                except:
+                    pass
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
@@ -577,10 +583,13 @@ class FollowProfileView(APIView):
                 return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
 
             current_profile.following.add(target_profile)
-            create_dynamic_notification(
-                'follow',
-                {'sender': current_profile, 'target': target_profile}
-            )
+            try:
+                create_dynamic_notification(
+                    'follow',
+                    {'sender': current_profile, 'target': target_profile}
+                )
+            except:
+                pass
             return Response(success_response("Profile followed successfully."), status=status.HTTP_200_OK)
 
         except Exception as e:

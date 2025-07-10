@@ -2,7 +2,7 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
 from core.models import (
-    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge
+    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge,UpcomingFeature, FeatureStep
 )
 from core.resource import (
     WeeklyChallengeResource
@@ -45,3 +45,13 @@ class WeeklyChallengeAdmin(ImportExportModelAdmin):
     resource_class = WeeklyChallengeResource
     list_display = ('title', 'hashtag', 'start_date', 'end_date', 'is_active')
     search_fields = ('title', 'hashtag')
+
+class FeatureStepInline(admin.StackedInline):
+    model = FeatureStep
+    extra = 1
+    ordering = ['order']
+
+@admin.register(UpcomingFeature)
+class UpcomingFeatureAdmin(admin.ModelAdmin):
+    list_display = ['title', 'status', 'created_at']
+    inlines = [FeatureStepInline]

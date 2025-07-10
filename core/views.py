@@ -10,10 +10,10 @@ from rest_framework.exceptions import ValidationError
 
 # Local imports
 from core.models import (
-    Country, State, City, WeeklyChallenge
+    Country, State, City, UpcomingFeature, WeeklyChallenge
 )
 from core.serializers import (
-    CountrySerializer, StateSerializer, CitySerializer, WeeklyChallengeSerializer
+    CountrySerializer, StateSerializer, CitySerializer, UpcomingFeatureSerializer, WeeklyChallengeSerializer
 )
 from core.services import success_response, error_response
 from core.pagination import PaginationMixin
@@ -126,5 +126,31 @@ class WeeklyChallengeAPIView(APIView, PaginationMixin):
             paginated = self.paginate_queryset(weekly_challanges, request)
             serializer = WeeklyChallengeSerializer(paginated, many=True)
             return self.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UpcomingFeatureAPIView(APIView, PaginationMixin):
+    """             
+    GET /api/upcoming-features/
+    Returns a list of upcoming features that are currently active.  
+        """
+    
+    def get(self, request):
+        try:
+            features = UpcomingFeature.objects.filter(status=True).order_by('-created_at')
+            paginated = self.paginate_queryset(features, request)
+            serializer = UpcomingFeatureSerializer(paginated, many=True)
+            return self.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
+    
+    def post(self, request):
+        try:
+            serializer = UpcomingFeatureSerializer(data=request.data)
+            if serializer.is_valid():
+                feature = serializer.save()
+                return Response(UpcomingFeatureSerializer(feature).data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

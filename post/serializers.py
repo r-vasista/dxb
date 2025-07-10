@@ -3,8 +3,12 @@ from rest_framework import serializers
 
 # Local imports
 from post.models import (
-    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SharePost, ArtType, CustomArtType
+    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SavedPost, SharePost, ArtType, CustomArtType
 )
+
+from profiles.serializers import ProfileSerializer
+from profiles.choices import VisibilityStatus
+from post.choices import PostVisibility
 from core.serializers import TimezoneAwareSerializerMixin
 from core.services import get_user_profile
 
@@ -102,6 +106,19 @@ class PostSerializer(TimezoneAwareSerializerMixin):
         for name in custom_names:
             obj, _ = CustomArtType.objects.get_or_create(name=name)
             post.custom_art_types.add(obj)
+    def validate_visibility(self, value):
+        request = self.context.get("request")
+        profile = self.initial_data.get("profile_id") 
+
+        if request and profile:
+            from profiles.models import Profile  
+            profile_obj = Profile.objects.filter(id=profile).first()
+            if profile_obj and profile_obj.visibility_status == VisibilityStatus.PRIVATE:
+                if value not in [PostVisibility.PRIVATE, PostVisibility.FRIENDS_ONLY]:
+                    raise serializers.ValidationError(
+                        "This profile is private. You can only post with private or friends-only visibility."
+                    )
+        return value
 
 
 class ImageMediaSerializer(serializers.ModelSerializer):
@@ -154,15 +171,6 @@ class HashtagSerializer(serializers.ModelSerializer):
         fields = ['name']
 
 
-class HashtagSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Hash Tags
-    """
-    
-    class Meta:
-        model = Hashtag
-        fields = ['name']
-
 
 class SharePostSerailizer(serializers.ModelSerializer):
     class Meta:
@@ -174,3 +182,10 @@ class ArtTypeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ArtType
         fields = ['id', 'name', 'slug', 'description']
+
+class SavedPostSerializer(serializers.ModelSerializer):
+    post = PostSerializer(read_only=True)
+    # profile = ProfileSerializer(read_only=True)
+    class Meta:
+        model = SavedPost
+        fields = ['id', 'profile', 'post', 'created_at']
