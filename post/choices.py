@@ -13,7 +13,7 @@ class PostVisibility(models.TextChoices):
     PUBLIC = 'public', 'Public'
     FOLLOWERS_ONLY = 'followers', 'Followers Only'
     PRIVATE = 'private', 'Private',
-    FRIENDS_ONLY = 'friends_only', 'Friends Only'
+    FRIENDS_ONLY = 'friends', 'Friends Only'
 
 
 class ReactionType(models.TextChoices):

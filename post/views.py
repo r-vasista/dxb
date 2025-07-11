@@ -102,6 +102,10 @@ class PostAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
+            try:
+                create_dynamic_notification('post_create', post)
+            except:
+                pass
 
             # Handle media files safely
             media_files = request.FILES.getlist('media_files')
