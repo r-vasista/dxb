@@ -8,7 +8,7 @@ from openai import OpenAI
 
 from ai.models import ArtImagePrompt
 from ai.utils import compress_and_encode_image
-from core.services import get_user_profile
+from core.services import get_user_profile, success_response, error_response
 
 client = OpenAI(api_key="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")
 
@@ -69,6 +69,6 @@ class ArtImageDescribeAPIView(APIView):
 
             )
             
-            return Response({"result": result_text})
+            return Response(success_response(result_text))
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
