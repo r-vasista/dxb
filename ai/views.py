@@ -9,8 +9,11 @@ from openai import OpenAI
 from ai.models import ArtImagePrompt
 from ai.utils import compress_and_encode_image
 from core.services import get_user_profile, success_response, error_response
+from django.conf import settings
 
-client = OpenAI(api_key="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")
+OPEN_AI_KEY = settings.OPEN_AI_KEY
+
+client = OpenAI(api_key=OPEN_AI_KEY)
 
 def encode_image(image_file):
     return base64.b64encode(image_file.read()).decode('utf-8')

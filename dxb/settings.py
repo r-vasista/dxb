@@ -214,6 +214,8 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 EMAIL_DOMAIL_URL = os.environ.get('EMAIL_DOMAIL_URL', '')
 
+OPEN_AI_KEY =  os.environ.get('OPEN_AI_KEY', '')
+
 FRONTEND_URL = 'http://127.0.0.1:8000'
 
 # CKEDITOR_BASEPATH = "/my_static/ckeditor/ckeditor/"
