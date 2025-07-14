@@ -67,9 +67,13 @@ def get_visible_profile_posts(request, profile, ordering=None, only_ids=False):
 
 def get_post_visibility_filter(user):
     """
-    Returns a Q filter object to get posts visible to the given user.
+    Returns a Q object to filter posts visible to the given user,
+    considering post visibility settings and profile visibility.
     """
-    base_filter = Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PUBLIC)
+    # Exclude posts from private profiles, unless it's the user's own
+    public_profiles = Q(profile__visibility_status=VisibilityStatus.PUBLIC) | Q(created_by=user)
+
+    base_filter = Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PUBLIC) & public_profiles
 
     if not user or not user.is_authenticated:
         return base_filter
@@ -80,19 +84,13 @@ def get_post_visibility_filter(user):
 
     return (
         base_filter |
-        Q(
-            status=PostStatus.PUBLISHED,
-            visibility=PostVisibility.FOLLOWERS_ONLY,
-            profile__in=requester_profile.following.all()
+        (
+            Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.FOLLOWERS_ONLY) &
+            Q(profile__in=requester_profile.following.filter(visibility_status=VisibilityStatus.PUBLIC))
         ) |
-        Q(
-            status=PostStatus.PUBLISHED,
-            visibility=PostVisibility.FRIENDS_ONLY,
-            profile__in=requester_profile.friends.all()
+        (
+            Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.FRIENDS_ONLY) &
+            Q(profile__in=requester_profile.friends.filter(visibility_status=VisibilityStatus.PUBLIC))
         ) |
-        Q(
-            status=PostStatus.PUBLISHED,
-            visibility=PostVisibility.PRIVATE,
-            created_by=user
-        )
+        Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PRIVATE, created_by=user)
     )

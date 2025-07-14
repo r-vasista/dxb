@@ -29,6 +29,7 @@ urlpatterns = [
     path('event/', include('event.urls')),
     path('general/', include('core.urls')),
     path('notification/', include('notification.urls')),
+    path('ai/', include('ai.urls')),
 ]
 
 if settings.DEBUG:
