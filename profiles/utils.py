@@ -1,9 +1,12 @@
 # Rest Framework imports
 from rest_framework.exceptions import ValidationError
 
+# Django imports 
+from django.core.exceptions import ValidationError as  d_ValidationError
 
 # Python imports
 import random
+import re
 
 # Local imports
 from profiles.choices import FieldType
@@ -46,3 +49,13 @@ def validate_profile_field_data(data, instance=None):
     set_field_count = sum(1 for val in value_fields.values() if val)
     if set_field_count > 1:
         raise ValidationError("Only one value field should be set based on field_type.")
+
+def validate_username_format(value):
+    """
+    Only allows lowercase letters, digits, underscores.
+    No spaces, no special characters.
+    """
+    if not re.fullmatch(r'^[a-z0-9_]+$', value):
+        raise d_ValidationError(
+            "Username can only contain lowercase letters, numbers, and underscores (_), and no spaces or special characters."
+        )

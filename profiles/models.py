@@ -14,6 +14,9 @@ from organization.models import (
 from profiles.choices import (
     VisibilityStatus, FieldType, ProfileType, StaticFieldType
 )
+from profiles.utils import (
+    validate_username_format
+) 
 
 User = get_user_model()
 
@@ -29,7 +32,7 @@ class Profile(BaseModel):
     organization = models.OneToOneField(
         Organization, on_delete=models.CASCADE, null=True, blank=True, related_name='profile'
     )
-    username = models.CharField(max_length=200, unique=True, blank=True, null=True)
+    username = models.CharField(max_length=200, unique=True, blank=True, null=True, validators=[validate_username_format])
     phone_number = models.CharField(blank=True, null=True)
 
     bio = models.TextField(blank=True, null=True)
