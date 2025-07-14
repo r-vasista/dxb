@@ -76,6 +76,12 @@ class Profile(BaseModel):
     last_active_at = models.DateTimeField(null=True, blank=True)
     last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     art_service_enabled = models.BooleanField(default=False)
+    
+    def save(self, *args, **kwargs):
+        # Normalize username to lowercase before saving
+        if self.username:
+            self.username = self.username.lower()
+        super().save(*args, **kwargs)
 
     @property
     def followers_count(self):
