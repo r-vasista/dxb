@@ -6,8 +6,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from openai import OpenAI
 
-from ai.models import ArtImagePrompt
-from ai.utils import compress_and_encode_image
+from ai.models import ArtImagePrompt, BaseAIConfig
+from ai.choices import AiUseTypes
+from ai.utils import compress_and_encode_image, parse_gpt_response
 from core.services import get_user_profile, success_response, error_response
 from django.conf import settings
 
@@ -28,15 +29,11 @@ class ArtImageDescribeAPIView(APIView):
             return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
+            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.IMAGE_DESCRIPTION)
             base64_image = compress_and_encode_image(image)
-            gpt_model="gpt-4.1"
+            gpt_model= ai_config.gpt_model
             
-            prompt_instruction = (
-                "You are an expert art critic and creative writer for a digital art platform. "
-                "When shown an image, describe it vividly and artistically as if you're introducing the work in a gallery. "
-                "Keep it short less than 2 lines, elegant, and evocative. After the description, suggest 5 relevant social media hashtags for discovery. "
-                "Do not ask questions or wait for input. Respond in one go."
-            )
+            prompt_instruction = ai_config.prompt
             
             response = client.responses.create(
                 model=gpt_model,
@@ -56,7 +53,7 @@ class ArtImageDescribeAPIView(APIView):
                     }
                 ]
             )
-            result_text = response.output_text
+            result_text = parse_gpt_response(response.output_text)
             
             # Save record
             art_prompt = ArtImagePrompt.objects.create(
