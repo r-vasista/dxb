@@ -1,5 +1,6 @@
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+import re
 
 #from utils
 from core.services import  get_user_profile
@@ -94,3 +95,13 @@ def get_post_visibility_filter(user):
         ) |
         Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PRIVATE, created_by=user)
     )
+
+
+
+def extract_mentions(text):
+    """
+    Extract all @username patterns from text.
+    """
+    if not text:
+        return []
+    return re.findall(r'@(\w+)', text)

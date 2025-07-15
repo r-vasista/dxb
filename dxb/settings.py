@@ -52,6 +52,8 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'ckeditor',
+    'django_celery_results',
+    'django_celery_beat',
 
     # Local apps
     "core",
@@ -63,6 +65,8 @@ INSTALLED_APPS = [
     "notification",
     "import_export",
     "ai",
+
+    
 ]
 
 MIDDLEWARE = [
@@ -226,3 +230,73 @@ FRONTEND_URL = 'http://127.0.0.1:8000'
 #         'language': 'en',
 #     },
 # }
+
+
+CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+
+
+CELERY_ACCEPT_CONTENT = ['application/json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+
+CELERY_TIMEZONE = 'Asia/Kolkata'
+
+CELERY_RESULT_BACKEND = 'django-db'
+CELERY_CACHE_BACKEND = 'default'
+
+
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+
+    'formatters': {
+        'verbose': {
+            'format': '[%(asctime)s] %(levelname)s %(name)s | %(message)s',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+        'simple': {
+            'format': '%(levelname)s | %(message)s'
+        },
+    },
+
+    'handlers': {
+        'console': {
+            'level': 'INFO',  # or DEBUG
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': os.path.join(BASE_DIR, 'logs', 'project.log'),
+            'formatter': 'verbose',
+        },
+    },
+
+    'loggers': {
+        # Celery tasks and your app code
+        'notification': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'post': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        'profiles': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+        # Root logger (fallback)
+        'django': {
+            'handlers': ['console', 'file'],
+            'level': 'WARNING',
+            'propagate': True,
+        },
+    }
+}

@@ -7,12 +7,14 @@ from rest_framework import status
 
 from collections import defaultdict
 
+# from notification.task import send_daily_muse_email_task
 
-from .models import Notification
+
+from .models import Notification, DailyQuoteSeen
+from django.utils import timezone
 from .serializers import NotificationSerializer
 from core.services import get_user_profile  # replace with your actual helper
 
-from .utils import get_random_unseen_quote_for_today
 
 class NotificationListView(APIView):
     """
@@ -45,23 +47,4 @@ class NotificationListView(APIView):
         }
 
         return Response(response_data)
-
-class DailyMuseQuoteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        profile = get_user_profile(request.user)
-        quote, seen_at, email_already_sent = get_random_unseen_quote_for_today(profile)
-
-        if quote and not email_already_sent:
-            return Response({
-                "text": quote.text,
-                "author": quote.author,
-                "seen_at": seen_at,
-                "is_today": True
-            })
-
-        return Response({}, status=status.HTTP_200_OK)
-
-
 

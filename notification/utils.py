@@ -2,6 +2,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
 import random
 from datetime import timedelta
+from django.db import transaction
 
 from notification.models import Notification,DailyQuote, DailyQuoteSeen
 
@@ -9,9 +10,36 @@ from notification.models import Notification,DailyQuote, DailyQuoteSeen
 from core.services import send_dynamic_email_using_template,get_user_profile
 
 
-def create_notification(sender, recipient, notification_type, message, instance=None):
-    if sender == recipient:
-        return 
+def send_notification_email(recipient, sender, message, notification_type):
+    user = getattr(recipient, 'user', None) or getattr(getattr(recipient, 'organization', None), 'user', None)
+
+    if user and user.email and recipient.notify_email:
+        context = {
+            "user_name": recipient.username,
+            "message": message,
+            "notification_type": notification_type,
+            "sender_username": sender.username,
+        }
+        template_name = "generic-notification"
+        try:
+            send_dynamic_email_using_template(template_name, [user.email], context)
+        except Exception:
+            pass
+
+        
+def create_notification(*args):
+    """
+    Flexible notification creator:
+    Supports both:
+      - (sender, recipient, instance, message, notification_type)
+      - (obj, sender, recipient, instance, message, notification_type)
+    """
+    if len(args) == 5:
+        sender, recipient, instance, message, notification_type = args
+    elif len(args) == 6:
+        _, sender, recipient, instance, message, notification_type = args
+    else:
+        raise TypeError("create_notification() takes 5 or 6 positional arguments")
 
     notification = Notification(
         sender=sender,
@@ -19,23 +47,13 @@ def create_notification(sender, recipient, notification_type, message, instance=
         notification_type=notification_type,
         message=message
     )
-
     if instance:
-        notification.content_type = ContentType.objects.get_for_model(instance.__class__)
-        notification.object_id = instance.pk
-
+        notification.content_type = ContentType.objects.get_for_model(instance)
+        notification.object_id = instance.id
     notification.save()
-    return notification
 
-def create_post_reaction_notification(post_reaction):
-    
-    create_notification(
-        sender=post_reaction.profile,
-        recipient=post_reaction.post.profile,
-        notification_type='like',
-        message=f'{post_reaction.profile.username} liked your post',
-        instance=post_reaction.post
-    )
+    transaction.on_commit(lambda: send_notification_email(recipient, sender, message, notification_type))
+
 
 NOTIFICATION_CONFIG = {
     'like': {
@@ -110,79 +128,20 @@ def create_dynamic_notification(notification_type, obj, sender=None):
     if instance:
         notification.content_type = ContentType.objects.get_for_model(instance)
         notification.object_id = instance.id
-    if recipient.notify_email:
-        context = {
-            "user_name": get_user_profile(recipient).username,
-            "message": message,
-            "notification_type": notification_type,
-            "sender_username": sender.username,
-        }
-        
-        template_name = "generic-notification"  # Make sure this matches your EmailTemplate DB entry
-        send_dynamic_email_using_template(template_name, [user.email], context)
-    
+
+    try :
+        if recipient.notify_email:
+            context = {
+                "user_name": get_user_profile(recipient).username,
+                "message": message,
+                "notification_type": notification_type,
+                "sender_username": sender.username,
+            }
+            
+            template_name = "generic-notification"  # Make sure this matches your EmailTemplate DB entry
+            send_dynamic_email_using_template(template_name, [user.email], context)
+    except:
+        pass
 
     notification.save()
 
-
-def get_random_unseen_quote_for_today(profile):
-    today = timezone.localdate()
-
-    today_seen = DailyQuoteSeen.objects.filter(
-        profile=profile,
-        created_at__date=today
-    ).first()
-
-    if today_seen:
-        if not today_seen.email_sent and profile.notify_email:
-            send_daily_muse_email(profile, today_seen.quote)
-            today_seen.email_sent = True
-            today_seen.save()
-            return today_seen.quote, today_seen.created_at, False  # False means was not already emailed
-        return today_seen.quote, today_seen.created_at, True  # ✅ already emailed today
-
-    seen_ids = DailyQuoteSeen.objects.filter(profile=profile).values_list('quote_id', flat=True)
-    unseen_quotes = DailyQuote.objects.exclude(id__in=seen_ids)
-
-    if unseen_quotes.exists():
-        quote = random.choice(list(unseen_quotes))
-        seen_record = DailyQuoteSeen.objects.create(profile=profile, quote=quote)
-
-        if profile.notify_email:
-            send_daily_muse_email(profile, quote)
-            seen_record.email_sent = True
-            seen_record.save()
-
-        return quote, seen_record.created_at, False  # newly created, not emailed before
-
-    return None, None, False
-
-
-def send_daily_muse_email(profile, quote):
-    user = getattr(profile, 'user', None)
-    if not user and hasattr(profile, 'organization'):
-        user = getattr(profile.organization, 'user', None)
-
-    if user and user.email:
-        context = {
-            "user_name": profile.username,
-            "message": quote.text,
-            "notification_type": "daily_muse",
-            "sender_username": "Daily Muse"
-        }
-        template_name = "generic-notification"
-        send_dynamic_email_using_template(template_name, [user.email], context)
-
-def send_welcome_email(profile):
-    user = getattr(profile, 'user', None)
-    if not user and hasattr(profile, 'organization'):
-        user = getattr(profile.organization, 'user', None)
-
-    if user and user.email:
-        context = {
-            "user_name": profile.username,
-
-        }
-
-        template_name = "welcome-email"  # Should match the EmailTemplate entry name
-        send_dynamic_email_using_template(template_name, [user.email], context)
