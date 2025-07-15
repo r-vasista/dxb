@@ -1067,7 +1067,7 @@ class SearchProfilesView(APIView):
         if not query:
             return Response(error_response("Query parameter 'q' is required."), status=status.HTTP_400_BAD_REQUEST)
         try:
-            profiles = Profile.objects.filter(username__icontains=query, allow_me=True).order_by('username')
+            profiles = Profile.objects.filter(username__icontains=query, allow_mentions=True).order_by('username')
             serializer = ProfileSearchSerializer(profiles, many=True, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Profile.DoesNotExist:

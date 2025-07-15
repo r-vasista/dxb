@@ -196,10 +196,10 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
     """
     Serializer for Profile Search
     """
-    username = serializers.CharField(source='user.username', read_only=True)
-    profile_picture = serializers.CharField(source='profile_picture', read_only=True)
 
     class Meta:
         model = Profile
-        fields = ['id', 'username', 'profile_picture', 'bio']
-        read_only_fields = ['id', 'username', 'profile_picture', 'bio']
+        fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
+        read_only_fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
+
+        
