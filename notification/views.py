@@ -1,4 +1,5 @@
 # views.py
+from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
@@ -7,14 +8,16 @@ from rest_framework import status
 
 from collections import defaultdict
 
+# from notification.task import send_daily_muse_email_task
 
-from .models import Notification
+
+from .models import Notification, DailyQuoteSeen
+from django.utils import timezone
 from .serializers import NotificationSerializer
-from core.services import get_user_profile  # replace with your actual helper
+from core.services import error_response, get_user_profile  # replace with your actual helper
+from core.pagination import PaginationMixin
 
-from .utils import get_random_unseen_quote_for_today
-
-class NotificationListView(APIView):
+class NotificationListView(APIView, PaginationMixin):
     """
     GET /api/notifications/
 
@@ -24,44 +27,32 @@ class NotificationListView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        profile = get_user_profile(request.user)
+        try:
+            profile = get_user_profile(request.user)
 
-        # Fetch all notifications
-        notifications = Notification.objects.filter(recipient=profile).order_by('-created_at')
+            notifications = Notification.objects.filter(
+                recipient=profile
+            ).order_by('-created_at')
+            paginated_notifications = self.paginate_queryset(notifications, request)
 
-        # Mark all unread as read in bulk
-        unread = notifications.filter(is_read=False)
-        unread.update(is_read=True)
+            unread = notifications.filter(is_read=False)
+            unread.update(is_read=True)
 
-        # Group notifications by type
-        grouped = defaultdict(list)
-        for notif in notifications:
-            grouped[notif.notification_type].append(notif)
+            grouped = defaultdict(list)
+            for notif in paginated_notifications:
+                grouped[notif.notification_type].append(notif)
 
-        # Serialize each group
-        response_data = {
-            notif_type: NotificationSerializer(notif_list, many=True).data
-            for notif_type, notif_list in grouped.items()
-        }
+            grouped_data = {
+                notif_type: NotificationSerializer(notif_list, many=True).data
+                for notif_type, notif_list in grouped.items()
+            }
+            return self.get_paginated_response(grouped_data)
 
-        return Response(response_data)
-
-class DailyMuseQuoteAPIView(APIView):
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        profile = get_user_profile(request.user)
-        quote, seen_at, email_already_sent = get_random_unseen_quote_for_today(profile)
-
-        if quote and not email_already_sent:
-            return Response({
-                "text": quote.text,
-                "author": quote.author,
-                "seen_at": seen_at,
-                "is_today": True
-            })
-
-        return Response({}, status=status.HTTP_200_OK)
-
-
-
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

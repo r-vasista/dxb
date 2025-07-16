@@ -25,3 +25,24 @@ def compress_and_encode_image(file_obj, max_size=(1000, 1000), quality=85):
     # Encode to base64
     encoded_string = base64.b64encode(buffer.read()).decode("utf-8")
     return f"data:image/jpeg;base64,{encoded_string}"
+
+
+def parse_gpt_response(text):
+    """
+    Splits a GPT response into description and list of hashtags.
+    Assumes hashtags start with a line beginning with "#"
+    """
+    lines = text.strip().splitlines()
+    description_lines = []
+    hashtags = []
+
+    for line in lines:
+        if line.strip().startswith("#"):
+            hashtags += line.strip().split()
+        else:
+            description_lines.append(line.strip())
+
+    return {
+        "description": " ".join(description_lines),
+        "hashtags": hashtags
+    }

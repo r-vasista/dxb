@@ -73,7 +73,7 @@ class Post(BaseModel):
     )
 
     # Content
-    title = models.CharField(max_length=255, blank=True)
+    title = models.TextField(blank=True)
     content = models.TextField(blank=True)
     caption = models.TextField(blank=True)
     art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
@@ -234,3 +234,10 @@ class SavedPost(BaseModel):
 
     def __str__(self):
         return f"{self.profile} saved {self.post}"
+
+
+class Mention(BaseModel):
+    from_profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='mentions_made')
+    to_profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='mentions_received')
+    post = models.ForeignKey(Post, null=True, blank=True, on_delete=models.CASCADE)
+    comment = models.ForeignKey(Comment, null=True, blank=True, on_delete=models.CASCADE)

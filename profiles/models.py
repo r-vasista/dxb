@@ -14,6 +14,9 @@ from organization.models import (
 from profiles.choices import (
     VisibilityStatus, FieldType, ProfileType, StaticFieldType
 )
+from profiles.utils import (
+    validate_username_format
+) 
 
 User = get_user_model()
 
@@ -29,7 +32,7 @@ class Profile(BaseModel):
     organization = models.OneToOneField(
         Organization, on_delete=models.CASCADE, null=True, blank=True, related_name='profile'
     )
-    username = models.CharField(max_length=200, unique=True, blank=True, null=True)
+    username = models.CharField(max_length=200, unique=True, blank=True, null=True, validators=[validate_username_format])
     phone_number = models.CharField(blank=True, null=True)
 
     bio = models.TextField(blank=True, null=True)
@@ -76,6 +79,13 @@ class Profile(BaseModel):
     last_active_at = models.DateTimeField(null=True, blank=True)
     last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     art_service_enabled = models.BooleanField(default=False)
+    allow_mentions = models.BooleanField(default=True)
+    
+    def save(self, *args, **kwargs):
+        # Normalize username to lowercase before saving
+        if self.username:
+            self.username = self.username.lower()
+        super().save(*args, **kwargs)
 
     @property
     def followers_count(self):
