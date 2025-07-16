@@ -12,6 +12,7 @@ from requests import post
 from core.services import send_dynamic_email_using_template
 from profiles.models import Profile
 from notification.models import DailyQuote, DailyQuoteSeen, Notification  
+from notification.choices import NotificationType
 from post.models import PostReaction,Comment ,Post,SharePost
 from profiles.models import FriendRequest
 from notification.utils import create_notification
@@ -115,13 +116,14 @@ def send_post_reaction_notification_task(reaction_id):
     recipient = reaction.post.profile
     sender = reaction.profile
     instance = reaction.post
+    notification_type = NotificationType.LIKE
     reaction_name = reaction.reaction_type.lower().capitalize()  # e.g., "Like", "Love"
     message = f"{sender.username} reacted ({reaction_name}) to your post"
 
     if recipient and sender:
         logger.info(f"Sending reaction notification: {message} to {recipient.username} from {sender.username}")
-        create_notification(reaction, sender, recipient, instance, message, "post_reaction")
-    
+        create_notification(reaction, sender, recipient, instance, message, notification_type)
+
 
 @shared_task
 def send_comment_notification_task(comment_id):
@@ -135,11 +137,12 @@ def send_comment_notification_task(comment_id):
     recipient = comment.post.profile
     sender = comment.profile
     instance = comment.post
+    notification_type = NotificationType.COMMENT
     message = f"{sender.username} commented on your post"
 
     if recipient and sender:
         logger.info(f"Sending comment notification: {message} to {recipient.username} from {sender.username}")
-        create_notification(comment, sender, recipient, instance, message, "post_comment")
+        create_notification(comment, sender, recipient, instance, message, notification_type)
 
 @shared_task
 def send_friend_request_notification_task(friend_request_id):
@@ -152,11 +155,12 @@ def send_friend_request_notification_task(friend_request_id):
 
     sender = friend_request.from_profile
     recipient = friend_request.to_profile
+    notification_type = NotificationType.FRIEND_REQUEST
     message = f"{sender.username} sent you a friend request"
 
     if sender and recipient:
         logger.info(f"Sending friend request notification: {message} to {recipient.username} from {sender.username}")
-        create_notification(sender, recipient, friend_request, message, "friend_request")
+        create_notification(sender, recipient, friend_request, message, notification_type)
 
 @shared_task
 def send_friend_request_response_notification_task(friend_request_id, response_type):
@@ -175,8 +179,8 @@ def send_friend_request_response_notification_task(friend_request_id, response_t
     sender = friend_request.to_profile      # The one who accepted
     recipient = friend_request.from_profile # The one who sent the request
     message = f"{sender.username} accepted your friend request"
-
-    create_notification(sender, recipient, friend_request, message, "friend_request_accepted")
+    notification_type = NotificationType.FRIEND_ACCEPTED
+    create_notification(sender, recipient, friend_request, message, notification_type)
     """
     Sends a notification when a friend request is accepted or rejected.
     """
@@ -190,10 +194,10 @@ def send_friend_request_response_notification_task(friend_request_id, response_t
 
     if response_type == "accepted":
         message = f"{sender.username} accepted your friend request"
-        notification_type = "friend_request_accepted"
+        notification_type = NotificationType.FRIEND_ACCEPTED
     else:
         message = f"{sender.username} rejected your friend request"
-        notification_type = "friend_request_rejected"
+        notification_type = NotificationType.FRIEND_REQUEST_REJECTED
     logger.info(f"Sending friend request response notification: {message} to {recipient.username} from {sender.username}")
     create_notification(sender, recipient, friend_request, message, notification_type)
 
@@ -210,12 +214,13 @@ def notify_friends_of_new_post(post_id):
 
     profile = post.profile
     friends = profile.friends.all()
+    notification_type = NotificationType.POST_CREATE
 
     for friend in friends:
         if friend.notify_email:
             message = f"{profile.username} has created a new post."
             logger.info(f"Notifying friend {friend.username} about new post by {profile.username}")
-            create_notification(profile, friend, post, message, "post_create")
+            create_notification(profile, friend, post, message, notification_type)
         else:
             logger.info(f"Friend {friend.username} has email notifications disabled, skipping notification for new post.")
 
@@ -231,11 +236,12 @@ def send_post_share_notification_task(share_id):
     sender = share.profile
     recipient = share.post.profile
     instance = share.post
+    notification_type = NotificationType.SHARE
     message = f"{sender.username} shared your post"
 
     if sender != recipient:
         logger.info(f"Sending share notification: {message} to {recipient.username} from {sender.username}")
-        create_notification(sender, recipient, instance, message, "post_share")
+        create_notification(sender, recipient, instance, message, notification_type)
 
 
 @shared_task
@@ -244,10 +250,11 @@ def send_mention_notification_task(from_profile_id, to_profile_id, post_id):
         sender = Profile.objects.get(id=from_profile_id)
         recipient = Profile.objects.get(id=to_profile_id)
         post = Post.objects.get(id=post_id)
+        notification_type = NotificationType.MENTION
 
         if sender != recipient and recipient.allow_mentions:
             message = f"{sender.username} mentioned you in a post"
-            create_notification(post, sender, recipient, post, message, "mention")
+            create_notification(post, sender, recipient, post, message, notification_type)
             logger.info(f"✅ Mention notification sent to {recipient.username}")
     except ObjectDoesNotExist:
         logger.warning("❌ Mention task failed — object not found.")

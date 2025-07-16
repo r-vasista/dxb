@@ -3,29 +3,21 @@ from django.db import models
 from django.contrib.contenttypes.models import ContentType
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.utils import timezone
-
 # Local imports
 from user.models import CustomUser
 from profiles.models import Profile
 from core.models import BaseModel
+from notification.choices import NotificationType
 
 
 class Notification(models.Model):
-    NOTIFICATION_TYPES = [
-        ('like', 'Like'),
-        ('comment', 'Comment'),
-        ('follow', 'Follow'),
-        ('friend_request', 'Friend Request'),
-        ('friend_accept', 'Friend Accept'),
-        ('tag', 'Tag'),
-        ('mention', 'Mention'),
-        ('share', 'Share'),
-        ('post_create', 'Post Create'),
-    ]
+    """    Represents a notification sent to a user.    
+    Each notification can be linked to any model instance (like Post, Comment, etc.) using a generic foreign key.
+    """
     
     recipient = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='notifications')
     sender = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='sent_notifications')
-    notification_type = models.CharField(max_length=20, choices=NOTIFICATION_TYPES)
+    notification_type = models.CharField(max_length=20, choices=NotificationType.choices)
     message = models.TextField()
     
     # Generic foreign key to link to any model (Post, Comment, etc.)

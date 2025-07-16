@@ -52,7 +52,8 @@ def create_notification(*args):
         notification.object_id = instance.id
     notification.save()
 
-    transaction.on_commit(lambda: send_notification_email(recipient, sender, message, notification_type))
+    if recipient.notify_email:
+        transaction.on_commit(lambda: send_notification_email(recipient, sender, message, notification_type))
 
 
 NOTIFICATION_CONFIG = {
