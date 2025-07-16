@@ -23,6 +23,7 @@ from datetime import datetime
 from decimal import Decimal
 
 # Local imports
+from notification.task import send_friend_request_notification_task, send_friend_request_response_notification_task
 from post.serializers import PostSerializer
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -374,10 +375,7 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-            try:
-                create_dynamic_notification('friend_request', friend_request, sender=from_profile)
-            except:
-                pass
+            transaction.on_commit(lambda: send_friend_request_notification_task.delay(friend_request.id))
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -468,10 +466,9 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-                try:
-                    create_dynamic_notification('friend_accept', friend_request)
-                except:
-                    pass
+                transaction.on_commit(lambda: send_friend_request_response_notification_task.delay(
+                    friend_request.id, "accepted"
+                ))
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':

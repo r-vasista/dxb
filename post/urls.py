@@ -3,7 +3,7 @@ from post.views import (
     PostAPIView, ProfilePostListView, AllPostsAPIView, ProfileImageMediaListView, PostReactionView, Postreactionlist,PostReactionDetailView,
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView,
     TrendingPostsAPIView, HashtagPostsView, HashtagsListView, PostShareView, ProfileGalleryView, UpdateGalleryOrderView,
-    ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView,SavedPostsListAPIView, SavePostAPIView,GlobalSearchAPIView
+    ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView,SavedPostsListAPIView, SavePostAPIView,GlobalSearchAPIView, SearchProfilesView
     )
 
 
@@ -52,4 +52,6 @@ urlpatterns = [
     path('save-post/<int:post_id>/', SavePostAPIView.as_view(), name='save-post'),
 
     path('global-search/', GlobalSearchAPIView.as_view(), name='global-search'),
+
+    path('search/profiles/', SearchProfilesView.as_view(), name='search-profiles'),
 ]

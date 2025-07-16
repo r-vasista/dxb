@@ -1,0 +1,5 @@
+"" 
+[2025-07-15 13:52:23] WARNING django.request | Not Found: /media/share/posts/15/
+[2025-07-15 13:52:23] WARNING django.server | "POST /media/share/posts/15/ HTTP/1.1" 404 61
+[2025-07-15 15:47:10] INFO notification.task | Notifying friend vasista org about new post by Shiva
+[2025-07-15 15:50:45] INFO notification.task | Notifying friend vasista org about new post by Shiva

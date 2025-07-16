@@ -35,7 +35,7 @@ from profiles.choices import (
     ProfileType
 )
 
-from notification.utils import send_welcome_email
+from notification.task import send_welcome_email_task
 
 class RegisterAccountAPIView(APIView):
     """
@@ -127,7 +127,7 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
-                    send_welcome_email(profile)
+                    transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
 
                 elif user_type == "user":
                     user_type_obj, _ = UserType.objects.get_or_create(code="user", defaults={"name": "user"})
@@ -150,7 +150,7 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
-                    send_welcome_email(profile)
+                    transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
 

@@ -22,6 +22,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 # Local imports
 from core.services import success_response, error_response, get_user_profile, handle_hashtags
 from core.pagination import PaginationMixin
+from notification.task import notify_friends_of_new_post, send_comment_notification_task, send_mention_notification_task, send_post_reaction_notification_task, send_post_share_notification_task
 from post.models import ReactionType, PostView, SavedPost
 from profiles.models import (
     Profile
@@ -36,7 +37,7 @@ from post.choices import (
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
-    HashtagSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
+    HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -45,7 +46,7 @@ from organization.models import (
     OrganizationMember
 )
 from notification.utils import (
-    create_post_reaction_notification,create_dynamic_notification
+    create_dynamic_notification
 )
 from core.permissions import (
     is_owner_or_org_member
@@ -54,7 +55,7 @@ from core.permissions import (
 
 User = get_user_model()
 
-from .utils import get_post_visibility_filter,get_profile_from_request,get_visible_profile_posts
+from .utils import extract_mentions, get_post_visibility_filter,get_profile_from_request,get_visible_profile_posts
 
 
 
@@ -102,11 +103,15 @@ class PostAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
-            try:
-                create_dynamic_notification('post_create', post)
-            except:
-                pass
 
+            transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
+            
+            mentions = extract_mentions(post.caption or '') + extract_mentions(post.content or '')
+            mentioned_profiles = Profile.objects.filter(username__in=mentions, allow_mentions=True)
+
+            for mentioned in mentioned_profiles:
+                if mentioned.id != profile.id:
+                    transaction.on_commit(lambda: send_mention_notification_task.delay(from_profile_id=profile.id, to_profile_id=mentioned.id, post_id=post.id))
             # Handle media files safely
             media_files = request.FILES.getlist('media_files')
             for idx, media_file in enumerate(media_files):
@@ -311,10 +316,7 @@ class PostReactionView(APIView):
             serializer.is_valid(raise_exception=True)
             post_reaction = serializer.save()
 
-            try:
-                create_dynamic_notification('like', post_reaction)
-            except:
-                pass
+            transaction.on_commit(lambda: send_post_reaction_notification_task.delay(post_reaction.id))
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()
@@ -415,10 +417,7 @@ class CommentView(APIView, PaginationMixin):
             serializer.is_valid(raise_exception=True)
             comment = serializer.save()
 
-            try:
-                create_dynamic_notification('comment', comment)
-            except:
-                pass
+            transaction.on_commit(lambda: send_comment_notification_task.delay(comment.id))
 
             post.comment_count = post.comments.count()
             post.save(update_fields=["comment_count"])
@@ -699,10 +698,12 @@ class PostShareView(APIView):
             
             serializer=SharePostSerailizer(data={"post":post.id,"profile":profile.id})
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            share = serializer.save()
 
             post.share_count=SharePost.objects.filter(post=post).count()
             post.save(update_fields=["share_count"])
+            transaction.on_commit(lambda: send_post_share_notification_task.delay(share.id))
+
 
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
         
@@ -1054,4 +1055,20 @@ class GlobalSearchAPIView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            
+class SearchProfilesView(APIView):
+    """
+    GET /api/profiles/search/?q=<query>
+    Returns a list of profiles matching username .
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query=request.GET.get('q', '').strip()
+        if not query:
+            return Response(error_response("Query parameter 'q' is required."), status=status.HTTP_400_BAD_REQUEST)
+        try:
+            profiles = Profile.objects.filter(username__icontains=query, allow_mentions=True).order_by('username')
+            serializer = ProfileSearchSerializer(profiles, many=True, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Profile.DoesNotExist:
+            return Response("No profiles found.", status=status.HTTP_200_OK)

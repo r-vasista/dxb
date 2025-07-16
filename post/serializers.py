@@ -6,6 +6,7 @@ from post.models import (
     Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SavedPost, SharePost, ArtType, CustomArtType
 )
 
+from profiles.models import Profile
 from profiles.serializers import ProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.choices import PostVisibility
@@ -189,3 +190,16 @@ class SavedPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = SavedPost
         fields = ['id', 'profile', 'post', 'created_at']
+
+
+class ProfileSearchSerializer(serializers.ModelSerializer):
+    """
+    Serializer for Profile Search
+    """
+
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
+        read_only_fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
+
+        
