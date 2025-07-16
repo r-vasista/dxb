@@ -44,7 +44,7 @@ class BaseTypeModel(BaseModel):
 class EmailTemplate(BaseModel):
     """Model to store email template configurations"""
     name = models.CharField(max_length=100, unique=True)
-    subject = RichTextField()
+    subject = models.TextField()
     title = RichTextField()
     main_content = RichTextField()
     footer_content = RichTextField()
