@@ -201,7 +201,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'followers_count', 'following_count', 'friends_count',
             'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
-            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools'
+            'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
+            'notify_email'
         ]
     
     def get_is_friend(self, obj):
