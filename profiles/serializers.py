@@ -129,7 +129,7 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state', 'awards', 'tools']
+        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state', 'awards', 'tools', 'notify_email']
         extra_kwargs = {
             'username': {'required': False}, 
         }
