@@ -19,10 +19,12 @@ from core.pagination import PaginationMixin
 
 class NotificationListView(APIView, PaginationMixin):
     """
-    GET /api/notifications/
+    GET /api/notifications/?notification_type=<optional>
 
-    Returns notifications grouped by type.
-    Marks all unread notifications as read when accessed.
+    Returns grouped notifications.
+    Returns all notification types as metadata.
+    Allows filtering by notification type.
+    Marks unread notifications as read when accessed.
     """
     permission_classes = [IsAuthenticated]
 
@@ -30,24 +32,28 @@ class NotificationListView(APIView, PaginationMixin):
         try:
             profile = get_user_profile(request.user)
 
-            notifications = Notification.objects.filter(
-                recipient=profile
-            ).order_by('-created_at')
+            # Optional query param filter
+            notif_type_filter = request.query_params.get("notification_type")
+
+            notifications = Notification.objects.filter(recipient=profile)
+            if notif_type_filter:
+                notifications = notifications.filter(notification_type=notif_type_filter)
+
+            notifications = notifications.select_related("sender__user", "recipient__user").order_by("-created_at")
+            # Mark unread as read
+            notifications.filter(is_read=False).update(is_read=True)
+            # Paginate
             paginated_notifications = self.paginate_queryset(notifications, request)
 
-            unread = notifications.filter(is_read=False)
-            unread.update(is_read=True)
+            serializer = NotificationSerializer(paginated_notifications, many=True, context={"request": request})
 
-            grouped = defaultdict(list)
-            for notif in paginated_notifications:
-                grouped[notif.notification_type].append(notif)
+            # All defined notification types from model
+            all_notification_types = [choice[0] for choice in Notification.NOTIFICATION_TYPES]
 
-            grouped_data = {
-                notif_type: NotificationSerializer(notif_list, many=True).data
-                for notif_type, notif_list in grouped.items()
-            }
-            return self.get_paginated_response(grouped_data)
-
+            return self.get_paginated_response({
+                "available_notification_types": all_notification_types,
+                "notifications": serializer.data
+            })
         except ValueError as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
         except PermissionError as e:
