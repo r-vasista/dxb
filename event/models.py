@@ -133,9 +133,6 @@ class EventAttendance(BaseModel):
         choices=AttendanceStatus.choices,
         default=AttendanceStatus.INTERESTED
     )
-    registered_at = models.DateTimeField(auto_now_add=True)
-    checked_in = models.BooleanField(default=False)
-    check_in_time = models.DateTimeField(null=True, blank=True)
     
     class Meta:
         unique_together = ['profile', 'event']
@@ -177,6 +174,8 @@ class EventMedia(BaseModel):
     # Metadata
     uploaded_at = models.DateTimeField(auto_now_add=True)
     is_active = models.BooleanField(default=True)
+    
+    is_pinned = models.BooleanField(default=False)
     
     class Meta:
         ordering = ['-uploaded_at']
