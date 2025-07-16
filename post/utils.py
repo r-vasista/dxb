@@ -4,6 +4,7 @@ from django.db.models import Q
 #from utils
 from core.services import  get_user_profile
 from profiles.choices import VisibilityStatus
+from core.utils import update_last_active
 
 
 #chiocies
@@ -79,6 +80,7 @@ def get_post_visibility_filter(user):
         return base_filter
 
     requester_profile = get_user_profile(user)
+    update_last_active(requester_profile)
     if not requester_profile:
         return base_filter
 

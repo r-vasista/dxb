@@ -50,7 +50,9 @@ from notification.utils import (
 from core.permissions import (
     is_owner_or_org_member
 )
-
+from core.utils import (
+    update_last_active
+)
 
 User = get_user_model()
 
@@ -116,6 +118,8 @@ class PostAPIView(APIView):
                     media_type=media_file.content_type.split('/')[0],
                     order=idx
                 )
+            
+            update_last_active(profile)
 
             return Response(success_response(PostSerializer(post, context={'request': request}).data), status=status.HTTP_201_CREATED)
 
@@ -274,6 +278,8 @@ class PostReactionView(APIView):
         try:
             post = get_object_or_404(Post, id=post_id)
             profile = get_user_profile(request.user)
+            
+            update_last_active(profile)
 
             if not post.allow_reactions:
                 return Response(error_response("Reactions are Disabled for this Post"),status=status.HTTP_403_FORBIDDEN)
@@ -405,6 +411,7 @@ class CommentView(APIView, PaginationMixin):
         try:
             post = get_object_or_404(Post, id=post_id)
             profile = get_user_profile(request.user)
+            update_last_active(profile)
             if not post.allow_comments:
                 return Response(error_response("Comments are disable for this Post"),status=status.HTTP_403_FORBIDDEN)
             data = request.data.copy()
@@ -692,6 +699,7 @@ class PostShareView(APIView):
         try: 
             post=get_object_or_404(Post,id=post_id)
             profile= get_user_profile(request.user)
+            update_last_active(profile)
 
             existing_share = SharePost.objects.filter(post=post, profile=profile).first()
             if existing_share:
@@ -896,6 +904,7 @@ class CreatePostViewAPIView(APIView):
         try:
             post = get_object_or_404(Post.objects.select_related("profile", "created_by"), id=post_id)
             viewer = get_user_profile(request.user) if request.user.is_authenticated else None
+            update_last_active(viewer)
 
             # Prevent self-views from being tracked
             if viewer and post.profile == viewer:
