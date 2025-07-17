@@ -129,7 +129,10 @@ class ProfileSerializer(serializers.ModelSerializer):
 class UpdateProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
-        fields = ['username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state', 'awards', 'tools', 'notify_email']
+        fields = [
+            'username', 'bio', 'profile_picture', 'cover_picture', 'visibility_status', 'city', 'country', 'state',
+            'awards', 'tools', 'notify_email', 'has_seen_tutorial'
+            ]
         extra_kwargs = {
             'username': {'required': False}, 
         }
@@ -202,7 +205,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
-            'notify_email'
+            'notify_email', 'has_seen_tutorial'
         ]
     
     def get_is_friend(self, obj):
