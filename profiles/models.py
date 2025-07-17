@@ -81,6 +81,9 @@ class Profile(BaseModel):
     art_service_enabled = models.BooleanField(default=False)
     allow_mentions = models.BooleanField(default=True)
     
+    wall_tutorial = models.BooleanField(default=False)
+    profile_tutorial = models.BooleanField(default=False)
+    
     def save(self, *args, **kwargs):
         # Normalize username to lowercase before saving
         if self.username:
