@@ -788,25 +788,32 @@ class StaticFieldValueView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             
-class SearchProfilesAPIView(ListAPIView):
+class SearchProfilesAPIView(APIView, PaginationMixin):
     permission_classes = [AllowAny]
-    serializer_class = ProfileSerializer
 
-    def get_queryset(self):
-        query = self.request.query_params.get('name', '')
-        qs = Profile.objects.filter(
-            Q(username__icontains=query) |
-            Q(bio__icontains=query)
-        ).distinct()
+    def get(self, request):
+        try:
+            query = request.query_params.get('name', '').strip()
 
-        # Exclude the request user's profile (if authenticated and has a profile)
-        user = self.request.user
-        if user.is_authenticated and hasattr(user, 'profile'):
-            qs = qs.exclude(id=user.profile.id)
+            qs = Profile.objects.filter(
+                Q(username__icontains=query) |
+                Q(bio__icontains=query) |
+                Q(tools__icontains=query) |
+                Q(awards__icontains=query)
+            ).distinct().order_by('id') 
 
-        return qs
-    
-    
+            user = request.user
+            if user.is_authenticated and hasattr(user, 'profile'):
+                qs = qs.exclude(id=user.profile.id)
+
+            paginated_qs = self.paginate_queryset(qs, request)
+            serializer = ProfileSerializer(paginated_qs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response({"status": False, "message": str(e)}, status=500)
+        
+        
 class InspiredByFromProfileView(APIView):
     """
     GET /api/profiles/{profile_id}/inspired-by/
