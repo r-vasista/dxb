@@ -54,6 +54,9 @@ from post.models import (
 from post.choices import (
     PostStatus
 )
+from post.utils import (
+    get_profile_from_request
+)
 from core.permissions import (
     is_owner_or_org_member
 )
@@ -644,9 +647,9 @@ class ListFriendsView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, profile_id):
+    def get(self, request, profile_id=None, username=None):
         try:
-            profile = get_object_or_404(Profile, id=profile_id)
+            profile = get_profile_from_request(profile_id, username)
 
             friends = profile.friends.all().order_by('username')
             serializer = ProfileListSerializer(friends, many=True)
