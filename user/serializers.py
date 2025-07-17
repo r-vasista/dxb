@@ -40,7 +40,8 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
             data['profile_picture'] = str(profile.profile_picture) if profile.profile_picture else None
             data['profile_visibility'] = profile.visibility_status
             data['created_at'] = profile.created_at
-            data['has_seen_tutorial'] = profile.has_seen_tutorial
+            data['profile_tutorial'] = profile.profile_tutorial
+            data['wall_tutorial'] = profile.wall_tutorial
         else:
             data["profile_id"] = None
             data["profile_type"] = None
