@@ -57,6 +57,8 @@ from post.choices import (
 from core.permissions import (
     is_owner_or_org_member
 )
+from core.pagination import PaginationMixin
+
 
 class ProfileAPIView(APIView):
     """
@@ -525,7 +527,7 @@ class RemoveFriendView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
-class PendingFriendRequestsView(APIView):
+class PendingFriendRequestsView(APIView, PaginationMixin):
     """
     GET /api/friends/pending-requests/
 
@@ -542,10 +544,10 @@ class PendingFriendRequestsView(APIView):
                 to_profile=profile,
                 status='pending'
             ).select_related('from_profile')
-
-            serializer = FriendRequestSerializer(pending_requests, many=True)
-
-            return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
+            
+            paginated_queryset = self.paginate_queryset(pending_requests, request)
+            serializer = FriendRequestSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
