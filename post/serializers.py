@@ -6,6 +6,7 @@ from post.models import (
     Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SavedPost, SharePost, ArtType, CustomArtType
 )
 
+from post.utils import extract_mentions
 from profiles.models import Profile
 from profiles.serializers import ProfileSerializer
 from profiles.choices import VisibilityStatus
@@ -40,7 +41,7 @@ class PostSerializer(TimezoneAwareSerializerMixin):
     custom_art_type_names = serializers.ListField(
         child=serializers.CharField(), write_only=True, required=False
     )
-
+    mentions = serializers.SerializerMethodField()
     # Read-only serialized fields
     art_types = serializers.SlugRelatedField(
         many=True, read_only=True, slug_field='name'
@@ -120,6 +121,25 @@ class PostSerializer(TimezoneAwareSerializerMixin):
                         "This profile is private. You can only post with private or friends-only visibility."
                     )
         return value
+
+    def get_mentions(self, post):
+        """
+        Return list of mentioned profiles (who allow mentions) as dicts with id, username, and profile_picture.
+        """
+        text = " ".join(filter(None, [post.caption, post.title, post.content]))
+        usernames = extract_mentions(text)
+
+        mentioned_profiles = Profile.objects.filter(username__in=usernames, allow_mentions=True)
+
+        return [
+            {
+                "id": profile.id,
+                "username": profile.username,
+                # "profile_picture": profile.profile_picture.url if hasattr(profile.profile_picture, 'url') else None
+            }
+            for profile in mentioned_profiles
+        ]
+
 
 
 class ImageMediaSerializer(serializers.ModelSerializer):
