@@ -84,6 +84,13 @@ class Profile(BaseModel):
     wall_tutorial = models.BooleanField(default=False)
     profile_tutorial = models.BooleanField(default=False)
     
+    is_verified = models.BooleanField(default=False)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.ForeignKey(
+        'self', on_delete=models.SET_NULL, null=True, blank=True,
+        related_name='verified_profiles'
+    )
+    
     def save(self, *args, **kwargs):
         # Normalize username to lowercase before saving
         if self.username:
@@ -121,6 +128,12 @@ class Profile(BaseModel):
                 fields=['organization'], condition=models.Q(organization__isnull=False),
                 name='unique_organization_profile'
             ),
+        ]
+        indexes = [
+            models.Index(fields=['username'], name='profile_username_idx'),
+            models.Index(fields=['bio'], name='profile_bio_idx'),
+            models.Index(fields=['tools'], name='profile_tools_idx'),
+            models.Index(fields=['awards'], name='profile_awards_idx'),
         ]
 
     def __str__(self):
