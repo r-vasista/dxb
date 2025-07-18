@@ -7,7 +7,7 @@ from profiles.views import (
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
     ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
     CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView, EnableOrUpdateArtServiceAPIView, GetArtServiceAPIView,
-    SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView
+    SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView, SuggestedProfilesAPIView
 )
 
 urlpatterns = [
@@ -43,6 +43,8 @@ urlpatterns = [
     path('art-service/<int:profile_id>/', EnableOrUpdateArtServiceAPIView.as_view(), name='art-service'),
     path('user-art-service/', GetArtServiceAPIView.as_view(), name='user-art-service'),
     path('art-service-inquire/', SendArtServiceInquiryAPIView.as_view(), name='send-art-service-inquiry'),
-    path('art-service-inquiries/<int:profile_id>/', ArtServiceInquiriesAPIView.as_view(), name='art-service-inquiries/')
+    path('art-service-inquiries/<int:profile_id>/', ArtServiceInquiriesAPIView.as_view(), name='art-service-inquiries/'),
+
+    path('onboarding/suggested-profiles/', SuggestedProfilesAPIView.as_view(), name='suggested-profiles'),
 
 ]
