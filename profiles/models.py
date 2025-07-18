@@ -122,6 +122,12 @@ class Profile(BaseModel):
                 name='unique_organization_profile'
             ),
         ]
+        indexes = [
+            models.Index(fields=['username'], name='profile_username_idx'),
+            models.Index(fields=['bio'], name='profile_bio_idx'),
+            models.Index(fields=['tools'], name='profile_tools_idx'),
+            models.Index(fields=['awards'], name='profile_awards_idx'),
+        ]
 
     def __str__(self):
         return f"{'User: ' + str(self.username), self.id if self.user else 'Org: ' + str(self.username), self.id}"

@@ -54,6 +54,9 @@ from post.models import (
 from post.choices import (
     PostStatus
 )
+from post.utils import (
+    get_profile_from_request
+)
 from core.permissions import (
     is_owner_or_org_member
 )
@@ -644,9 +647,9 @@ class ListFriendsView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, profile_id):
+    def get(self, request, profile_id=None, username=None):
         try:
-            profile = get_object_or_404(Profile, id=profile_id)
+            profile = get_profile_from_request(profile_id, username)
 
             friends = profile.friends.all().order_by('username')
             serializer = ProfileListSerializer(friends, many=True)
@@ -788,25 +791,32 @@ class StaticFieldValueView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
             
-class SearchProfilesAPIView(ListAPIView):
+class SearchProfilesAPIView(APIView, PaginationMixin):
     permission_classes = [AllowAny]
-    serializer_class = ProfileSerializer
 
-    def get_queryset(self):
-        query = self.request.query_params.get('name', '')
-        qs = Profile.objects.filter(
-            Q(username__icontains=query) |
-            Q(bio__icontains=query)
-        ).distinct()
+    def get(self, request):
+        try:
+            query = request.query_params.get('name', '').strip()
 
-        # Exclude the request user's profile (if authenticated and has a profile)
-        user = self.request.user
-        if user.is_authenticated and hasattr(user, 'profile'):
-            qs = qs.exclude(id=user.profile.id)
+            qs = Profile.objects.filter(
+                Q(username__icontains=query) |
+                Q(bio__icontains=query) |
+                Q(tools__icontains=query) |
+                Q(awards__icontains=query)
+            ).distinct().order_by('id') 
 
-        return qs
-    
-    
+            user = request.user
+            if user.is_authenticated and hasattr(user, 'profile'):
+                qs = qs.exclude(id=user.profile.id)
+
+            paginated_qs = self.paginate_queryset(qs, request)
+            serializer = ProfileSerializer(paginated_qs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response({"status": False, "message": str(e)}, status=500)
+        
+        
 class InspiredByFromProfileView(APIView):
     """
     GET /api/profiles/{profile_id}/inspired-by/
