@@ -27,19 +27,20 @@ def send_notification_email(recipient, sender, message, notification_type):
             pass
 
         
-def create_notification(*args):
-    """
-    Flexible notification creator:
-    Supports both:
-      - (sender, recipient, instance, message, notification_type)
-      - (obj, sender, recipient, instance, message, notification_type)
-    """
-    if len(args) == 5:
-        sender, recipient, instance, message, notification_type = args
-    elif len(args) == 6:
-        _, sender, recipient, instance, message, notification_type = args
+def create_notification(*args, **kwargs):
+    if kwargs:
+        sender = kwargs.get('sender')
+        recipient = kwargs.get('recipient')
+        instance = kwargs.get('instance')
+        message = kwargs.get('message')
+        notification_type = kwargs.get('notification_type')
     else:
-        raise TypeError("create_notification() takes 5 or 6 positional arguments")
+        if len(args) == 5:
+            sender, recipient, instance, message, notification_type = args
+        elif len(args) == 6:
+            _, sender, recipient, instance, message, notification_type = args
+        else:
+            raise TypeError("create_notification() takes 5 or 6 positional arguments")
 
     notification = Notification(
         sender=sender,
@@ -54,6 +55,7 @@ def create_notification(*args):
 
     if recipient.notify_email:
         transaction.on_commit(lambda: send_notification_email(recipient, sender, message, notification_type))
+
 
 
 NOTIFICATION_CONFIG = {

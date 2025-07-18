@@ -106,7 +106,8 @@ class PostAPIView(APIView):
 
             transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
             
-            mentions = extract_mentions(post.caption or '') + extract_mentions(post.content or '')
+            mentions = extract_mentions(" ".join(filter(None, [post.caption, post.title, post.content])))
+
             mentioned_profiles = Profile.objects.filter(username__in=mentions, allow_mentions=True)
 
             for mentioned in mentioned_profiles:
