@@ -392,7 +392,7 @@ class CommentView(APIView, PaginationMixin):
     def get(self, request, post_id):
         try:
             post = get_object_or_404(Post, id=post_id)
-            comments = post.comments.filter(parent=None).select_related('profile').order_by('-created_at')
+            comments = post.comments.filter(parent=None,is_approved=True).select_related('profile').order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(comments, request)
             serializer = CommentSerializer(paginated_queryset, many=True)
@@ -412,6 +412,7 @@ class CommentView(APIView, PaginationMixin):
             data = request.data.copy()
             data['post'] = post.id
             data['profile'] = profile.id
+            data['is_approved'] = True
 
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
@@ -1058,8 +1059,12 @@ class GlobalSearchAPIView(APIView, PaginationMixin):
 
             return Response(success_response(data), status=status.HTTP_200_OK)
 
-        except ValueError:
-            return Response(error_response("Invalid date format. Expected YYYY-MM-DD."), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -1078,5 +1083,71 @@ class SearchProfilesView(APIView):
             profiles = Profile.objects.filter(username__icontains=query, allow_mentions=True).order_by('username')
             serializer = ProfileSearchSerializer(profiles, many=True, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
-        except Profile.DoesNotExist:
-            return Response("No profiles found.", status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+class MyHiddenCommentsAPIView(APIView):
+    """
+    GET /api/comments/hidden/
+    Returns all comments created by the user that are currently hidden (is_approved=False)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            hidden_comments = Comment.objects.filter(profile=profile, is_approved=False).select_related('post')
+            serializer = CommentSerializer(hidden_comments, many=True, context={'request': request})
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class UpdateCommentVisibilityAPIView(APIView):
+    """
+    PATCH /api/comments/visibility/{comment_id}/
+    Body: { "is_approved": true }  # true = unhide, false = hide
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request, comment_id):
+        try:
+            profile = get_user_profile(request.user)
+            comment = get_object_or_404(Comment, id=comment_id)
+
+            if comment.profile != profile:
+                raise PermissionError("You are not allowed to change this comment.")
+
+            is_approved = request.data.get('is_approved')
+            if isinstance(is_approved, str):
+                is_approved = is_approved.lower() == 'true'
+            if is_approved not in [True, False]:
+                raise ValueError("Invalid value for 'is_approved'. Must be true or false.")
+
+            comment.is_approved = is_approved
+            comment.save(update_fields=['is_approved'])
+
+            return Response({
+                "message": "Comment updated successfully.",
+                "is_approved": comment.is_approved
+            }, status=200)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionError as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
