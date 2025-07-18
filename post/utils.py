@@ -25,7 +25,7 @@ def get_profile_from_request(profile_id=None, username=None):
     if profile_id:
         return get_object_or_404(Profile, id=profile_id)
     elif username:
-        return get_object_or_404(Profile, username=username)
+        return get_object_or_404(Profile, username=username.strip().lower())
     else:
         raise ValueError("Either profile_id or username is required.")
 

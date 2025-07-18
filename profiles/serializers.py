@@ -402,3 +402,9 @@ class ArtServiceInquirySerializer(serializers.ModelSerializer):
         model = ArtServiceInquiry
         fields = ['id', 'artist_profile', 'inquirer_profile', 'message', 'created_at']
         read_only_fields = ['id', 'created_at', 'inquirer_profile']
+
+
+class ProfileSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id', 'username', 'bio', 'profile_picture', 'tools', 'awards']
