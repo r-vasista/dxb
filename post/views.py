@@ -468,7 +468,14 @@ class CommentDetailView(APIView):
 
     def get_object(self, request, comment_id):
         profile = get_user_profile(request.user)
-        return get_object_or_404(Comment, id=comment_id, profile=profile)
+
+        comment = get_object_or_404(Comment, id=comment_id)
+
+        # Allow if the user is the comment owner or the post owner
+        if comment.profile == profile or comment.post.profile == profile:
+            return comment
+
+        raise Http404("You do not have permission to access this comment.")
 
     def get(self, request, comment_id):
         try:
@@ -482,8 +489,7 @@ class CommentDetailView(APIView):
 
     def delete(self, request, comment_id):
         try:
-            profile= get_user_profile(request.user)
-            comment = self.get_object( comment_id, profile=profile)
+            comment = self.get_object(request, comment_id)
             post = comment.post
             comment.delete()
 
@@ -495,6 +501,7 @@ class CommentDetailView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class CommentReplyView(APIView):
     """
@@ -512,6 +519,7 @@ class CommentReplyView(APIView):
             data['post'] = post.id
             data['profile'] = profile.id
             data['parent'] = parent_comment.id
+            data['is_approved'] = True
 
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
@@ -522,7 +530,7 @@ class CommentReplyView(APIView):
             except:
                 pass
             # Update reply count
-            parent_comment.reply_count = parent_comment.replies.count()
+            parent_comment.reply_count = parent_comment.replies.filter(is_approved=True).count()
             parent_comment.save(update_fields=['reply_count'])
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
