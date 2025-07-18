@@ -1,3 +1,4 @@
+from datetime import timedelta
 import logging
 import random
 from celery import shared_task
@@ -10,10 +11,11 @@ from requests import post
 
 
 from core.services import send_dynamic_email_using_template
-from profiles.models import Profile
+from core.utils import get_user
+from profiles.models import Profile, ProfileView
 from notification.models import DailyQuote, DailyQuoteSeen, Notification  
 from notification.choices import NotificationType
-from post.models import PostReaction,Comment ,Post,SharePost
+from post.models import PostReaction,Comment ,Post, PostView,SharePost
 from profiles.models import FriendRequest
 from notification.utils import create_notification
 # Setup logger
@@ -112,13 +114,16 @@ def send_post_reaction_notification_task(reaction_id):
     except ObjectDoesNotExist:
         logger.warning(f"PostReaction with ID {reaction_id} not found.")
         return
+    if reaction.post.profile == reaction.profile:
+        logger.info(f"Sender and recipient are the same. Skipping notification for {reaction.profile.username} on post {reaction.post.id}")
+        return
 
     recipient = reaction.post.profile
     sender = reaction.profile
     instance = reaction.post
     notification_type = NotificationType.LIKE
     reaction_name = reaction.reaction_type.lower().capitalize()  # e.g., "Like", "Love"
-    message = f"{sender.username} reacted ({reaction_name}) to your post"
+    message = f"{sender.username} hit your post with a {reaction_name}"
 
     if recipient and sender:
         logger.info(f"Sending reaction notification: {message} to {recipient.username} from {sender.username}")
@@ -133,7 +138,9 @@ def send_comment_notification_task(comment_id):
     except ObjectDoesNotExist:
         logger.warning(f"Comment with ID {comment_id} not found.")
         return
-
+    if comment.post.profile == comment.profile:
+        logger.info(f"Sender and recipient are the same. Skipping notification for {comment.profile.username} on post {comment.post.id}")
+        return
     recipient = comment.post.profile
     sender = comment.profile
     instance = comment.post
@@ -217,12 +224,9 @@ def notify_friends_of_new_post(post_id):
     notification_type = NotificationType.POST_CREATE
 
     for friend in friends:
-        if friend.notify_email:
-            message = f"{profile.username} has created a new post."
-            logger.info(f"Notifying friend {friend.username} about new post by {profile.username}")
-            create_notification(profile, friend, post, message, notification_type)
-        else:
-            logger.info(f"Friend {friend.username} has email notifications disabled, skipping notification for new post.")
+        message = f"{profile.username} has created a new post."
+        logger.info(f"Notifying friend {friend.username} about new post by {profile.username}")
+        create_notification(profile, friend, post, message, notification_type)
 
 @shared_task
 def send_post_share_notification_task(share_id):
@@ -260,3 +264,50 @@ def send_mention_notification_task(from_profile_id, to_profile_id, post_id):
         logger.warning("❌ Mention task failed — object not found.")
     except Exception as e:
         logger.error(f"❌ Mention task error: {e}")
+
+
+@shared_task
+def send_weekly_profile_stats():
+    one_week_ago = timezone.now() - timedelta(days=7)
+    now = timezone.now()
+
+    profiles = Profile.objects.filter(notify_email=True)
+
+    for profile in profiles:
+        user = get_user(profile)
+        email_to = user.email
+
+        # Stats from the last 7 days
+        posts_created = Post.objects.filter(profile=profile, created_at__range=(one_week_ago, now)).count()
+        print(f"Posts created in the last week: {posts_created}")
+        likes_received = PostReaction.objects.filter(post__profile=profile, created_at__range=(one_week_ago, now)).count()
+        likes_given = PostReaction.objects.filter(profile=profile, created_at__range=(one_week_ago, now)).count()
+        comments_made = Comment.objects.filter(profile=profile, created_at__range=(one_week_ago, now)).count()
+        comments_received = Comment.objects.filter(post__profile=profile, created_at__range=(one_week_ago, now)).count()
+        shares = SharePost.objects.filter(profile=profile, created_at__range=(one_week_ago, now)).count()
+        profile_views = ProfileView.objects.filter(profile=profile, created_at__range=(one_week_ago, now)).count()
+        post_views = PostView.objects.filter(post__profile=profile, created_at__range=(one_week_ago, now)).count()
+
+        context = {
+            "name": profile.username,
+            "posts_created": posts_created,
+            "likes_received": likes_received,
+            "likes_given": likes_given,
+            "comments_made": comments_made,
+            "comments_received": comments_received,
+            "shares": shares,
+            # "followers": profile.followers.count(),
+            "following": profile.following.count(),
+            "friends": profile.friends.count(),
+            "profile_views": profile_views,
+            "post_views": post_views,
+            "date_range": f"{one_week_ago.date()} to {now.date()}",
+        }
+
+        # Send email
+        send_dynamic_email_using_template(
+            template_name="weekly-profile-stats",
+            recipient_list=[email_to],
+            context=context,
+        )
+

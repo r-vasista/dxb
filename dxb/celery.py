@@ -21,6 +21,14 @@ def debug_task(self):
 app.conf.beat_schedule = {
     'send-daily-muse-to-all-profiles-every-minute': {
         'task': 'notification.task.send_daily_muse_to_all_profiles',
-        'schedule': crontab(hour=11, minute=0),  # 🔁 Every day at 11:00 AM
+        'schedule': crontab(hour=16, minute=50),  # 🔁 Every day at 4:50 PM
+    },
+    'send-inactivity-reminders-every-6-hours': {
+        'task': 'core.tasks.send_inactivity_reminders_via_command',
+        'schedule': crontab(minute=0, hour='*/6'),  # 🔁 Every 6 hours at :00 (e.g., 12:00, 6:00, 18:00)
+    },
+    'send-weekly-profile-stats-every-minute': {
+        'task': 'notification.task.send_weekly_profile_stats',
+        'schedule': crontab(hour=8, minute=0, day_of_week=1),  # Every week at 8:00 AM on Monday
     },
 }

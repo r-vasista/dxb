@@ -7,11 +7,17 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_id = serializers.SerializerMethodField()
     sender_profile_picture = serializers.SerializerMethodField()
     recipient_username = serializers.CharField(source='recipient.username', read_only=True)
+    post_id = serializers.SerializerMethodField()
 
     def get_sender_id(self, obj):
         return obj.sender.id if obj.sender else None
     def get_sender_profile_picture(self, obj):
         return obj.sender.profile_picture.url if obj.sender and obj.sender.profile_picture else None
+    
+    def get_post_id(self, obj):
+        if obj.content_type and obj.content_type.model == 'post' and obj.object_id:
+            return obj.object_id
+        return None
 
     class Meta:
         model = Notification
@@ -26,5 +32,6 @@ class NotificationSerializer(serializers.ModelSerializer):
             'sender_username',
             'recipient_username',
             'object_id',
-            'content_type'
+            'content_type',
+            'post_id',
         ]
