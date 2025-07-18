@@ -83,6 +83,7 @@ class Profile(BaseModel):
     
     wall_tutorial = models.BooleanField(default=False)
     profile_tutorial = models.BooleanField(default=False)
+    onboarding_required = models.BooleanField(default=True)
     
     is_verified = models.BooleanField(default=False)
     verified_at = models.DateTimeField(null=True, blank=True)

@@ -1175,3 +1175,14 @@ class ArtServiceInquiriesAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SuggestedProfilesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # For example, show 10 verified profiles excluding self
+        profile= get_user_profile(request.user)
+        suggestions = Profile.objects.filter(is_verified=True).exclude(id=profile.id)[:10]
+        serializer = ProfileSerializer(suggestions, many=True, context={'request': request})
+        return Response(serializer.data)
