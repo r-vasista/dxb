@@ -5,7 +5,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
-
+from django.db import transaction
 # Django imports
 from django.utils import timezone
 from django.db.models import Q, Count, F
@@ -20,6 +20,7 @@ from event.serializers import (
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment
 )
+from event.tasks import send_event_creation_notification_task,send_event_rsvp_notification_task
 from event.choices import (
     EventStatus
 )
@@ -44,6 +45,7 @@ class CreateEventAPIView(APIView):
             serializer.is_valid(raise_exception=True)
 
             event = serializer.save()
+            transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
             
             return Response(success_response(data=serializer.data), status=status.HTTP_201_CREATED)
 
@@ -107,7 +109,8 @@ class EventAttendacneAPIView(APIView):
             data['profile'] = get_user_profile(request.user).id
             serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            attendance=serializer.save()
+            transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
             
         except ValidationError as e:
