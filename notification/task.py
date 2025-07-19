@@ -8,16 +8,17 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from requests import post
-
+from django.db import transaction
 
 from core.services import send_dynamic_email_using_template
 from core.utils import get_user
+from event.models import Event, EventAttendance
 from profiles.models import Profile, ProfileView
 from notification.models import DailyQuote, DailyQuoteSeen, Notification  
 from notification.choices import NotificationType
 from post.models import PostReaction,Comment ,Post, PostView,SharePost
 from profiles.models import FriendRequest
-from notification.utils import create_notification
+from notification.utils import create_notification, send_notification_email
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -310,4 +311,5 @@ def send_weekly_profile_stats():
             recipient_list=[email_to],
             context=context,
         )
+
 
