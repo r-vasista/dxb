@@ -102,7 +102,7 @@ class EventAttendacneAPIView(APIView):
         try:
             data = request.data
             data['profile'] = get_user_profile(request.user).id
-            serializer = EventAttendanceSerializer(data=data)
+            serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -115,7 +115,7 @@ class EventAttendacneAPIView(APIView):
     def get(self, request, event_id):
         try:
             event_attendance = EventAttendance.objects.select_related('profile').filter(id=event_id)
-            serializer = EventAttendanceSerializer(event_attendance, many=True)
+            serializer = EventAttendanceSerializer(event_attendance, many=True, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -134,7 +134,7 @@ class EventAttendacneAPIView(APIView):
             except EventAttendance.DoesNotExist:
                 return Response(error_response("RSVP does not exist. You must RSVP first before updating."), status=status.HTTP_404_NOT_FOUND)
             data = {'status': status_value}
-            serializer = EventAttendanceSerializer(attendance, data=data, partial=True)
+            serializer = EventAttendanceSerializer(attendance, data=data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
@@ -176,7 +176,7 @@ class MyRSVPEventsListAPIView(APIView):
                     eventattendance__status=attendance_status
                 )
                             
-            serializer = EventSummarySerializer(upcoming_events, many=True)
+            serializer = EventSummarySerializer(upcoming_events, many=True, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
             
         except Exception as e:
