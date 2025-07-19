@@ -187,6 +187,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     static_sections = serializers.SerializerMethodField()
 
     is_friend = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
     friend_request_status = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     organized_events = serializers.SerializerMethodField()
@@ -202,7 +203,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'bio', 'profile_picture', 'cover_picture',
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
-            'field_sections', 'is_friend', 'friend_request_status', 'static_sections',
+            'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
             'notify_email', 'profile_tutorial', 'wall_tutorial'
@@ -219,6 +220,20 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
         try:
             user_profile = get_user_profile(request.user)
             return obj in user_profile.friends.all()
+        except Profile.DoesNotExist:
+            return False
+    
+    def get_is_following(self, obj):
+        """
+        Check if the request user's profile is following with the target profile.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        try:
+            user_profile = get_user_profile(request.user)
+            return obj in user_profile.following.all()
         except Profile.DoesNotExist:
             return False
         
