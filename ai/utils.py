@@ -1,6 +1,12 @@
 from PIL import Image
 import base64
 from io import BytesIO
+from openai import OpenAI
+from django.conf import settings
+
+OPEN_AI_KEY = settings.OPEN_AI_KEY
+
+client = OpenAI(api_key=OPEN_AI_KEY)
 
 def compress_and_encode_image(file_obj, max_size=(1000, 1000), quality=85):
     """
@@ -46,3 +52,24 @@ def parse_gpt_response(text):
         "description": " ".join(description_lines),
         "hashtags": hashtags
     }
+    
+def encode_image(image_file):
+    return base64.b64encode(image_file.read()).decode('utf-8')
+
+    
+def get_ai_response(gpt_model, prompt_instruction, user_content):
+    response = client.responses.create(
+        model=gpt_model,
+        input=[
+            {
+                "role": "developer",
+                "content": prompt_instruction
+            },
+            {
+                "role": "user",
+                "content": user_content
+            }
+        ]
+    )
+
+    return response

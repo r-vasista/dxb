@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import Event, EventAttendance, EventMedia
+from event.utils import generate_google_calendar_link
 from profiles.models import Profile
 from core.serializers import TimezoneAwareSerializerMixin
 
@@ -45,13 +46,14 @@ class EventListSerializer(TimezoneAwareSerializerMixin):
         fields = "__all__"
         
 
-class EventAttendanceSerializer(serializers.ModelSerializer):
+class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
     profile_deails = serializers.SerializerMethodField()
-    
+    calendar_link = serializers.SerializerMethodField()
+
     class Meta:
         model = EventAttendance
         fields = '__all__'
-    
+
     def get_profile_deails(self, obj):
         return {
             "id": obj.profile.id,
@@ -59,15 +61,24 @@ class EventAttendanceSerializer(serializers.ModelSerializer):
             "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
             "status": obj.status,
         }
+
+    def get_calendar_link(self, obj):
+        return generate_google_calendar_link(obj, self.context.get('request'))
         
 
-class EventSummarySerializer(serializers.ModelSerializer):
+class EventSummarySerializer(TimezoneAwareSerializerMixin):
+    calendar_link = serializers.SerializerMethodField()
+
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
-            'city', 'state', 'country', 'is_online', 'online_link'
+            'city', 'state', 'country', 'is_online', 'online_link', 
+            'calendar_link'
         ]
+
+    def get_calendar_link(self, obj):
+        return generate_google_calendar_link(obj, self.context.get('request'))
 
 
 class EventMediaSerializer(serializers.ModelSerializer):
