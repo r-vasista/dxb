@@ -1,6 +1,6 @@
 from django.contrib import admin
 from ai.models import (
-    ArtImagePrompt, BaseAIConfig
+    ArtImagePrompt, BaseAIConfig, EventTagPrompt
 )
 # Register your models here.
 
@@ -16,3 +16,10 @@ class BaseAIConfigAdmin(admin.ModelAdmin):
     list_display = ['id', 'use_type', 'gpt_model']
     search_fields =  ['id', 'use_type', 'gpt_model']
     list_filter =  ['id', 'use_type', 'gpt_model']
+
+
+@admin.register(EventTagPrompt)
+class EventTagPromptAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
+    search_fields = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
+    list_filter = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
