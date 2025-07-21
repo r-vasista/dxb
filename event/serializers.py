@@ -138,3 +138,30 @@ class EventCommentListSerializer(serializers.ModelSerializer):
 
     def get_has_replies(self, obj):
         return obj.replies.exists()
+
+
+class EventMediaCommentSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+    is_reply = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventComment
+        fields = [
+            'id', 'event_media', 'profile', 'content', 'parent', 
+            'created_at', 'reply_count', 'is_reply'
+        ]
+        read_only_fields = ['id', 'event_media', 'profile', 'created_at', 'reply_count', 'is_reply']
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_reply_count(self, obj):
+        return obj.reply_count
+
+    def get_is_reply(self, obj):
+        return obj.is_reply
