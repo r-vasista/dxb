@@ -41,7 +41,7 @@ from profiles.serializers import (
     StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer
 )
 from profiles.choices import (
-    StaticFieldType
+    StaticFieldType, VisibilityStatus
 )
 from notification.utils import (
     create_dynamic_notification
@@ -581,6 +581,9 @@ class FollowProfileView(APIView):
 
             if current_profile == target_profile:
                 return Response(error_response("You cannot follow yourself."), status=status.HTTP_400_BAD_REQUEST)
+            
+            if target_profile.visibility_status == VisibilityStatus.PRIVATE:
+                return Response(error_response("This account is private"), status=status.HTTP_403_FORBIDDEN)
 
             if target_profile in current_profile.following.all():
                 return Response(error_response("You are already following this profile."), status=status.HTTP_400_BAD_REQUEST)
@@ -662,7 +665,7 @@ class ListFriendsView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
-class ListFollowersView(APIView):
+class ListFollowersView(APIView, PaginationMixin):
     """
     GET /api/profile/<int:profile_id>/followers/
 
@@ -675,7 +678,12 @@ class ListFollowersView(APIView):
             profile = get_object_or_404(Profile, id=profile_id)
 
             followers = profile.followers.all().order_by('username')
-            serializer = ProfileListSerializer(followers, many=True)
+            
+            paginated_queryset = self.paginate_queryset(followers, request)
+            
+            serializer = ProfileListSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+            
 
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
@@ -684,7 +692,7 @@ class ListFollowersView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class ListFollowingView(APIView):
+class ListFollowingView(APIView, PaginationMixin):
     """
     GET /api/profile/<int:profile_id>/following/
 
@@ -697,7 +705,10 @@ class ListFollowingView(APIView):
             profile = get_object_or_404(Profile, id=profile_id)
 
             following = profile.following.all().order_by('username')
-            serializer = ProfileListSerializer(following, many=True)
+            paginated_queryset = self.paginate_queryset(following, request)
+            
+            serializer = ProfileListSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
 
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
 
@@ -1175,3 +1186,14 @@ class ArtServiceInquiriesAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class SuggestedProfilesAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # For example, show 10 verified profiles excluding self
+        profile= get_user_profile(request.user)
+        suggestions = Profile.objects.filter(is_verified=True).exclude(id=profile.id)[:10]
+        serializer = ProfileSerializer(suggestions, many=True, context={'request': request})
+        return Response(serializer.data)

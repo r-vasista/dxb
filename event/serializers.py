@@ -2,7 +2,10 @@
 from rest_framework import serializers
 
 # Local imports
-from event.models import Event, EventAttendance, EventMedia
+from event.models import (
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment
+)
+from event.utils import generate_google_calendar_link
 from profiles.models import Profile
 from core.serializers import TimezoneAwareSerializerMixin
 
@@ -15,6 +18,30 @@ class EventSerializer(serializers.ModelSerializer):
     class Meta:
         model = Event
         fields = "__all__"
+        
+
+class EventDetailSerializer(TimezoneAwareSerializerMixin):
+    host = serializers.SerializerMethodField()
+    city = serializers.CharField(source='city.name', read_only=True)
+    state = serializers.CharField(source='state.name', read_only=True)
+    country = serializers.CharField(source='country.name', read_only=True)
+    
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'description', 'event_type', 'status',
+            'start_datetime', 'end_datetime', 'timezone',
+            'is_online', 'address', 'city', 'state', 'country', 'online_link',
+            'is_free', 'price', 'currency',
+            'event_image', 'host',
+        ]
+
+    def get_host(self, obj):
+        return {
+            "id": obj.host.id,
+            "username": obj.host.username,
+            "profile_picture": obj.host.profile_picture.url if obj.host.profile_picture else None
+        }
         
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
@@ -45,13 +72,14 @@ class EventListSerializer(TimezoneAwareSerializerMixin):
         fields = "__all__"
         
 
-class EventAttendanceSerializer(serializers.ModelSerializer):
+class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
     profile_deails = serializers.SerializerMethodField()
-    
+    calendar_link = serializers.SerializerMethodField()
+
     class Meta:
         model = EventAttendance
         fields = '__all__'
-    
+
     def get_profile_deails(self, obj):
         return {
             "id": obj.profile.id,
@@ -59,19 +87,108 @@ class EventAttendanceSerializer(serializers.ModelSerializer):
             "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
             "status": obj.status,
         }
+
+    def get_calendar_link(self, obj):
+        try:
+            return generate_google_calendar_link(obj.event, self.context.get('request'))
+        except Exception:
+            return None
         
 
-class EventSummarySerializer(serializers.ModelSerializer):
+class EventSummarySerializer(TimezoneAwareSerializerMixin):
+    calendar_link = serializers.SerializerMethodField()
+
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
-            'city', 'state', 'country', 'is_online', 'online_link'
+            'city', 'state', 'country', 'is_online', 'online_link', 
+            'calendar_link'
         ]
+
+    def get_calendar_link(self, obj):
+        return generate_google_calendar_link(obj, self.context.get('request'))
 
 
 class EventMediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventMedia
-        fields = ['id', 'event', 'file', 'media_type', 'title', 'description', 'uploaded_at', 'uploaded_by']
+        fields = ['id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at', 'uploaded_by']
         read_only_fields = ['media_type', 'uploaded_at']
+
+
+class EventCommentSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+    is_reply = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventComment
+        fields = [
+            'id', 'event', 'profile', 'content', 'parent', 
+            'created_at', 'reply_count', 'is_reply'
+        ]
+        read_only_fields = ['id', 'event', 'profile', 'created_at', 'reply_count', 'is_reply']
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_reply_count(self, obj):
+        return obj.reply_count
+
+    def get_is_reply(self, obj):
+        return obj.is_reply
+    
+
+class EventCommentListSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    has_replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventComment
+        fields = [
+            'id', 'event', 'profile', 'content', 'parent', 
+            'created_at', 'has_replies'
+        ]
+        read_only_fields = fields
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_has_replies(self, obj):
+        return obj.replies.exists()
+
+
+class EventMediaCommentSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+    is_reply = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventMediaComment
+        fields = [
+            'id', 'event_media', 'profile', 'content', 'parent', 
+            'created_at', 'reply_count', 'is_reply'
+        ]
+        read_only_fields = ['id', 'event_media', 'profile', 'created_at', 'reply_count', 'is_reply']
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_reply_count(self, obj):
+        return obj.reply_count
+
+    def get_is_reply(self, obj):
+        return obj.is_reply

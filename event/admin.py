@@ -1,6 +1,6 @@
 from django.contrib import admin
 from event.models import (
-    Event, EventAttendance, EventComment, EventCommentLike, EventMedia
+    Event, EventAttendance, EventComment, EventCommentLike, EventMedia, EventMediaComment
 )
 
 @admin.register(Event)
@@ -22,4 +22,10 @@ class EventMediaAdmin(admin.ModelAdmin):
     list_display = ['id','event', 'uploaded_by', 'file', 'media_type']
     search_fields = ['id','event', 'uploaded_by', 'file', 'media_type']
     list_filter = ['id','event', 'uploaded_by', 'file', 'media_type']
+    
+@admin.register(EventMediaComment)
+class EventMediaCommentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'event_media', 'parent', 'created_at']
+    search_fields = ['id', 'profile', 'event_media', 'parent', 'created_at']
+    list_filter = ['id', 'profile', 'event_media', 'parent', 'created_at']
     

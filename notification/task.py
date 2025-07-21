@@ -8,16 +8,17 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
 from requests import post
-
+from django.db import transaction
 
 from core.services import send_dynamic_email_using_template
 from core.utils import get_user
+from event.models import Event, EventAttendance, EventComment, EventMedia
 from profiles.models import Profile, ProfileView
 from notification.models import DailyQuote, DailyQuoteSeen, Notification  
 from notification.choices import NotificationType
 from post.models import PostReaction,Comment ,Post, PostView,SharePost
 from profiles.models import FriendRequest
-from notification.utils import create_notification
+from notification.utils import create_notification, send_notification_email
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -310,4 +311,208 @@ def send_weekly_profile_stats():
             recipient_list=[email_to],
             context=context,
         )
+
+@shared_task
+def send_event_creation_notification_task(event_id):
+    """
+    Send notifications to all followers when an event is created.
+    """
+    try:
+        event = Event.objects.select_related('host').get(id=event_id)
+        sender = event.host
+        message = f"{sender.username} created a new event: {event.title}"
+        notification_type = NotificationType.EVENT_CREATE
+
+        followers = sender.followers.all()
+        logger.info(f"Sending notifications to {followers.count()} followers for event {event_id}")
+
+        for follower in followers:
+            try:
+                create_notification(
+                    sender=sender,
+                    recipient=follower,
+                    instance=event,
+                    message=message,
+                    notification_type=notification_type
+                )
+            except Exception as inner_e:
+                logger.error(
+                    f"[send_event_creation_notification_task] Failed to notify {follower.username}: {inner_e}",
+                    exc_info=True
+                )
+
+        logger.info(f"[send_event_creation_notification_task] Notifications sent for event {event_id}")
+
+    except Event.DoesNotExist:
+        logger.warning(f"[send_event_creation_notification_task] Event with id {event_id} not found.")
+    except Exception as e:
+        logger.error(
+            f"[send_event_creation_notification_task] Error sending notifications: {str(e)}",
+            exc_info=True
+        )
+
+@shared_task
+def send_event_rsvp_notification_task(attendance_id):
+    try:
+        attendance = EventAttendance.objects.select_related('event', 'profile').get(id=attendance_id)
+        event = attendance.event
+        attendee = attendance.profile
+        host = event.host
+
+        attendance_count = EventAttendance.objects.filter(event=event).count()
+
+        if host != attendee:
+            message = (f"""{attendee.username} RSVP'd to your event: {event.title}.
+                       with status: {attendance.status.title()}
+                        Total attendees so far: {attendance_count}"""
+                    )
+            create_notification(
+                sender=attendee,
+                recipient=host,
+                instance=event,
+                message=message,
+                notification_type=NotificationType.EVENT_RSVP
+            )
+        message_to_attendee = (
+            f"Thank you {attendee.username} for RSVPing to '{event.title}'.\n"
+            f"Your status: {attendance.status.title()}\n"
+            f"Event Host: {host.username}"
+        )
+        create_notification(
+            sender=host,
+            recipient=attendee,
+            instance=event,
+            message=message_to_attendee,
+            notification_type=NotificationType.EVENT_RSVP
+        )
+        if attendee.notify_email:
+            transaction.on_commit(lambda: send_notification_email(
+                recipient=attendee,
+                sender=host,
+                message=message_to_attendee,
+                notification_type=NotificationType.EVENT_RSVP
+            ))
+
+        logger.info(f"RSVP notification sent for Event ID: {event.id}")
+    except EventAttendance.DoesNotExist:
+        logger.warning(f"Attendance with id {attendance_id} not found")
+    except Exception as e:
+        logger.error(f"Error sending RSVP notification: {e}", exc_info=True)
+
+@shared_task
+def send_event_media_notification_task(event_id, uploader_id, media_id):
+    try:
+        event = Event.objects.get(id=event_id)
+        uploader = Profile.objects.get(id=uploader_id)
+        attendees = EventAttendance.objects.filter(event=event).select_related('profile')
+        media = EventMedia.objects.get(id=media_id)
+
+        for attendance in attendees:
+            recipient = attendance.profile
+            if recipient != uploader:
+                message = f"{uploader.username} uploaded new media to the event: {event.title}."
+                create_notification(
+                    sender=uploader,
+                    recipient=recipient,
+                    instance=event,
+                    message=message,
+                    notification_type=NotificationType.EVENT_MEDIA
+                )
+
+                # Optional: send email
+                if recipient.notify_email:
+                    transaction.on_commit(lambda: send_notification_email(
+                        recipient=recipient,
+                        sender=uploader,
+                        message=message,
+                        notification_type=NotificationType.EVENT_MEDIA
+                    ))
+
+        # Notify host if uploader is not host
+        if uploader == event.host:
+            host_msg = f"You shared new event media with all attendees of {event.title}."
+            create_notification(
+                sender=uploader,
+                recipient=uploader,
+                instance=event,
+                message=host_msg,
+                notification_type=NotificationType.EVENT_MEDIA
+            )
+
+    except Exception as e:
+        logger.error(f"Error sending media upload notifications: {e}", exc_info=True)
+
+
+@shared_task
+def shared_event_comment_notification_task(event_id, profile_id, comment_id):
+    try:
+        event = Event.objects.get(id=event_id)
+        profile = Profile.objects.get(id=profile_id)
+        comment = EventComment.objects.get(id=comment_id)
+
+        # Notify event host
+        if event.host and event.host.user != profile.user:
+            create_notification(
+                sender=profile,
+                recipient=event.host,
+                instance=comment,
+                message=f"{profile.user.username} commented on your event.",
+                notification_type=NotificationType.COMMENT
+            )
+            logger.info(f"Comment notification sent to host {event.host.user.username} for event {event.id}")
+
+        # Notify parent comment author (if it's a reply)
+        if comment.parent and comment.parent.profile != profile:
+            create_notification(
+                sender=profile,
+                recipient=comment.parent.profile,
+                instance=comment,
+                message=f"{profile.user.username} replied to your comment.",
+                notification_type=NotificationType.COMMENT
+            )
+            logger.info(f"Reply notification sent to parent comment owner {comment.parent.profile.user.username} for comment {comment.id}")
+
+    except ObjectDoesNotExist as e:
+        logger.warning(f"Notification failed: Object not found - {str(e)}")
+    except Exception as e:
+        logger.error(f"Unhandled error in shared_event_comment_notification_task: {str(e)}", exc_info=True)
+
+@shared_task
+def send_event_reminder_notifications():
+    try:
+        now = timezone.now()
+
+        # Define reminder windows
+        reminder_windows = {
+            '24h': (now + timedelta(hours=24) - timedelta(minutes=5), now + timedelta(hours=24) + timedelta(minutes=5)),
+            '3h': (now + timedelta(hours=3) - timedelta(minutes=5), now + timedelta(hours=3) + timedelta(minutes=5)),
+        }
+
+        for reminder_type, (start, end) in reminder_windows.items():
+            events = Event.objects.filter(start_datetime__range=(start, end), status='published')
+
+            for event in events:
+                attendees = EventAttendance.objects.filter(event=event).select_related('profile')
+                for attendance in attendees:
+                    recipient = attendance.profile
+                    message = f"Reminder: '{event.title}' starts in {reminder_type.replace('h', ' hours')}."
+
+                    create_notification(
+                        sender=event.host,
+                        recipient=recipient,
+                        instance=event,
+                        message=message,
+                        notification_type=NotificationType.EVENT_REMINDER
+                    )
+
+                    if recipient.notify_email:
+                        transaction.on_commit(lambda: send_notification_email(
+                            recipient=recipient,
+                            sender=event.host,
+                            message=message,
+                            notification_type=NotificationType.EVENT_REMINDER
+                        ))
+
+    except Exception as e:
+        logger.error(f"Error sending event reminders: {e}", exc_info=True)
 

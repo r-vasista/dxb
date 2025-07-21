@@ -227,14 +227,6 @@ class EventComment(BaseModel):
     def reply_count(self):
         return self.replies.filter(is_active=True).count()
     
-    def save(self, *args, **kwargs):
-        # Mark as edited if content is being updated (not on creation)
-        if self.pk:
-            original = EventComment.objects.get(pk=self.pk)
-            if original.content != self.content:
-                self.is_edited = True
-        super().save(*args, **kwargs)
-
 
 class EventCommentLike(BaseModel):
     """
@@ -248,3 +240,29 @@ class EventCommentLike(BaseModel):
         
     def __str__(self):
         return f"{self.profile.username} likes comment on {self.comment.event.title}"
+
+
+class EventMediaComment(BaseModel):
+    """
+    Comments on events
+    """
+    event_media = models.ForeignKey(EventMedia, on_delete=models.CASCADE, related_name='comments')
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
+    
+    # Comment content
+    content = models.TextField()
+
+    class Meta:
+        ordering = ['created_at']
+        
+    def __str__(self):
+        return f"Comment by {self.profile.username} on {self.event_media.event.title}"
+    
+    @property
+    def is_reply(self):
+        return self.parent is not None
+    
+    @property
+    def reply_count(self):
+        return self.replies.filter(is_active=True).count()
