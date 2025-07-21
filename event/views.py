@@ -15,12 +15,15 @@ from django.http import Http404
 # Local imports
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSummarySerializer, EventMediaSerializer, 
-    EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer
+    EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment
 )
-from notification.task import send_event_creation_notification_task,send_event_rsvp_notification_task,send_event_media_notification_task, shared_event_comment_notification_task
+from notification.task import (
+    send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
+    shared_event_comment_notification_task
+)
 from event.choices import (
     EventStatus
 )
@@ -54,6 +57,31 @@ class CreateEventAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+class EventDetailAPIView(APIView):
+    """
+    GET /api/events/<event_id>/
+    Fetch a single event by its ID.
+    Includes full event details.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        try:
+            # Fetch event or return 404
+            event = get_object_or_404(
+                Event.objects.select_related('host'),
+                id=event_id,
+                status='published'
+            )
+
+            # Serialize the event
+            serializer = EventDetailSerializer(event, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 class EventListAPIView(APIView, PaginationMixin):
     """
@@ -318,7 +346,6 @@ class EventCommentCreateAPIView(APIView):
 
             # Save the comment
             comment = serializer.save(profile=profile, event=event)
-            print(event.host)
             transaction.on_commit(lambda: shared_event_comment_notification_task.delay(event.id, profile.id, comment.id))
 
             return Response(success_response(EventCommentSerializer(comment).data),

@@ -2,12 +2,14 @@ from django.urls import path
 from event.views import (
     CreateEventAPIView, EventListAPIView, EventAttendacneAPIView, MyRSVPEventsListAPIView, EventMediaUploadAPIView, EventMediaListAPIView,
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
-    PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView
+    PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
+    EventDetailAPIView
 )
 
 
 urlpatterns = [
     path('create/', CreateEventAPIView.as_view(), name='create'),
+    path('details/<int:event_id>/', EventDetailAPIView.as_view(), name='detials'),
     path('update/<int:event_id>/', UpdateEventAPIView.as_view(), name='update'),
     path('list/', EventListAPIView.as_view(), name='event-list'),
     path('rsvp/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
