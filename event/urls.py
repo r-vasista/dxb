@@ -2,7 +2,7 @@ from django.urls import path
 from event.views import (
     CreateEventAPIView, EventListAPIView, EventAttendacneAPIView, MyRSVPEventsListAPIView, EventMediaUploadAPIView, EventMediaListAPIView,
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
-    PopularEventsAPIView
+    PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView
 )
 
 
@@ -21,5 +21,8 @@ urlpatterns = [
     path('child-comments-list/<int:event_id>/<int:parent_id>/', ChildEventCommentListAPIView.as_view(), name='child-event-comments'),
     path('pin-media/<int:event_id>/<int:media_id>/', EventMediaPinStatusAPIView.as_view(), name='pin-event-media'),
     path('popular-events/', PopularEventsAPIView.as_view(), name='popular-events'),
+    path('comment-media/<str:event_media_id>/', CreateEventMediaCommentAPIView.as_view(), name='comment-media'),
+    path('parent-media-comments-list/<int:evnet_media_id>/', ParentEventMediaCommentsAPIView.as_view(), name='parent-event-media-comments'),
+    path('child-media-comments-list/<int:event_media_id>/<int:parent_id>/', ChildEventMediaCommentListAPIView.as_view(), name='child-event-media-comments'),
 
 ]

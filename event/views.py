@@ -484,17 +484,17 @@ class CreateEventMediaCommentAPIView(APIView):
     def post(self, request, event_media_id):
         try:
             # Ensure event exists
-            event = get_object_or_404(Event, id=event_media_id)
+            event_media = get_object_or_404(EventMedia, id=event_media_id)
             profile = get_user_profile(request.user)
 
             # Inject required fields into request data
             data = request.data.copy()
-            data['event'] = event.id
+            data['event_media'] = event_media.id
 
             # Optional: validate parent comment
             parent_id = data.get("parent")
             if parent_id:
-                parent_comment = EventMediaComment.objects.filter(id=parent_id, event=event).first()
+                parent_comment = EventMediaComment.objects.filter(id=parent_id, event_media=event_media).first()
                 if not parent_comment:
                     return Response(error_response("Invalid parent comment."),
                                     status=status.HTTP_400_BAD_REQUEST)
@@ -504,7 +504,7 @@ class CreateEventMediaCommentAPIView(APIView):
             serializer.is_valid(raise_exception=True)
 
             # Save the comment
-            comment = serializer.save(profile=profile, event=event)
+            comment = serializer.save(profile=profile, event_media=event_media)
 
             return Response(success_response(EventCommentSerializer(comment).data),
                             status=status.HTTP_201_CREATED)
@@ -524,12 +524,37 @@ class ParentEventMediaCommentsAPIView(APIView, PaginationMixin):
     
     def get(self, request, evnet_media_id):
         try:
-            comments = EventMediaComment.objects.filter(event_media__id=evnet_media_id, is_reply=False)
+            comments = EventMediaComment.objects.select_related('profile', 'parent').filter(
+                event_media__id=evnet_media_id, parent__isnull=True)
             
             paginated_response = self.paginate_queryset(comments, request)
             serializer = EventMediaCommentSerializer(paginated_response, many=True, context={'request': request})
             return self.get_paginated_response(success_response(serializer.data))
             
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChildEventMediaCommentListAPIView(APIView, PaginationMixin):
+    """
+    API to get the list of all child comments of an event media
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_media_id, parent_id):
+        try:
+            event_media = get_object_or_404(EventMedia, id=event_media_id)
+
+            comments = EventMediaComment.objects.select_related('profile', 'parent').filter(
+                        event_media=event_media.id, parent__id=parent_id
+                    ) .order_by('created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = EventMediaCommentSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+        
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
