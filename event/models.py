@@ -25,7 +25,6 @@ class EventTag(BaseModel):
     Tags for categorizing events
     """
     name = models.CharField(max_length=50, unique=True)
-    slug = models.SlugField(max_length=50, unique=True)
     description = models.TextField(blank=True, null=True)
     
     class Meta:
@@ -94,6 +93,12 @@ class Event(BaseModel):
         Profile,
         through='EventAttendance',
         related_name='attended_events',
+        blank=True
+    )
+    
+    tags = models.ManyToManyField(
+        EventTag,
+        related_name='events',
         blank=True
     )
     

@@ -1,6 +1,8 @@
 from urllib.parse import urlencode
 from django.utils.timezone import is_aware
 import pytz 
+import re
+from event.models import EventTag
 
 def generate_google_calendar_link(event, request=None):
     """
@@ -31,3 +33,19 @@ def generate_google_calendar_link(event, request=None):
         'location': event.address or 'Online',
     }
     return f"https://www.google.com/calendar/render?{urlencode(params)}"
+
+def extract_hashtags(text):
+    """Extracts hashtags from a string (ignores case)."""
+    return set(re.findall(r"#(\w+)", text or ""))
+
+def handle_event_hashtags(event):
+    """Extract hashtags from event fields and update M2M relation."""
+    hashtag_text = f"{event.title or ''} {event.description or ''}"
+    hashtags = extract_hashtags(hashtag_text)
+
+    # Clear old hashtags
+    event.tags.clear()
+
+    for tag in hashtags:
+        hashtag_obj, _ = EventTag.objects.get_or_create(name=tag.lower())
+        event.tags.add(hashtag_obj)
