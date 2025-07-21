@@ -51,7 +51,10 @@ class CreateEventAPIView(APIView):
             serializer.is_valid(raise_exception=True)
 
             event = serializer.save()
-            transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
+            try:
+                transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
+            except:
+                pass
             
             handle_event_hashtags(event)
             
@@ -143,7 +146,11 @@ class EventAttendacneAPIView(APIView):
             serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             attendance=serializer.save()
-            transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
+            try:
+
+                transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
+            except:
+                pass
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
             
         except ValidationError as e:
@@ -251,7 +258,10 @@ class EventMediaUploadAPIView(APIView):
             
             # Save the media
             media=serializer.save()
-            transaction.on_commit(lambda:send_event_media_notification_task.delay(event.id,profile.id,media.id))
+            try:
+                transaction.on_commit(lambda:send_event_media_notification_task.delay(event.id,profile.id,media.id))
+            except:
+                pass
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
 
         except Event.DoesNotExist:
@@ -538,7 +548,10 @@ class CreateEventMediaCommentAPIView(APIView):
 
             # Save the comment
             comment = serializer.save(profile=profile, event_media=event_media)
-            transaction.on_commit(lambda: shared_event_media_comment_notification_task.delay(event_media.id, profile.id, comment.id))
+            try:
+                transaction.on_commit(lambda: shared_event_media_comment_notification_task.delay(event_media.id, profile.id, comment.id))
+            except:
+                pass
 
             return Response(success_response(EventCommentSerializer(comment).data),
                             status=status.HTTP_201_CREATED)
