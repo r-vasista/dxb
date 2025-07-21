@@ -774,7 +774,7 @@ class SendPasswordResetLinkAPIView(APIView):
             token = PasswordResetTokenGenerator().make_token(user)
 
             # Frontend URL for resetting password
-            reset_url = f"http://localhost:3000/reset-password/?uid={uid}&token={token}"
+            reset_url = f"{settings.FRONTEND_URL}/reset-password/?uid={uid}&token={token}"
 
             subject = "Reset your password"
             text_content = f"Click the link below to reset your password:\n{reset_url}"
