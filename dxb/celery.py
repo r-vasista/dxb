@@ -31,8 +31,8 @@ app.conf.beat_schedule = {
         'task': 'notification.task.send_weekly_profile_stats',
         'schedule': crontab(hour=8, minute=0, day_of_week=1),  # Every week at 8:00 AM on Monday
     },
-    # 'send-event-reminder-notifications': {
-    #     'task': 'notification.task.send_event_reminder_notifications',
-    #     'schedule': crontab(),  # Runs every 10 minutes
-    # },
+    'send-event-reminder-notifications': {
+        'task': 'notification.task.send_event_reminder_notifications',
+        'schedule': crontab(minute=0) # Runs every 10 minutes
+    },
 }

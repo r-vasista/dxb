@@ -103,8 +103,10 @@ class PostAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
-
-            transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
+            try:
+                transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
+            except:
+                pass
             
             mentions = extract_mentions(" ".join(filter(None, [post.caption, post.title, post.content])))
 
@@ -112,7 +114,10 @@ class PostAPIView(APIView):
 
             for mentioned in mentioned_profiles:
                 if mentioned.id != profile.id:
-                    transaction.on_commit(lambda: send_mention_notification_task.delay(from_profile_id=profile.id, to_profile_id=mentioned.id, post_id=post.id))
+                    try:
+                        transaction.on_commit(lambda: send_mention_notification_task.delay(from_profile_id=profile.id, to_profile_id=mentioned.id, post_id=post.id))
+                    except:
+                        pass
             # Handle media files safely
             media_files = request.FILES.getlist('media_files')
             for idx, media_file in enumerate(media_files):
@@ -315,8 +320,10 @@ class PostReactionView(APIView):
             serializer = PostReactionSerializer(data={"post": post.id,"profile": profile.id,"reaction_type": reaction_type})
             serializer.is_valid(raise_exception=True)
             post_reaction = serializer.save()
-
-            transaction.on_commit(lambda: send_post_reaction_notification_task.delay(post_reaction.id))
+            try: 
+                transaction.on_commit(lambda: send_post_reaction_notification_task.delay(post_reaction.id))
+            except:
+                pass
 
             # Optional: update reaction count on the post
             post.reaction_count = post.reactions.count()
@@ -417,8 +424,10 @@ class CommentView(APIView, PaginationMixin):
             serializer = CommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             comment = serializer.save()
-
-            transaction.on_commit(lambda: send_comment_notification_task.delay(comment.id))
+            try:
+                transaction.on_commit(lambda: send_comment_notification_task.delay(comment.id))
+            except:
+                pass
 
             post.comment_count = post.comments.count()
             post.save(update_fields=["comment_count"])
@@ -711,10 +720,13 @@ class PostShareView(APIView):
 
             post.share_count=SharePost.objects.filter(post=post).count()
             post.save(update_fields=["share_count"])
-            transaction.on_commit(lambda: send_post_share_notification_task.delay(share.id))
-
+            try:
+                transaction.on_commit(lambda: send_post_share_notification_task.delay(share.id))
+            except:
+                pass 
 
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
+        
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)

@@ -7,12 +7,11 @@ from django.db import transaction
 from notification.models import Notification,DailyQuote, DailyQuoteSeen
 
 
-from core.services import send_dynamic_email_using_template,get_user_profile
+from core.services import send_dynamic_email_using_template,get_user_profile,get_actual_user
 
 
 def send_notification_email(recipient, sender, message, notification_type):
-    user = getattr(recipient, 'user', None) or getattr(getattr(recipient, 'organization', None), 'user', None)
-
+    user = get_actual_user(recipient)
     if user and user.email and recipient.notify_email:
         context = {
             "user_name": recipient.username,
@@ -54,7 +53,7 @@ def create_notification(*args, **kwargs):
     notification.save()
 
     if recipient.notify_email:
-        transaction.on_commit(lambda: send_notification_email(recipient, sender, message, notification_type))
+        send_notification_email(recipient, sender, message, notification_type)
 
 
 
