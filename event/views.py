@@ -15,10 +15,10 @@ from django.http import Http404
 # Local imports
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSummarySerializer, EventMediaSerializer, 
-    EventCommentSerializer, EventCommentListSerializer
+    EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer
 )
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment
 )
 from notification.task import send_event_creation_notification_task,send_event_rsvp_notification_task,send_event_media_notification_task, shared_event_comment_notification_task
 from event.choices import (
@@ -110,7 +110,7 @@ class EventAttendacneAPIView(APIView):
             serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             attendance=serializer.save()
-            transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
+            # transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
             
         except ValidationError as e:
@@ -471,5 +471,66 @@ class PopularEventsAPIView(APIView, PaginationMixin):
             serializer = EventSummarySerializer(paginated_response, many=True, context={'request': request})
             return self.get_paginated_response(success_response(serializer.data))
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreateEventMediaCommentAPIView(APIView):
+    """
+    API view to create comments on event media
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def post(self, request, event_media_id):
+        try:
+            # Ensure event exists
+            event = get_object_or_404(Event, id=event_media_id)
+            profile = get_user_profile(request.user)
+
+            # Inject required fields into request data
+            data = request.data.copy()
+            data['event'] = event.id
+
+            # Optional: validate parent comment
+            parent_id = data.get("parent")
+            if parent_id:
+                parent_comment = EventMediaComment.objects.filter(id=parent_id, event=event).first()
+                if not parent_comment:
+                    return Response(error_response("Invalid parent comment."),
+                                    status=status.HTTP_400_BAD_REQUEST)
+
+            # Initialize serializer
+            serializer = EventMediaCommentSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+
+            # Save the comment
+            comment = serializer.save(profile=profile, event=event)
+
+            return Response(success_response(EventCommentSerializer(comment).data),
+                            status=status.HTTP_201_CREATED)
+            
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ParentEventMediaCommentsAPIView(APIView, PaginationMixin):
+    """
+    API to get the list of all parent comments of an event media
+    """
+    
+    def get(self, request, evnet_media_id):
+        try:
+            comments = EventMediaComment.objects.filter(event_media__id=evnet_media_id, is_reply=False)
+            
+            paginated_response = self.paginate_queryset(comments, request)
+            serializer = EventMediaCommentSerializer(paginated_response, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+            
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
