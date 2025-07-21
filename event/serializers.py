@@ -65,7 +65,7 @@ class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
         }
 
     def get_calendar_link(self, obj):
-        return generate_google_calendar_link(obj, self.context.get('request'))
+        return generate_google_calendar_link(obj.event, self.context.get('request'))
         
 
 class EventSummarySerializer(TimezoneAwareSerializerMixin):
