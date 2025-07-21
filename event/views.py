@@ -27,6 +27,9 @@ from notification.task import (
 from event.choices import (
     EventStatus
 )
+from event.utils import (
+    handle_event_hashtags
+)
 from core.services import success_response, error_response, get_user_profile
 from core.pagination import PaginationMixin
 from core.permissions import is_owner_or_org_member
@@ -49,6 +52,8 @@ class CreateEventAPIView(APIView):
 
             event = serializer.save()
             transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
+            
+            handle_event_hashtags(event)
             
             return Response(success_response(data=serializer.data), status=status.HTTP_201_CREATED)
 
