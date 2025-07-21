@@ -19,6 +19,30 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = "__all__"
         
+
+class EventDetailSerializer(TimezoneAwareSerializerMixin):
+    host = serializers.SerializerMethodField()
+    city = serializers.CharField(source='city.name', read_only=True)
+    state = serializers.CharField(source='state.name', read_only=True)
+    country = serializers.CharField(source='country.name', read_only=True)
+    
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'description', 'event_type', 'status',
+            'start_datetime', 'end_datetime', 'timezone',
+            'is_online', 'address', 'city', 'state', 'country', 'online_link',
+            'is_free', 'price', 'currency',
+            'event_image', 'host',
+        ]
+
+    def get_host(self, obj):
+        return {
+            "id": obj.host.id,
+            "username": obj.host.username,
+            "profile_picture": obj.host.profile_picture.url if obj.host.profile_picture else None
+        }
+        
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
     class Meta:
