@@ -11,3 +11,5 @@ class NotificationType(models.TextChoices):
     MENTION = 'mention', 'Mention'
     SHARE = 'share', 'Share'
     POST_CREATE = 'post_create', 'Post Create'
+    EVENT_MEDIA= 'event_media', 'Event Media'
+    EVENT_REMINDER= 'event_reminder','Event Reminder'
