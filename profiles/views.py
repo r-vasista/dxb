@@ -380,7 +380,10 @@ class SendFriendRequestView(APIView):
                 from_profile=from_profile,
                 to_profile=to_profile
             )
-            transaction.on_commit(lambda: send_friend_request_notification_task.delay(friend_request.id))
+            try:
+                transaction.on_commit(lambda: send_friend_request_notification_task.delay(friend_request.id))
+            except:
+                pass
             serializer = FriendRequestSerializer(friend_request)
             return Response(success_response(serializer.data),status=status.HTTP_201_CREATED)
 
@@ -471,9 +474,12 @@ class RespondFriendRequestView(APIView):
 
                 from_profile.friends.add(to_profile)
                 to_profile.friends.add(from_profile)
-                transaction.on_commit(lambda: send_friend_request_response_notification_task.delay(
-                    friend_request.id, "accepted"
-                ))
+                try:
+                    transaction.on_commit(lambda: send_friend_request_response_notification_task.delay(
+                        friend_request.id, "accepted"
+                    ))
+                except:
+                    pass
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':

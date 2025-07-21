@@ -119,3 +119,13 @@ def handle_hashtags(post):
     for tag in hashtags:
         hashtag_obj, created = Hashtag.objects.get_or_create(name=tag.lower())
         post.hashtags.add(hashtag_obj)
+
+def get_actual_user(obj):
+    """
+    Returns the Django User object from a Profile or Organization-based object.
+    """
+    if hasattr(obj, 'user') and obj.user:
+        return obj.user
+    elif hasattr(obj, 'organization') and hasattr(obj.organization, 'user'):
+        return obj.organization.user
+    return None

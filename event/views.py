@@ -22,7 +22,7 @@ from event.models import (
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
-    shared_event_comment_notification_task
+    shared_event_media_comment_notification_task
 )
 from event.choices import (
     EventStatus
@@ -138,7 +138,7 @@ class EventAttendacneAPIView(APIView):
             serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             attendance=serializer.save()
-            # transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
+            transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
             
         except ValidationError as e:
@@ -346,7 +346,7 @@ class EventCommentCreateAPIView(APIView):
 
             # Save the comment
             comment = serializer.save(profile=profile, event=event)
-            transaction.on_commit(lambda: shared_event_comment_notification_task.delay(event.id, profile.id, comment.id))
+
 
             return Response(success_response(EventCommentSerializer(comment).data),
                             status=status.HTTP_201_CREATED)
@@ -529,9 +529,11 @@ class CreateEventMediaCommentAPIView(APIView):
             # Initialize serializer
             serializer = EventMediaCommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
+            
 
             # Save the comment
             comment = serializer.save(profile=profile, event_media=event_media)
+            transaction.on_commit(lambda: shared_event_media_comment_notification_task.delay(event_media.id, profile.id, comment.id))
 
             return Response(success_response(EventCommentSerializer(comment).data),
                             status=status.HTTP_201_CREATED)
