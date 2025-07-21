@@ -257,7 +257,7 @@ class EventMediaComment(BaseModel):
         ordering = ['created_at']
         
     def __str__(self):
-        return f"Comment by {self.profile.username} on {self.event.title}"
+        return f"Comment by {self.profile.username} on {self.event_media.event.title}"
     
     @property
     def is_reply(self):

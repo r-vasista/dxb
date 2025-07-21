@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment
 )
 from event.utils import generate_google_calendar_link
 from profiles.models import Profile
@@ -65,7 +65,10 @@ class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
         }
 
     def get_calendar_link(self, obj):
-        return generate_google_calendar_link(obj.event, self.context.get('request'))
+        try:
+            return generate_google_calendar_link(obj.event, self.context.get('request'))
+        except Exception:
+            return None
         
 
 class EventSummarySerializer(TimezoneAwareSerializerMixin):
@@ -146,7 +149,7 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
     is_reply = serializers.SerializerMethodField()
 
     class Meta:
-        model = EventComment
+        model = EventMediaComment
         fields = [
             'id', 'event_media', 'profile', 'content', 'parent', 
             'created_at', 'reply_count', 'is_reply'
