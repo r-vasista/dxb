@@ -15,7 +15,8 @@ from django.http import Http404
 # Local imports
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSummarySerializer, EventMediaSerializer, 
-    EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer
+    EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
+    EventUpdateSerializer
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment
@@ -321,7 +322,7 @@ class UpdateEventAPIView(APIView):
             data = request.data.copy()
             data['host'] = event.host.id  # preserve original host
 
-            serializer = EventCreateSerializer(event, data=data, context={'request': request})
+            serializer = EventUpdateSerializer(event, data=data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
