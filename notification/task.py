@@ -526,3 +526,28 @@ def send_event_reminder_notifications():
 
 
 
+@shared_task
+def notify_low_rsvp_events():
+    now = timezone.now()
+    threshold = now + timedelta(hours=72)
+
+    # Events starting within next 72 hours
+    events = Event.objects.filter(
+        start_datetime__range=(now, threshold),
+    ).select_related('host', 'host__user')
+
+    for event in events:
+        logger.info(f"this is from event {event}  and event host is{event.host}")
+        rsvp_count = EventAttendance.objects.filter(event=event).count()
+        event_host = event.host
+        host_user = get_actual_user(event_host)
+        if rsvp_count < 5 and event_host and host_user:
+            message = f"Only {rsvp_count} RSVPs for your event '{event.title}' — boost it now to attract more guests!"
+
+            create_notification(
+                sender=event_host,
+                recipient=event.host,
+                instance=event,
+                message=message,
+                notification_type=NotificationType.EVENT_REMINDER
+            )
