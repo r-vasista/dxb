@@ -85,6 +85,9 @@ class Event(BaseModel):
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default='USD')
     
+    reminder_1st_sent=models.BooleanField(default=False)
+    reminder_2nd_sent=models.BooleanField(default=False)
+
     # Media
     event_image = models.ImageField(upload_to='events/images/', blank=True, null=True)
     
