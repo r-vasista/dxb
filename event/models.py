@@ -90,6 +90,7 @@ class Event(BaseModel):
 
     # Media
     event_image = models.ImageField(upload_to='events/images/', blank=True, null=True)
+    event_logo = models.ImageField(upload_to='events/logo/', blank=True, null=True)
     
     # Attendees
     attendees = models.ManyToManyField(
