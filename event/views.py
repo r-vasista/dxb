@@ -73,18 +73,28 @@ class EventDetailAPIView(APIView):
     """
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, event_id):
+    def get(self, request, event_id=None, slug=None):
         try:
-            # Fetch event or return 404
-            event = get_object_or_404(
-                Event.objects.select_related('host'),
-                id=event_id,
-                status='published'
-            )
+            if event_id:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    id=event_id,
+                    status='published'
+                )
+            elif slug:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    slug=slug,
+                    status='published'
+                )
+            else:
+                raise ValueError("Either profile_id or username is required.")
 
             # Serialize the event
             serializer = EventDetailSerializer(event, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -604,5 +614,35 @@ class ChildEventMediaCommentListAPIView(APIView, PaginationMixin):
         
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class MyHostedEventsAPIView(APIView, PaginationMixin):
+    """
+    GET /api/events/my-hosted/
+
+    Returns all events where the logged-in user's profile is the host or co-host.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Get profile of logged-in user
+            profile = get_user_profile(request.user)
+            if not profile:
+                return Response(error_response("Profile not found."), status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch events where user is host or co-host
+            events = Event.objects.filter(
+                (Q(host=profile) | Q(co_host=profile))
+            ).order_by('-start_datetime')
+
+            # Paginate
+            paginated_events = self.paginate_queryset(events, request)
+            serializer = EventDetailSerializer(paginated_events, many=True, context={'request': request})
+
+            return self.get_paginated_response(serializer.data)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
