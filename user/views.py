@@ -15,6 +15,7 @@ from django.db.models import Q
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
+from django.core.exceptions import ValidationError as DjangoValidationError
 
 # Local imports
 from core.services import success_response, error_response
@@ -33,6 +34,9 @@ from profiles.models import (
 )
 from profiles.choices import (
     ProfileType
+)
+from profiles.utils import (
+    validate_username_format
 )
 
 from notification.task import send_welcome_email_task
@@ -83,6 +87,11 @@ class RegisterAccountAPIView(APIView):
 
             if not verify_otp(email, otp):
                 return Response(error_response("Invalid or expired OTP."), status=status.HTTP_400_BAD_REQUEST)
+            
+            try:
+                validate_username_format(name)
+            except DjangoValidationError as e:
+                return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
                 if user_type == "organization":
