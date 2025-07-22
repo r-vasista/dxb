@@ -35,7 +35,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'id', 'title', 'description', 'event_type', 'status',
             'start_datetime', 'end_datetime', 'timezone',
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
-            'is_free', 'price', 'currency', 'event_image', 'host', 'slug'
+            'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 'event_logo'
         ]
 
     def get_host(self, obj):
