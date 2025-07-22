@@ -72,18 +72,21 @@ def get_post_visibility_filter(user):
     Returns a Q object to filter posts visible to the given user,
     considering post visibility settings and profile visibility.
     """
-    # Exclude posts from private profiles, unless it's the user's own
-    public_profiles = Q(profile__visibility_status=VisibilityStatus.PUBLIC) | Q(created_by=user)
+    base_filter = Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PUBLIC) & \
+                  Q(profile__visibility_status=VisibilityStatus.PUBLIC)
 
-    base_filter = Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PUBLIC) & public_profiles
-
+    # If user is not logged in, only return public posts
     if not user or not user.is_authenticated:
         return base_filter
 
+    # For authenticated users, allow their own posts (even private)
+    base_filter = base_filter | Q(created_by=user)
+
     requester_profile = get_user_profile(user)
-    update_last_active(requester_profile)
     if not requester_profile:
         return base_filter
+
+    update_last_active(requester_profile)
 
     return (
         base_filter |
@@ -97,7 +100,6 @@ def get_post_visibility_filter(user):
         ) |
         Q(status=PostStatus.PUBLISHED, visibility=PostVisibility.PRIVATE, created_by=user)
     )
-
 
 
 def extract_mentions(text):
