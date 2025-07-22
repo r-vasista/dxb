@@ -2,6 +2,7 @@
 from django.db import models
 from django.utils import timezone
 from django.core.validators import FileExtensionValidator
+from django.utils.text import slugify
 
 # Local imports
 from event.choices import (
@@ -54,6 +55,7 @@ class Event(BaseModel):
     
     # Basic event information
     title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=255, unique=True, blank=True)
     description = models.TextField()
     event_type = models.CharField(
         max_length=20,
@@ -111,6 +113,19 @@ class Event(BaseModel):
         
     def __str__(self):
         return f"{self.title} - {self.start_datetime.strftime('%Y-%m-%d %H:%M')}"
+    
+    def save(self, *args, **kwargs):
+        # Only generate slug if not provided
+        if not self.slug:
+            base_slug = slugify(self.title)
+            slug = base_slug
+            counter = 1
+            while Event.objects.filter(slug=slug).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            self.slug = slug
+
+        super().save(*args, **kwargs)
     
     @property
     def is_past(self):

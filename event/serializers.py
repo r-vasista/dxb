@@ -1,3 +1,6 @@
+# Django imports
+from django.utils.text import slugify
+
 # Rest Framework imports
 from rest_framework import serializers
 
@@ -32,8 +35,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'id', 'title', 'description', 'event_type', 'status',
             'start_datetime', 'end_datetime', 'timezone',
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
-            'is_free', 'price', 'currency',
-            'event_image', 'host',
+            'is_free', 'price', 'currency', 'event_image', 'host', 'slug'
         ]
 
     def get_host(self, obj):
@@ -192,3 +194,42 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
 
     def get_is_reply(self, obj):
         return obj.is_reply
+
+
+class EventUpdateSerializer(serializers.ModelSerializer):
+    """
+    Serializer for updating events.
+    Allows partial updates and regenerates slug if title changes.
+    """
+    class Meta:
+        model = Event
+        # Include only fields that should be editable
+        fields = [
+            "title", "description", "event_type", "status",
+            "start_datetime", "end_datetime", "timezone",
+            "is_online", "address", "city", "state", "country", "online_link",
+            "max_attendees", "is_free", "price", "currency",
+            "event_image", "event_logo", "tags","slug"
+        ]
+        read_only_fields = ["slug"]
+
+    def update(self, instance, validated_data):
+        # Auto-regenerate slug if title is updated
+        title_changed = False
+        if "title" in validated_data and validated_data["title"] != instance.title:
+            title_changed = True
+
+        instance = super().update(instance, validated_data)
+
+        # Handle slug update if title changed
+        if title_changed:
+            base_slug = slugify(instance.title)
+            slug = base_slug
+            counter = 1
+            while Event.objects.filter(slug=slug).exclude(pk=instance.pk).exists():
+                slug = f"{base_slug}-{counter}"
+                counter += 1
+            instance.slug = slug
+            instance.save()
+
+        return instance
