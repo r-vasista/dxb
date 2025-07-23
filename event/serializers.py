@@ -67,7 +67,6 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
 class EventListSerializer(TimezoneAwareSerializerMixin):
     host_username = serializers.CharField(source='host.username', read_only=True)
     host_profile_picture = serializers.CharField(source='host.profile_picture', read_only=True)
-    co_host_username = serializers.CharField(source='co_host.username', read_only=True)
     
     class Meta:
         model = Event

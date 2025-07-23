@@ -22,7 +22,7 @@ from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
 )
 from event.choices import (
-    EventStatus
+    EventStatus, AttendanceStatus
 )
 from event.utils import (
     handle_event_hashtags
@@ -155,13 +155,27 @@ class EventAttendacneAPIView(APIView):
     
     def post(self, request):
         try:
+            profile = get_user_profile(request.user)
             data = request.data
-            data['profile'] = get_user_profile(request.user).id
+            event_id = data.get('event')
+            status_value = data.get('status', AttendanceStatus.INTERESTED)
+
+            if not event_id:
+                return Response(error_response("Event ID is required"), status=status.HTTP_400_BAD_REQUEST)
+
+            # Check event settings
+            event = Event.objects.get(id=event_id)
+            if event.aprove_attendees and status_value==AttendanceStatus.INTERESTED:
+                # Force RSVP to pending regardless of requested status
+                status_value = AttendanceStatus.PENDING
+
+            data['profile'] = profile.id
+            data['status'] = status_value
+
             serializer = EventAttendanceSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
-            attendance=serializer.save()
+            attendance = serializer.save()
             try:
-
                 transaction.on_commit(lambda:send_event_rsvp_notification_task.delay(attendance.id))
             except:
                 pass
@@ -185,14 +199,23 @@ class EventAttendacneAPIView(APIView):
             profile = get_user_profile(request.user)
             event_id = request.data.get('event')
             status_value = request.data.get('status')
-
+            
             if not event_id or not status_value:
                 return Response(error_response( "Both 'event' and 'status' fields are required."), status=status.HTTP_400_BAD_REQUEST)
-
+            
             try:
                 attendance = EventAttendance.objects.get(profile=profile, event_id=event_id)
             except EventAttendance.DoesNotExist:
                 return Response(error_response("RSVP does not exist. You must RSVP first before updating."), status=status.HTTP_404_NOT_FOUND)
+            
+            if status_value not in [AttendanceStatus.INTERESTED, AttendanceStatus.NOT_INTERESTED]:
+                return  Response(error_response("Invalid status value"), status=status.HTTP_400_BAD_REQUEST)
+            
+            event = Event.objects.get(id=event_id)
+            if event.aprove_attendees and status_value==AttendanceStatus.INTERESTED:
+                # Force RSVP to pending regardless of requested status
+                status_value = AttendanceStatus.PENDING
+
             data = {'status': status_value}
             serializer = EventAttendanceSerializer(attendance, data=data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -660,7 +683,7 @@ class MyHostedEventsAPIView(APIView, PaginationMixin):
 
             # Fetch events where user is host or co-host
             events = Event.objects.filter(
-                (Q(host=profile) | Q(co_host=profile))
+                (Q(host=profile) | Q(co_hosts=profile))
             ).order_by('-start_datetime')
 
             # Paginate
