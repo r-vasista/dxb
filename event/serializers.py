@@ -195,6 +195,17 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
     def get_is_reply(self, obj):
         return obj.is_reply
 
+class EventSerializer(serializers.ModelSerializer):
+    attendee_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'start_datetime', 'end_datetime',
+            'event_image', 'attendee_count', 'tags',
+            'is_online', 'city', 'country',
+        ]
+
 
 class EventUpdateSerializer(serializers.ModelSerializer):
     """

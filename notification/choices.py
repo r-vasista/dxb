@@ -13,3 +13,6 @@ class NotificationType(models.TextChoices):
     POST_CREATE = 'post_create', 'Post Create'
     EVENT_MEDIA= 'event_media', 'Event Media'
     EVENT_REMINDER= 'event_reminder','Event Reminder'
+    STATUS_CHANGE = "status change","Status Change"
+    EVENT_CREATE ='event create','Event Create'
+    EVENT_RSVP='event rsvp','Event Rsvp'
