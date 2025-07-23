@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
 )
 from event.utils import generate_google_calendar_link
 from profiles.models import Profile
@@ -115,7 +115,7 @@ class EventSummarySerializer(TimezoneAwareSerializerMixin):
 class EventMediaSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventMedia
-        fields = ['id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at', 'uploaded_by']
+        fields = ['id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at', 'uploaded_by','like_count']
         read_only_fields = ['media_type', 'uploaded_at']
 
 
@@ -244,3 +244,9 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             instance.save()
 
         return instance
+
+
+class EventMediaLikeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventMediaLike
+        fields = '__all__'
