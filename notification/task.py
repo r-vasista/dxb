@@ -319,7 +319,11 @@ def send_event_creation_notification_task(event_id):
     try:
         event = Event.objects.select_related('host').get(id=event_id)
         sender = event.host
-        message = f"{sender.username} created a new event: {event.title}"
+        message = (
+            f"{sender.username} created a new event: {event.title}. "
+            f"Add your media to the event to explore more. "
+            f"Don't forget to add a cover image and invite your friends to join!"
+        )
         notification_type = NotificationType.EVENT_CREATE
 
         followers = sender.followers.all()

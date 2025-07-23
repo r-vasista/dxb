@@ -14,7 +14,7 @@ from django.http import Http404
 
 # Local imports
 from event.serializers import (
-    EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSummarySerializer, EventMediaSerializer, 
+    EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
     EventUpdateSerializer
 )
@@ -301,7 +301,28 @@ class EventMediaListAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
+class EventMediaDetailAPIView(APIView):
+    """
+    GET /api/events/media/<media_id>/
+    Returns a single media item for a given event.
+    """
+    def get(self,request,media_id):
+        try:
+            media=EventMedia.objects.get(id=media_id,is_active=True)
+
+            serializer=EventMediaSerializer(media)
+            return Response(success_response(serializer.data),status=status.HTTP_200_OK)
+        except Event.DoesNotExist:
+            return Response(error_response("Event not found."), status=status.HTTP_404_NOT_FOUND)
+
+        except EventMedia.DoesNotExist:
+            return Response(error_response("Media not found for this event."), status=status.HTTP_404_NOT_FOUND)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
 class UpdateEventAPIView(APIView):
     """
@@ -647,3 +668,48 @@ class MyHostedEventsAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class SuggestedEventsAPIView(APIView, PaginationMixin):
+    """
+    GET /api/events/suggestions/
+    Returns upcoming suggested events based on tags of events the user is attending,
+    paginated and ordered by most attendees.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            # 1. Get attended events
+            attended_event_ids = EventAttendance.objects.filter(
+                profile=profile
+            ).values_list('event_id', flat=True)
+
+            # 2. Get related tag IDs
+            tag_ids = Event.objects.filter(
+                Q(id__in=attended_event_ids) | Q(host=profile)
+            ).values_list('tags', flat=True)
+
+            # 3. Get upcoming events matching tags, exclude already attended
+            suggested_events = Event.objects.filter(
+                tags__in=tag_ids,
+                start_datetime__gte=timezone.now()
+            ).exclude(
+                Q(id__in=attended_event_ids) | Q(host=profile)
+            ).annotate(
+                num_attendees=Count('attendees')
+            ).order_by('-num_attendees').distinct()
+
+            # 4. Paginate results
+            paginated_events = self.paginate_queryset(suggested_events, request)
+            serializer = EventSerializer(paginated_events, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response({"success": False, "error": str(e)}, status=500)
+
+
+    
