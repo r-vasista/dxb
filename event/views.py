@@ -16,10 +16,10 @@ from django.http import Http404
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer
 )
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
 )
 from event.choices import (
     EventStatus, AttendanceStatus
@@ -839,3 +839,126 @@ class RemoveCoHostAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventMediaLikeAPIView(APIView, PaginationMixin):
+    """
+    GET /api/event-media/likes/grouped/
+    Returns paginated event media with their likes grouped under each media item.
+    """
+    def get(self, request):
+        try:
+
+            # Get all media that has likes
+            media_ids = EventMediaLike.objects.values_list('event_media_id', flat=True).distinct()
+            media_queryset = EventMedia.objects.filter(id__in=media_ids).order_by('-uploaded_at')
+
+            # Paginate media queryset
+            paginated_media = self.paginate_queryset(media_queryset, request)
+
+            # Build grouped data
+            grouped_results = []
+            for media in paginated_media:
+                media_data = EventMediaSerializer(media, context={'request': request}).data
+                likes = EventMediaLike.objects.filter(event_media=media)
+                like_data = EventMediaLikeSerializer(likes, many=True, context={'request': request}).data
+                grouped_results.append({
+                    'event_media': media_data,
+                    'likes': like_data
+                })
+
+            return self.get_paginated_response(grouped_results)
+
+        except Exception as e:
+            return Response({"status": False, "message": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+    
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            media_id = request.data.get("event_media")
+
+            if not profile or not media_id:
+                return Response(error_response("Both profile and event_media are required."), status=status.HTTP_400_BAD_REQUEST)
+
+            media = EventMedia.objects.filter(id=media_id).first()
+            if not media:
+                return Response(error_response("EventMedia not found."), status=status.HTTP_404_NOT_FOUND)
+
+            existing_like = EventMediaLike.objects.filter(profile=profile, event_media_id=media_id).first()
+
+            with transaction.atomic():
+                if existing_like:
+                    existing_like.delete()
+                    media.like_count = max((media.like_count or 1) - 1, 0)
+                    media.save(update_fields=["like_count"])
+                    return Response({"message": "Disliked (like removed)."}, status=status.HTTP_200_OK)
+                else:
+                    # Create the like explicitly
+                    like = EventMediaLike.objects.create(
+                        profile=profile,
+                        event_media=media
+                    )
+                    media.like_count = (media.like_count or 0) + 1
+                    media.save(update_fields=["like_count"])
+
+                    # Return serialized data
+                    serializer = EventMediaLikeSerializer(like)
+                    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class EventMediaLikeDetailAPIView(APIView):
+    """
+    Authenticated Like Detail View
+
+    GET: Retrieve like details (only if owned)
+    PUT: Update like (only if owned)
+    DELETE: Remove like (only if owned)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, profile):
+        try:
+            return EventMediaLike.objects.get(pk=pk, profile=profile)
+        except EventMediaLike.DoesNotExist:
+            raise Http404("Like not found or not owned by you.")
+
+    def get(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            like = self.get_object(pk, profile)
+            serializer = EventMediaLikeSerializer(like)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+    def delete(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            like = self.get_object(pk, profile)
+            media = like.event_media
+
+            like.delete()
+
+            if media.like_count:
+                media.like_count = max(0, media.like_count - 1)
+                media.save(update_fields=['like_count'])
+
+            return Response({"message": "Like deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+       
+
