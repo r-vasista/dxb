@@ -3,7 +3,7 @@ from event.views import (
     CreateEventAPIView, EventListAPIView, EventAttendacneAPIView, MyRSVPEventsListAPIView, EventMediaUploadAPIView, EventMediaListAPIView,
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
-    EventDetailAPIView, MyHostedEventsAPIView
+    EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView
 )
 
 
@@ -19,6 +19,7 @@ urlpatterns = [
     path('my-rsvp-events/', MyRSVPEventsListAPIView.as_view(), name='my-rsvp-events'),
     path('upload-media/<int:event_id>/', EventMediaUploadAPIView.as_view(), name='upload-media'),
     path('media-list/<int:event_id>/', EventMediaListAPIView.as_view(), name='media-list'),
+    path('media/<int:media_id>/', EventMediaDetailAPIView.as_view(), name='event-media-detail'),
     path('comment/<int:event_id>/', EventCommentCreateAPIView.as_view(), name='event-comment'),
     path('parent-comments-list/<int:event_id>/', ParentEventCommentListAPIView.as_view(), name='parent-event-comments'),
     path('child-comments-list/<int:event_id>/<int:parent_id>/', ChildEventCommentListAPIView.as_view(), name='child-event-comments'),
@@ -29,4 +30,5 @@ urlpatterns = [
     path('child-media-comments-list/<int:event_media_id>/<int:parent_id>/', ChildEventMediaCommentListAPIView.as_view(), name='child-event-media-comments'),
     path('hosted-events/', MyHostedEventsAPIView.as_view(), name='hosted-events')
 
+    path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
 ]
