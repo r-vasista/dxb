@@ -199,6 +199,7 @@ class EventMedia(BaseModel):
     is_active = models.BooleanField(default=True)
     
     is_pinned = models.BooleanField(default=False)
+    like_count=models.IntegerField(blank=True,null=True)
     
     class Meta:
         ordering = ['-uploaded_at']
@@ -289,3 +290,10 @@ class EventMediaComment(BaseModel):
     @property
     def reply_count(self):
         return self.replies.filter(is_active=True).count()
+
+class EventMediaLike(BaseModel):
+    event_media=models.ForeignKey(EventMedia,on_delete=models.CASCADE,related_name='media_like')
+    profile=models.ForeignKey(Profile,on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.profile.username} liked on media {self.event_media}"
