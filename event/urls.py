@@ -28,7 +28,6 @@ urlpatterns = [
     path('comment-media/<str:event_media_id>/', CreateEventMediaCommentAPIView.as_view(), name='comment-media'),
     path('parent-media-comments-list/<int:evnet_media_id>/', ParentEventMediaCommentsAPIView.as_view(), name='parent-event-media-comments'),
     path('child-media-comments-list/<int:event_media_id>/<int:parent_id>/', ChildEventMediaCommentListAPIView.as_view(), name='child-event-media-comments'),
-    path('hosted-events/', MyHostedEventsAPIView.as_view(), name='hosted-events')
-
+    path('hosted-events/', MyHostedEventsAPIView.as_view(), name='hosted-events'),
     path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
 ]
