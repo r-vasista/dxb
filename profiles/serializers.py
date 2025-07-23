@@ -105,13 +105,15 @@ class ProfileSerializer(serializers.ModelSerializer):
     followers_count = serializers.IntegerField(read_only=True)
     friends_count = serializers.IntegerField(read_only=True)
     following_count = serializers.IntegerField(read_only=True)
+    is_friend = serializers.SerializerMethodField()
+    is_following = serializers.SerializerMethodField()
 
     class Meta:
         model = Profile
         fields = [
             'id', 'username', 'bio', 'profile_picture', 'profile_type', 'cover_picture', 'visibility_status',
             'followers_count', 'friends_count', 'following_count',
-            'organization', 'profile_fields', 'awards', 'tools'
+            'organization', 'profile_fields', 'awards', 'tools', 'is_friend', 'is_following'
         ]
 
     def get_profile_fields(self, obj):
@@ -123,6 +125,34 @@ class ProfileSerializer(serializers.ModelSerializer):
         if obj.organization:
             return OrganizationSerializer(obj.organization).data
         return None
+    
+    def get_is_friend(self, obj):
+        """
+        Check if the request user's profile is friends with the target profile.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        try:
+            user_profile = get_user_profile(request.user)
+            return obj in user_profile.friends.all()
+        except Profile.DoesNotExist:
+            return False
+    
+    def get_is_following(self, obj):
+        """
+        Check if the request user's profile is following with the target profile.
+        """
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+
+        try:
+            user_profile = get_user_profile(request.user)
+            return obj in user_profile.following.all()
+        except Profile.DoesNotExist:
+            return False
 
     
 
