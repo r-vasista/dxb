@@ -31,6 +31,5 @@ urlpatterns = [
     path('hosted-events/', MyHostedEventsAPIView.as_view(), name='hosted-events'),
     path('add-cohost/<int:event_id>/', AddCoHostsAPIView.as_view(), name='add-cohost'),
     path('remove-cohost/<int:event_id>/', RemoveCoHostAPIView.as_view(), name='remove-cohost'),
-
     path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
 ]
