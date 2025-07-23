@@ -25,7 +25,7 @@ from event.choices import (
     EventStatus, AttendanceStatus
 )
 from event.utils import (
-    handle_event_hashtags
+    handle_event_hashtags, is_host_or_cohost   
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
@@ -146,7 +146,7 @@ class EventListAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class EventAttendacneAPIView(APIView):
+class EventAttendacneAPIView(APIView, PaginationMixin):
     """
     API for Event RSVP
     """
@@ -188,9 +188,15 @@ class EventAttendacneAPIView(APIView):
     
     def get(self, request, event_id):
         try:
-            event_attendance = EventAttendance.objects.select_related('profile').filter(id=event_id)
-            serializer = EventAttendanceSerializer(event_attendance, many=True, context={'request': request})
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            event_attendance = EventAttendance.objects.select_related('profile').filter(event__id=event_id)
+            
+            status_filter = request.query_params.get('status').lower()
+            if status_filter:
+                event_attendance = event_attendance.filter(status=status_filter)
+                
+            paginated_qs = self.paginate_queryset(event_attendance, request)
+            serializer = EventAttendanceSerializer(paginated_qs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
@@ -446,7 +452,7 @@ class ParentEventCommentListAPIView(APIView, PaginationMixin):
             # Fetch top-level comments efficiently
             comments = EventComment.objects.select_related('profile', 'parent').filter(
                         event=event, parent__isnull=True
-                    ) .order_by('created_at')
+                    ) .order_by('-created_at')
 
             # Apply pagination
             paginated_comments = self.paginate_queryset(comments, request)
@@ -473,7 +479,7 @@ class ChildEventCommentListAPIView(APIView, PaginationMixin):
             # Fetch top-level comments efficiently
             comments = EventComment.objects.select_related('profile', 'parent').filter(
                         event=event, parent__id=parent_id
-                    ) .order_by('created_at')
+                    ) .order_by('-created_at')
 
             # Apply pagination
             paginated_comments = self.paginate_queryset(comments, request)
@@ -837,5 +843,50 @@ class RemoveCoHostAPIView(APIView):
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ApproveRSVPAPIView(APIView):
+    """
+    Allows the host or co-host of an event to approve or reject a user's RSVP.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def patch(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            attendance_id = request.data.get('attendance_id')
+            action = request.data.get('action')
+
+            if not attendance_id or action not in ['approve', 'reject']:
+                return Response(error_response("Invalid parameters"), status=status.HTTP_400_BAD_REQUEST)
+
+            attendance = EventAttendance.objects.select_related('event', 'profile').get(id=attendance_id)
+            event = attendance.event
+
+            # Check if the user is authorized (host or co-host)
+            if not is_host_or_cohost(event, profile):
+                return Response(
+                    error_response("You are not authorized to approve or reject RSVPs for this event."),
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            # Perform action
+            if action == 'approve':
+                attendance.status = AttendanceStatus.INTERESTED
+            else:
+                attendance.status = AttendanceStatus.DECLINED
+
+            attendance.save()
+
+            return Response(success_response({
+                "profile": attendance.profile.username,
+                "event": event.title,
+                "status": attendance.status
+            }), status=status.HTTP_200_OK)
+
+        except EventAttendance.DoesNotExist:
+            return Response(error_response("Attendance record not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

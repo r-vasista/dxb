@@ -3,7 +3,8 @@ from event.views import (
     CreateEventAPIView, EventListAPIView, EventAttendacneAPIView, MyRSVPEventsListAPIView, EventMediaUploadAPIView, EventMediaListAPIView,
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
-    EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView
+    EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
+    ApproveRSVPAPIView
 )
 
 
@@ -14,7 +15,6 @@ urlpatterns = [
     path('update/<int:event_id>/', UpdateEventAPIView.as_view(), name='update'),
     path('list/', EventListAPIView.as_view(), name='event-list'),
     path('rsvp/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
-    path('rsvp/<int:event_id>/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
     path('rsvp/<int:event_id>/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
     path('my-rsvp-events/', MyRSVPEventsListAPIView.as_view(), name='my-rsvp-events'),
     path('upload-media/<int:event_id>/', EventMediaUploadAPIView.as_view(), name='upload-media'),
@@ -32,4 +32,6 @@ urlpatterns = [
     path('add-cohost/<int:event_id>/', AddCoHostsAPIView.as_view(), name='add-cohost'),
     path('remove-cohost/<int:event_id>/', RemoveCoHostAPIView.as_view(), name='remove-cohost'),
     path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
+    path('approve-rsvp/', ApproveRSVPAPIView.as_view(), name='approve-rsvp'),
+    
 ]
