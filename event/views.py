@@ -21,15 +21,18 @@ from event.serializers import (
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment
 )
-from notification.task import (
-    send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
-    shared_event_media_comment_notification_task
-)
 from event.choices import (
     EventStatus
 )
 from event.utils import (
     handle_event_hashtags
+)
+from notification.task import (
+    send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
+    shared_event_media_comment_notification_task
+)
+from profiles.models import (
+    Profile
 )
 from core.services import success_response, error_response, get_user_profile
 from core.pagination import PaginationMixin
@@ -645,5 +648,106 @@ class MyHostedEventsAPIView(APIView, PaginationMixin):
 
             return self.get_paginated_response(serializer.data)
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class AddCoHostsAPIView(APIView):
+    """
+    POST /api/events/<event_id>/add-cohosts/
+    Allows the event host to add multiple co-hosts.
+
+    Request:
+    {
+        "co_host_ids": [5, 6, 7]
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, event_id):
+        try:
+            profile = get_user_profile(request.user)
+            event = get_object_or_404(Event, id=event_id)
+
+            # Only host can add co-hosts
+            if event.host != profile:
+                return Response(
+                    error_response("Only the host can add co-hosts."),
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            co_host_ids = request.data.get("co_host_ids", [])
+            
+            if not isinstance(co_host_ids, list):
+                raise ValueError('co_host_ids must be an instance of list') 
+            
+            if not co_host_ids:
+                return Response(
+                    error_response("Provide at least one co-host ID."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Exclude invalid cases
+            valid_co_hosts = Profile.objects.filter(id__in=co_host_ids).exclude(id=profile.id)
+
+            if not valid_co_hosts.exists():
+                return Response(
+                    error_response("No valid co-hosts found."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            event.co_hosts.add(*valid_co_hosts)
+
+            return Response(
+                success_response({
+                    "event_id": event.id,
+                    "added_co_hosts": list(valid_co_hosts.values_list("id", flat=True))
+                }),
+                status=status.HTTP_200_OK
+            )
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class RemoveCoHostAPIView(APIView):
+    """
+    POST /api/events/<event_id>/remove-cohost/
+    Removes a co-host from the event.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, event_id):
+        try:
+            profile = get_user_profile(request.user)
+            event = get_object_or_404(Event, id=event_id)
+
+            if event.host != profile:
+                return Response(
+                    error_response("Only the host can remove co-hosts."),
+                    status=status.HTTP_403_FORBIDDEN
+                )
+
+            co_host_id = request.data.get("co_host_id")
+            if not co_host_id:
+                return Response(
+                    error_response("Co-host ID is required."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            event.co_hosts.remove(co_host_id)
+
+            return Response(
+                success_response({"event_id": event.id, "removed_co_host": co_host_id}),
+                status=status.HTTP_200_OK
+            )
+            
+        except ValueError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

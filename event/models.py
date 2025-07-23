@@ -45,10 +45,9 @@ class Event(BaseModel):
         on_delete=models.CASCADE, 
         related_name='organized_events'
     )
-    co_host = models.ForeignKey(
-        Profile, 
-        on_delete=models.CASCADE, 
-        related_name='co_host_organized_events',
+    co_hosts = models.ManyToManyField(
+        Profile,
+        related_name='co_hosted_events',
         blank=True,
         null= True
     )
