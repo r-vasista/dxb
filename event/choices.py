@@ -21,6 +21,7 @@ class EventStatus(models.TextChoices):
 
 class AttendanceStatus(models.TextChoices):
     INTERESTED = 'interested', 'Interested'
-    GOING = 'going', 'Going'
-    MAYBE = 'maybe', 'Maybe'
-    NOT_GOING = 'not_going', 'Not Going'
+    NOT_INTERESTED = 'not_interested', 'Not Interested'
+    PENDING = 'pending', 'Pending'
+    DECLINED = 'declined', 'Declined'
+    

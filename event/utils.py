@@ -49,3 +49,17 @@ def handle_event_hashtags(event):
     for tag in hashtags:
         hashtag_obj, _ = EventTag.objects.get_or_create(name=tag.lower())
         event.tags.add(hashtag_obj)
+
+def is_host_or_cohost(event, profile):
+    """
+    Returns True if the given profile is either the host or a co-host of the event.
+    """
+    if not event or not profile:
+        return False
+
+    # Check if profile is the main host
+    if event.host_id == profile.id:
+        return True
+
+    # Check if profile is in the co-hosts ManyToMany relation
+    return event.co_hosts.filter(id=profile.id).exists()

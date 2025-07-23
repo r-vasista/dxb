@@ -82,6 +82,7 @@ class Event(BaseModel):
     
     # Event details
     max_attendees = models.PositiveIntegerField(null=True, blank=True)
+    aprove_attendees = models.BooleanField(default=False)
     is_free = models.BooleanField(default=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default='USD')
