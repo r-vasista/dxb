@@ -16,10 +16,10 @@ from django.http import Http404
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer,EventMediaLikeSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer
 )
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike
 )
 from event.choices import (
     EventStatus, AttendanceStatus
@@ -1067,3 +1067,63 @@ class ApproveRSVPAPIView(APIView):
             return Response(error_response("Attendance record not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventMediaCommentLikeToggleAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            comment_id = request.data.get("comment_id")
+
+            if not profile or not comment_id:
+                return Response(error_response("Both profile and comment_id are required."), status=status.HTTP_400_BAD_REQUEST)
+
+            comment = EventMediaComment.objects.filter(id=comment_id).first()
+            if not comment:
+                return Response(error_response("Comment not found."), status=status.HTTP_404_NOT_FOUND)
+
+            existing_like = EventMediaCommentLike.objects.filter(profile=profile, eventmediacomment_id=comment_id).first()
+
+            with transaction.atomic():
+                if existing_like:
+                    existing_like.delete()
+                    comment.like_count = max((comment.like_count or 1) - 1, 0)
+                    comment.save(update_fields=["like_count"])
+                    return Response({"message": "Disliked (like removed)."}, status=status.HTTP_200_OK)
+                else:
+                    like = EventMediaCommentLike.objects.create(
+                        profile=profile,
+                        event_media_comment=comment
+                    )
+                    comment.like_count = (comment.like_count or 0) + 1
+                    comment.save(update_fields=["like_count"])
+
+                    serializer = EventMediaCommentLikeSerializer(like)
+                    return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventMediaCommentLikeListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/eventmediacomment/<comment_id>/likes/
+    Returns a paginated list of likes on a specific comment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, comment_id):
+        try:
+            comment = EventMediaComment.objects.filter(id=comment_id).first()
+            if not comment:
+                return Response(error_response("Comment not found."), status=404)
+
+            likes_qs = EventMediaCommentLike.objects.filter(event_media_comment=comment).order_by('-created_at')
+            paginated_likes = self.paginate_queryset(likes_qs, request)
+            serializer = EventMediaCommentLikeSerializer(paginated_likes, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
