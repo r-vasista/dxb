@@ -317,8 +317,8 @@ class EventMediaLike(BaseModel):
     
 
 class EventMediaCommentLike(BaseModel):
-    eventmediacomment = models.ForeignKey(EventMediaComment,on_delete=models.CASCADE,related_name='event_media_comment_like')
+    event_media_comment = models.ForeignKey(EventMediaComment,on_delete=models.CASCADE,related_name='event_media_comment_like')
     profile = models.ForeignKey(Profile,on_delete=models.CASCADE)
 
     def __str__(self):
-        return f"{self.profile.username} like  on comment {self.eventmediacomment}"
+        return f"{self.profile.username} like  on comment {self.event_media_comment}"

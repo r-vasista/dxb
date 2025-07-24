@@ -198,7 +198,7 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
         model = EventMediaComment
         fields = [
             'id', 'event_media', 'profile', 'content', 'parent', 
-            'created_at', 'reply_count', 'is_reply'
+            'created_at', 'reply_count', 'is_reply','like_count'
         ]
         read_only_fields = ['id', 'event_media', 'profile', 'created_at', 'reply_count', 'is_reply']
 
@@ -274,7 +274,8 @@ class EventMediaLikeSerializer(serializers.ModelSerializer):
 
 class EventMediaCommentLikeSerializer(serializers.ModelSerializer):
     profile_username = serializers.CharField(source='profile.username', read_only=True)
+    profile_picture = serializers.CharField(source='profile.profile_picture',read_only=True) 
 
     class Meta:
         model = EventMediaCommentLike
-        fields = ['id', 'profile', 'profile_username', 'eventmediacomment', 'created_at']
+        fields = ['id', 'profile', 'profile_username','profile_picture', 'event_media_comment', 'created_at']
