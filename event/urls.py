@@ -4,7 +4,8 @@ from event.views import (
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
-    ApproveRSVPAPIView
+    ApproveRSVPAPIView,
+    EventMediaLikeAPIView,EventMediaLikeDetailAPIView,EventMediaLikesByIdAPIView,EventListByHostOrCoHostAPIView
 )
 
 
@@ -32,6 +33,10 @@ urlpatterns = [
     path('add-cohost/<int:event_id>/', AddCoHostsAPIView.as_view(), name='add-cohost'),
     path('remove-cohost/<int:event_id>/', RemoveCoHostAPIView.as_view(), name='remove-cohost'),
     path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
+    path('event-media-likes/', EventMediaLikeAPIView.as_view(), name='event-media-like'),
+    path('event-media-likes/<int:pk>/', EventMediaLikeDetailAPIView.as_view(), name='event-media-like-detail'),
+    path('media/likes/<int:id>/', EventMediaLikesByIdAPIView.as_view(), name='event-media-likes-by-id'),
+    path('events/owned/<str:username>/', EventListByHostOrCoHostAPIView.as_view(), name='event-owned-by-name'),
     path('approve-rsvp/', ApproveRSVPAPIView.as_view(), name='approve-rsvp'),
     
 ]
