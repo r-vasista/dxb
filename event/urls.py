@@ -5,7 +5,8 @@ from event.views import (
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView,
-    EventMediaLikeAPIView,EventMediaLikeDetailAPIView,EventMediaLikesByIdAPIView,EventListByHostOrCoHostAPIView
+    EventMediaLikeAPIView,EventMediaLikeDetailAPIView,EventMediaLikesByIdAPIView,EventListByHostOrCoHostAPIView,EventMediaCommentLikeToggleAPIView,
+    EventMediaCommentLikeListAPIView
 )
 
 
@@ -38,5 +39,7 @@ urlpatterns = [
     path('media/likes/<int:id>/', EventMediaLikesByIdAPIView.as_view(), name='event-media-likes-by-id'),
     path('events/owned/<str:username>/', EventListByHostOrCoHostAPIView.as_view(), name='event-owned-by-name'),
     path('approve-rsvp/', ApproveRSVPAPIView.as_view(), name='approve-rsvp'),
-    
+
+    path('eventmediacomment/like-toggle/', EventMediaCommentLikeToggleAPIView.as_view(), name='eventmedia-comment-like-toggle'),
+    path('eventmediacomment/likes/<int:comment_id>/', EventMediaCommentLikeListAPIView.as_view(), name='eventmedia-comment-like-list'),
 ]
