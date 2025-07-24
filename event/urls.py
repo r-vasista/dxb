@@ -4,6 +4,7 @@ from event.views import (
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
+    ApproveRSVPAPIView,
     EventMediaLikeAPIView,EventMediaLikeDetailAPIView,EventMediaLikesByIdAPIView,EventListByHostOrCoHostAPIView
 )
 
@@ -15,7 +16,6 @@ urlpatterns = [
     path('update/<int:event_id>/', UpdateEventAPIView.as_view(), name='update'),
     path('list/', EventListAPIView.as_view(), name='event-list'),
     path('rsvp/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
-    path('rsvp/<int:event_id>/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
     path('rsvp/<int:event_id>/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
     path('my-rsvp-events/', MyRSVPEventsListAPIView.as_view(), name='my-rsvp-events'),
     path('upload-media/<int:event_id>/', EventMediaUploadAPIView.as_view(), name='upload-media'),
@@ -37,4 +37,6 @@ urlpatterns = [
     path('event-media-likes/<int:pk>/', EventMediaLikeDetailAPIView.as_view(), name='event-media-like-detail'),
     path('media/likes/<int:id>/', EventMediaLikesByIdAPIView.as_view(), name='event-media-likes-by-id'),
     path('events/owned/<str:username>/', EventListByHostOrCoHostAPIView.as_view(), name='event-owned-by-name'),
+    path('approve-rsvp/', ApproveRSVPAPIView.as_view(), name='approve-rsvp'),
+    
 ]

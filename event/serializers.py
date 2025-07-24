@@ -9,6 +9,9 @@ from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
 )
 from event.utils import generate_google_calendar_link
+from event.choices import (
+    AttendanceStatus
+)
 from profiles.models import Profile
 from core.serializers import TimezoneAwareSerializerMixin
 
@@ -28,6 +31,10 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     city = serializers.CharField(source='city.name', read_only=True)
     state = serializers.CharField(source='state.name', read_only=True)
     country = serializers.CharField(source='country.name', read_only=True)
+    total_attendee_count = serializers.SerializerMethodField()
+    interested_count = serializers.SerializerMethodField()
+    not_interested_count = serializers.SerializerMethodField()
+    pending_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -35,7 +42,9 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'id', 'title', 'description', 'event_type', 'status',
             'start_datetime', 'end_datetime', 'timezone',
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
-            'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 'event_logo'
+            'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
+            'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
+            'pending_count'
         ]
 
     def get_host(self, obj):
@@ -44,6 +53,18 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             "username": obj.host.username,
             "profile_picture": obj.host.profile_picture.url if obj.host.profile_picture else None
         }
+        
+    def get_total_attendee_count(slef, obj):
+        return int(obj.attendee_count)
+    
+    def get_interested_count(self, obj):
+        return obj.eventattendance_set.filter(status=AttendanceStatus.INTERESTED).count()
+
+    def get_not_interested_count(self, obj):
+        return obj.eventattendance_set.filter(status=AttendanceStatus.NOT_INTERESTED).count()
+    
+    def get_pending_count(self, obj):
+        return obj.eventattendance_set.filter(status=AttendanceStatus.PENDING).count()
         
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
@@ -219,7 +240,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "start_datetime", "end_datetime", "timezone",
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
-            "event_image", "event_logo", "tags","slug"
+            "event_image", "event_logo", "tags","slug", "aprove_attendees"
         ]
         read_only_fields = ["slug"]
 

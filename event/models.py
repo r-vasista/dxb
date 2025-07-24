@@ -140,6 +140,21 @@ class Event(BaseModel):
         return self.attendees.count()
     
     @property
+    def interested_count(self):
+        """Count of attendees with status 'INTERESTED'."""
+        return self.eventattendance_set.filter(status=AttendanceStatus.INTERESTED).count()
+
+    @property
+    def not_interested_count(self):
+        """Count of attendees with status 'NOT_INTERESTED'."""
+        return self.eventattendance_set.filter(status=AttendanceStatus.NOT_INTERESTED).count()
+    
+    @property
+    def pending_count(self):
+        """Count of attendees with status 'pending'."""
+        return self.eventattendance_set.filter(status=AttendanceStatus.PENDING).count()
+    
+    @property
     def spots_remaining(self):
         if self.max_attendees:
             return max(0, self.max_attendees - self.attendee_count)
