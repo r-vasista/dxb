@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike
 )
 from event.utils import generate_google_calendar_link
 from event.choices import (
@@ -270,3 +270,11 @@ class EventMediaLikeSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventMediaLike
         fields = '__all__'
+
+
+class EventMediaCommentLikeSerializer(serializers.ModelSerializer):
+    profile_username = serializers.CharField(source='profile.username', read_only=True)
+
+    class Meta:
+        model = EventMediaCommentLike
+        fields = ['id', 'profile', 'profile_username', 'eventmediacomment', 'created_at']
