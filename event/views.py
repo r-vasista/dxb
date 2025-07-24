@@ -48,7 +48,7 @@ class CreateEventAPIView(APIView):
     def post(self, request):
         try:
             profile = get_user_profile(request.user)
-            data=request.data
+            data=request.data.copy()
             data['host'] = profile.id
 
             serializer = EventCreateSerializer(data=data, context={'request': request})
@@ -68,6 +68,7 @@ class CreateEventAPIView(APIView):
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class EventDetailAPIView(APIView):
     """
@@ -282,7 +283,7 @@ class EventMediaUploadAPIView(APIView):
             profile = get_user_profile(request.user)
 
             # Permission check
-            if not is_owner_or_org_member(event.host, request.user):
+            if not is_host_or_cohost(event, profile):
                 return Response(error_response("You do not have permission to upload media to this event."), status=status.HTTP_403_FORBIDDEN)
             
             # File validation
@@ -369,7 +370,7 @@ class UpdateEventAPIView(APIView):
             profile = get_user_profile(request.user)
             event = Event.objects.get(id=event_id)
 
-            if not is_owner_or_org_member(event.host, request.user):
+            if not is_host_or_cohost(event, profile):
                 return Response(error_response("You do not have permission to update this event."), status=status.HTTP_403_FORBIDDEN)
 
             data = request.data.copy()
