@@ -136,7 +136,10 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
-                    transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
+                    try:
+                        transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
+                    except:
+                        pass
 
                 elif user_type == "user":
                     user_type_obj, _ = UserType.objects.get_or_create(code="user", defaults={"name": "user"})
@@ -159,7 +162,10 @@ class RegisterAccountAPIView(APIView):
                         username=name,
                         phone_number=data.get("phone_number")
                     )
-                    transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
+                    try:
+                        transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
+                    except:
+                        pass
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
 
