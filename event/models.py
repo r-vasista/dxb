@@ -289,6 +289,7 @@ class EventMediaComment(BaseModel):
     event_media = models.ForeignKey(EventMedia, on_delete=models.CASCADE, related_name='comments')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
+    like_count = models.IntegerField(blank=True,null=True)
     
     # Comment content
     content = models.TextField()
@@ -313,3 +314,11 @@ class EventMediaLike(BaseModel):
 
     def __str__(self):
         return f"{self.profile.username} liked on media {self.event_media}"
+    
+
+class EventMediaCommentLike(BaseModel):
+    eventmediacomment = models.ForeignKey(EventMediaComment,on_delete=models.CASCADE,related_name='event_media_comment_like')
+    profile = models.ForeignKey(Profile,on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.profile.username} like  on comment {self.eventmediacomment}"
