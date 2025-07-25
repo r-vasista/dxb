@@ -1,8 +1,10 @@
 from urllib.parse import urlencode
 from django.utils.timezone import is_aware
+from event.models import EventTag, Event
+from django.shortcuts import get_object_or_404
+
 import pytz 
 import re
-from event.models import EventTag
 
 def generate_google_calendar_link(event, request=None):
     """
@@ -63,3 +65,12 @@ def is_host_or_cohost(event, profile):
 
     # Check if profile is in the co-hosts ManyToMany relation
     return event.co_hosts.filter(id=profile.id).exists()
+
+def get_event_by_id_or_slug(id=None, slug=None):
+    if id:
+        event = get_object_or_404(Event, id=id)
+    elif slug:
+        event = get_object_or_404(Event, slug=slug)
+    else:
+        raise ValueError('Event id or slug must be provided')
+    return event

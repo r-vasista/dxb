@@ -5,7 +5,7 @@ from event.models import (
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ['id', 'host', 'title', 'start_datetime']
+    list_display = ['id', 'host', 'title', 'allow_public_media', 'start_datetime']
     search_fields = ['id', 'host', 'title', 'start_datetime']
     list_filter = ['id', 'host', 'title', 'start_datetime']
 
@@ -19,9 +19,9 @@ class EventAttendanceAdmin(admin.ModelAdmin):
     
 @admin.register(EventMedia)
 class EventMediaAdmin(admin.ModelAdmin):
-    list_display = ['id','event', 'uploaded_by', 'file', 'media_type']
-    search_fields = ['id','event', 'uploaded_by', 'file', 'media_type']
-    list_filter = ['id','event', 'uploaded_by', 'file', 'media_type']
+    list_display = ['id','event', 'uploaded_by', 'file', 'media_type', 'uploaded_by_host']
+    search_fields = ['id','event', 'uploaded_by', 'file', 'media_type', 'uploaded_by_host']
+    list_filter = ['id','event', 'uploaded_by', 'file', 'media_type', 'uploaded_by_host']
     
 @admin.register(EventMediaComment)
 class EventMediaCommentAdmin(admin.ModelAdmin):
