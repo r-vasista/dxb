@@ -44,7 +44,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
-            'pending_count'
+            'pending_count', 'allow_public_media', 'created_at', 'updated_at'
         ]
 
     def get_host(self, obj):
@@ -133,10 +133,22 @@ class EventSummarySerializer(TimezoneAwareSerializerMixin):
 
 
 class EventMediaSerializer(serializers.ModelSerializer):
+    
+    uploaded_by_details = serializers.SerializerMethodField()
     class Meta:
         model = EventMedia
-        fields = ['id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at', 'uploaded_by','like_count']
-        read_only_fields = ['media_type', 'uploaded_at']
+        fields = [
+                    'id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at',
+                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details'
+                ]
+        read_only_fields = ['media_type', 'uploaded_at', 'uploaded_by_host']
+    
+    def get_uploaded_by_details(self, obj):
+        return {
+            "id": obj.uploaded_by.id,
+            "username": obj.uploaded_by.username,
+            "profile_picture": obj.uploaded_by.profile_picture.url if obj.uploaded_by.profile_picture else None,
+        }
 
 
 class EventCommentSerializer(serializers.ModelSerializer):
@@ -240,7 +252,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "start_datetime", "end_datetime", "timezone",
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
-            "event_image", "event_logo", "tags","slug", "aprove_attendees"
+            "event_image", "event_logo", "tags","slug", "aprove_attendees", "allow_public_media",
         ]
         read_only_fields = ["slug"]
 

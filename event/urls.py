@@ -4,9 +4,8 @@ from event.views import (
     UpdateEventAPIView, EventCommentCreateAPIView, ParentEventCommentListAPIView, ChildEventCommentListAPIView, EventMediaPinStatusAPIView,
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
-    ApproveRSVPAPIView,
-    EventMediaLikeAPIView,EventMediaLikeDetailAPIView,EventMediaLikesByIdAPIView,EventListByHostOrCoHostAPIView,EventMediaCommentLikeToggleAPIView,
-    EventMediaCommentLikeListAPIView
+    ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
+    EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView
 )
 
 
@@ -42,4 +41,7 @@ urlpatterns = [
 
     path('eventmediacomment/like-toggle/', EventMediaCommentLikeToggleAPIView.as_view(), name='eventmedia-comment-like-toggle'),
     path('eventmediacomment/likes/<int:comment_id>/', EventMediaCommentLikeListAPIView.as_view(), name='eventmedia-comment-like-list'),
+    
+    path('co-hosts-list/<int:event_id>/', GetCoHostListAPIView.as_view(), name='co-hosts-list'),
+    path('co-hosts-list/<str:event_slug>/', GetCoHostListAPIView.as_view(), name='co-hosts-list'),
 ]

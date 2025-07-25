@@ -6,11 +6,13 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
 from django.db import transaction
+
 # Django imports
 from django.utils import timezone
 from django.db.models import Q, Count, F
 from django.shortcuts import get_object_or_404
 from django.http import Http404
+from django.db import IntegrityError
 
 # Local imports
 from event.serializers import (
@@ -25,7 +27,7 @@ from event.choices import (
     EventStatus, AttendanceStatus
 )
 from event.utils import (
-    handle_event_hashtags, is_host_or_cohost   
+    handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
@@ -34,6 +36,10 @@ from notification.task import (
 from profiles.models import (
     Profile
 )
+from profiles.serializers import (
+    ProfileListSerializer
+)
+
 from core.services import success_response, error_response, get_user_profile
 from core.pagination import PaginationMixin
 from core.permissions import is_owner_or_org_member
@@ -166,6 +172,11 @@ class EventAttendacneAPIView(APIView, PaginationMixin):
 
             # Check event settings
             event = Event.objects.get(id=event_id)
+            
+            exisiting = EventAttendance.objects.get(profile=profile, event=event)
+            if exisiting:
+                return Response(success_response("RSVP already submitted"), status=status.HTTP_200_OK)
+            
             if event.aprove_attendees and status_value==AttendanceStatus.INTERESTED:
                 # Force RSVP to pending regardless of requested status
                 status_value = AttendanceStatus.PENDING
@@ -181,7 +192,9 @@ class EventAttendacneAPIView(APIView, PaginationMixin):
             except:
                 pass
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
-            
+        
+        except Event.DoesNotExist:
+            return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -281,9 +294,11 @@ class EventMediaUploadAPIView(APIView):
         try:
             event = Event.objects.get(id=event_id)
             profile = get_user_profile(request.user)
+            
+            host_or_cohost = is_host_or_cohost(event, profile)
 
             # Permission check
-            if not is_host_or_cohost(event, profile):
+            if event.allow_public_media == False and not host_or_cohost:
                 return Response(error_response("You do not have permission to upload media to this event."), status=status.HTTP_403_FORBIDDEN)
             
             # File validation
@@ -291,7 +306,7 @@ class EventMediaUploadAPIView(APIView):
             if not file:
                 return Response(error_response("No file uploaded."), status=status.HTTP_400_BAD_REQUEST)
 
-           # Prepare data for serializer
+            # Prepare data for serializer
             data = request.data
             data['event'] = event.id
             data['uploaded_by'] = profile.id
@@ -301,7 +316,7 @@ class EventMediaUploadAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             
             # Save the media
-            media=serializer.save()
+            media=serializer.save(uploaded_by_host=host_or_cohost)
             try:
                 transaction.on_commit(lambda:send_event_media_notification_task.delay(event.id,profile.id,media.id))
             except:
@@ -325,7 +340,14 @@ class EventMediaListAPIView(APIView):
     def get(self, request, event_id):
         try:
             event = Event.objects.get(id=event_id)
-            media_qs = EventMedia.objects.filter(event=event, is_active=True).order_by('-is_pinned', '-uploaded_at')
+            media_qs = EventMedia.objects.select_related('uploaded_by').filter(event=event, is_active=True).order_by('-is_pinned', '-uploaded_at')
+            uploaded_by_host = request.query_params.get('uploaded_by_host')
+            
+            if uploaded_by_host:
+                is_host = uploaded_by_host.strip().lower() == 'true'
+                media_qs = media_qs.filter(uploaded_by_host=is_host)
+                
+                
             serializer = EventMediaSerializer(media_qs, many=True)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
 
@@ -453,7 +475,7 @@ class ParentEventCommentListAPIView(APIView, PaginationMixin):
             # Fetch top-level comments efficiently
             comments = EventComment.objects.select_related('profile', 'parent').filter(
                         event=event, parent__isnull=True
-                    ) .order_by('-created_at')
+                    ).order_by('-created_at')
 
             # Apply pagination
             paginated_comments = self.paginate_queryset(comments, request)
@@ -480,7 +502,7 @@ class ChildEventCommentListAPIView(APIView, PaginationMixin):
             # Fetch top-level comments efficiently
             comments = EventComment.objects.select_related('profile', 'parent').filter(
                         event=event, parent__id=parent_id
-                    ) .order_by('-created_at')
+                    ).order_by('-created_at')
 
             # Apply pagination
             paginated_comments = self.paginate_queryset(comments, request)
@@ -1128,3 +1150,24 @@ class EventMediaCommentLikeListAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+class GetCoHostListAPIView(APIView, PaginationMixin):
+    """
+    gets the list of all co hosts in an event
+    """
+    permission_classes = [IsAuthenticated]
+    
+    def get(self, request, event_id=None, event_slug=None):
+        try:
+            event = get_event_by_id_or_slug(event_id, event_slug)
+            co_hosts = event.co_hosts.all()
+            
+            paginaged_qs = self.paginate_queryset(co_hosts, request)
+            serializer = ProfileListSerializer(paginaged_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+        except ValueError as e:
+            return Response(error_response(str(e), status=status.HTTP_400_BAD_REQUEST))
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+            

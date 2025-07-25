@@ -83,6 +83,7 @@ class Event(BaseModel):
     # Event details
     max_attendees = models.PositiveIntegerField(null=True, blank=True)
     aprove_attendees = models.BooleanField(default=False)
+    allow_public_media = models.BooleanField(default=False)
     is_free = models.BooleanField(default=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=3, default='USD')
@@ -193,6 +194,7 @@ class EventMedia(BaseModel):
     
     event = models.ForeignKey(Event, on_delete=models.CASCADE, related_name='media')
     uploaded_by = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    uploaded_by_host = models.BooleanField(blank=True, null=True)
     
     # File fields
     file = models.FileField(
