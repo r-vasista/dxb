@@ -61,6 +61,7 @@ class CreateEventAPIView(APIView):
             serializer.is_valid(raise_exception=True)
 
             event = serializer.save()
+            
             try:
                 transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
             except:
