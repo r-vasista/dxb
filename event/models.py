@@ -53,7 +53,7 @@ class Event(BaseModel):
     )
     
     # Basic event information
-    title = models.CharField(max_length=200)
+    title = models.TextField()
     slug = models.SlugField(max_length=255, unique=True, blank=True)
     description = models.TextField()
     event_type = models.CharField(
