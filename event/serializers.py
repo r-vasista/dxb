@@ -110,14 +110,14 @@ class EventListSerializer(TimezoneAwareSerializerMixin):
         
 
 class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
-    profile_deails = serializers.SerializerMethodField()
+    profile_details = serializers.SerializerMethodField()
     calendar_link = serializers.SerializerMethodField()
 
     class Meta:
         model = EventAttendance
         fields = '__all__'
 
-    def get_profile_deails(self, obj):
+    def get_profile_details(self, obj):
         return {
             "id": obj.profile.id,
             "username": obj.profile.username,
