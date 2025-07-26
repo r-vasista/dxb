@@ -70,6 +70,8 @@ class Event(BaseModel):
     # Date and time
     start_datetime = models.DateTimeField()
     end_datetime = models.DateTimeField()
+    updated_start_datetime = models.DateTimeField(blank=True, null=True)
+    updated_end_datetime = models.DateTimeField(blank=True, null=True)
     timezone = models.CharField(max_length=50, choices=[(tz, tz) for tz in pytz.all_timezones], default='UTC')
     
     # Location
@@ -97,6 +99,7 @@ class Event(BaseModel):
     view_count = models.PositiveIntegerField(default=0)
     comment_count = models.PositiveIntegerField(default=0)
     share_count = models.PositiveIntegerField(default=0)
+    show_views = models.BooleanField(default=False)
     
     
     # Attendees
