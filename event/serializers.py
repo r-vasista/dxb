@@ -8,7 +8,7 @@ from rest_framework import serializers
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog
 )
-from event.utils import generate_google_calendar_link
+from event.utils import generate_google_calendar_link, is_host_or_cohost
 from event.choices import (
     AttendanceStatus
 )
@@ -38,6 +38,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     not_interested_count = serializers.SerializerMethodField()
     pending_count = serializers.SerializerMethodField()
     user_rsvp_status = serializers.SerializerMethodField()
+    view_count = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -47,7 +48,8 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
-            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status'
+            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status',
+            'updated_end_datetime', 'updated_start_datetime'
         ]
 
     def get_host(self, obj):
@@ -79,7 +81,13 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             return None
         except Exception as e:
             return None
-        
+    
+    def get_view_count(self, obj):
+        user = self.context.get('request').user
+        profile = get_user_profile(user)
+        if is_host_or_cohost(obj, profile):
+            return obj.view_count
+        return obj.view_count if obj.show_views else None
         
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
@@ -268,8 +276,24 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
             "event_image", "event_logo", "tags","slug", "aprove_attendees", "allow_public_media",
+            "updated_end_datetime", "updated_start_datetime"
         ]
-        read_only_fields = ["slug"]
+        read_only_fields = ["slug", "start_datetime", "end_datetime"]
+    
+    def validate(self, attrs):
+        start = attrs.get("updated_start_datetime", self.instance.updated_start_datetime)
+        end = attrs.get("updated_end_datetime", self.instance.updated_end_datetime)
+
+        if start and end and end <= start:
+            raise serializers.ValidationError("End time must be after start time.")
+
+        if attrs.get('is_online') and not (attrs.get('online_link') or self.instance.online_link):
+            raise serializers.ValidationError("Online events must have an online link.")
+
+        if not attrs.get('is_online') and not (attrs.get('address') or self.instance.address):
+            raise serializers.ValidationError("Offline events must have an address.")
+
+        return attrs
 
     def update(self, instance, validated_data):
         # Auto-regenerate slug if title is updated
