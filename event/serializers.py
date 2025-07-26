@@ -140,7 +140,7 @@ class EventSummarySerializer(TimezoneAwareSerializerMixin):
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'city', 'state', 'country', 'is_online', 'online_link', 
-            'calendar_link'
+            'calendar_link', 'slug',
         ]
 
     def get_calendar_link(self, obj):
