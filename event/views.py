@@ -62,6 +62,7 @@ class CreateEventAPIView(APIView):
             serializer.is_valid(raise_exception=True)
 
             event = serializer.save()
+            
             try:
                 transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
             except:
@@ -581,16 +582,15 @@ class PopularEventsAPIView(APIView, PaginationMixin):
                 start_datetime__gte=now
             ).annotate(
                 annotated_attendee_count=Count('attendees', distinct=True),
-                comment_count=Count('comments', distinct=True),
-                media_count=Count('media', distinct=True)
+                annotated_media_count=Count('media', distinct=True)
             ).annotate(
-                popularity_score=F('annotated_attendee_count') + F('comment_count') + F('media_count')
-            ).order_by('-popularity_score', 'start_datetime')  # Most popular first
+                popularity_score=F('annotated_attendee_count') + F('comment_count') + F('annotated_media_count')
+            ).order_by('-popularity_score', 'start_datetime')
             
-            higher_popular_events = events_qs.filter(  
+            higher_popular_events = events_qs.filter(
                 Q(annotated_attendee_count__gte=100) |
                 Q(comment_count__gte=50) | 
-                Q(media_count__gte=20)
+                Q(annotated_media_count__gte=20)
             )
             if higher_popular_events:
                 popular_events = higher_popular_events

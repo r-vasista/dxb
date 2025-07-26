@@ -14,7 +14,9 @@ from event.choices import (
 )
 from profiles.models import Profile
 from core.serializers import TimezoneAwareSerializerMixin
-
+from core.services import (
+    get_user_profile
+)
 # Pyhton imports
 import pytz
 from pytz import timezone as pytz_timezone
@@ -35,6 +37,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     interested_count = serializers.SerializerMethodField()
     not_interested_count = serializers.SerializerMethodField()
     pending_count = serializers.SerializerMethodField()
+    user_rsvp_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -44,7 +47,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
-            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count'
+            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status'
         ]
 
     def get_host(self, obj):
@@ -65,6 +68,18 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     
     def get_pending_count(self, obj):
         return obj.eventattendance_set.filter(status=AttendanceStatus.PENDING).count()
+    
+    def get_user_rsvp_status(self, obj):
+        try:
+            user = self.context.get('request').user
+            profile = get_user_profile(user)
+            event_attendance = profile.eventattendance_set.first()
+            if event_attendance:
+                return event_attendance.status
+            return None
+        except Exception as e:
+            return None
+        
         
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
@@ -125,7 +140,7 @@ class EventSummarySerializer(TimezoneAwareSerializerMixin):
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'city', 'state', 'country', 'is_online', 'online_link', 
-            'calendar_link'
+            'calendar_link', 'slug',
         ]
 
     def get_calendar_link(self, obj):
