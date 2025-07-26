@@ -175,7 +175,7 @@ class EventAttendacneAPIView(APIView, PaginationMixin):
             # Check event settings
             event = Event.objects.get(id=event_id)
             
-            exisiting = EventAttendance.objects.get(profile=profile, event=event)
+            exisiting = EventAttendance.objects.filter(profile=profile, event=event)
             if exisiting:
                 return Response(success_response("RSVP already submitted"), status=status.HTTP_200_OK)
             
@@ -206,9 +206,9 @@ class EventAttendacneAPIView(APIView, PaginationMixin):
         try:
             event_attendance = EventAttendance.objects.select_related('profile').filter(event__id=event_id)
             
-            status_filter = request.query_params.get('status').lower()
+            status_filter = request.query_params.get('status')
             if status_filter:
-                event_attendance = event_attendance.filter(status=status_filter)
+                event_attendance = event_attendance.filter(status=status_filter.lower())
                 
             paginated_qs = self.paginate_queryset(event_attendance, request)
             serializer = EventAttendanceSerializer(paginated_qs, many=True, context={'request': request})
