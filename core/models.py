@@ -142,6 +142,8 @@ class FeatureStep(models.Model):
     title = models.CharField(max_length=255)
     description = RichTextField(null=True, blank=True)
     order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
     class Meta:
         ordering = ['order']    
         unique_together = ('feature', 'order')
