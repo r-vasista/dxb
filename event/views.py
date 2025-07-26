@@ -10,6 +10,7 @@ from django.db import transaction
 # Django imports
 from django.utils import timezone
 from django.db.models import Q, Count, F
+from django.db.models.functions import ExtractHour
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db import IntegrityError
@@ -18,13 +19,13 @@ from django.db import IntegrityError
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer
 )
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog
 )
 from event.choices import (
-    EventStatus, AttendanceStatus
+    EventStatus, AttendanceStatus, EventActivityType
 )
 from event.utils import (
     handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug
@@ -1172,3 +1173,210 @@ class GetCoHostListAPIView(APIView, PaginationMixin):
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
             
+
+class EventViewActivityAPIView(APIView):
+    """
+    POST /api/events/<event_id>/view/
+    Records a 'view' activity for the logged-in user (only once per event).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, event_id):
+        try:
+            profile = get_user_profile(request.user)
+            event = Event.objects.get(id=event_id)
+
+            # Check if this user has already viewed this event
+            already_viewed = EventActivityLog.objects.filter(
+                profile=profile,
+                event=event,
+                activity_type=EventActivityType.VIEW
+            ).exists()
+
+            if already_viewed:
+                return Response(
+                    {"detail": "You have already viewed this event."},
+                    status=status.HTTP_200_OK
+                )
+
+            # Increment the view count
+            event.view_count = F('view_count') + 1
+            event.save(update_fields=['view_count'])
+
+            # Log the view activity
+            data = {
+                'event': event.id,
+                'activity_type': EventActivityType.VIEW,
+            }
+
+            serializer = EventActivityLogSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(profile=profile)
+                event.refresh_from_db(fields=['view_count'])
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Event.DoesNotExist:
+            return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EventShareActivityAPIView(APIView):
+    """
+    POST /api/events/<event_id>/share_count/
+    Records a 'share_count' activity for the logged-in user (only once per event).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, event_id):
+        try:
+            profile = get_user_profile(request.user)
+            event = Event.objects.get(id=event_id)
+
+            # Check if this user has already shared this event
+            already_shared = EventActivityLog.objects.filter(
+                profile=profile,
+                event=event,
+                activity_type=EventActivityType.SHARE
+            ).exists()
+
+            if already_shared:
+                return Response(
+                    {"detail": "You have already shared this event."},
+                    status=status.HTTP_200_OK
+                )
+
+            # Increment the shared count
+            event.share_count = F('share_count') + 1
+            event.save(update_fields=['share_count'])
+
+            # Log the share activity
+            data = {
+                'event': event.id,
+                'activity_type': EventActivityType.SHARE,
+            }
+
+            serializer = EventActivityLogSerializer(data=data)
+            if serializer.is_valid():
+                serializer.save(profile=profile)
+                event.refresh_from_db(fields=['share_count'])
+                return Response(serializer.data, status=status.HTTP_201_CREATED)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        except Event.DoesNotExist:
+            return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class EventAnalyticsAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        try:
+            event = Event.objects.get(id=event_id)
+
+            # Reach
+            reach = EventActivityLog.objects.filter(
+                event=event, activity_type=EventActivityType.VIEW
+            ).values('profile').distinct().count()
+            attendance_stats = (
+                EventAttendance.objects
+                .filter(event=event)
+                .values('status')
+                .annotate(count=Count('id'))
+            )
+            rsvp_counts = {status: 0 for status in AttendanceStatus.values}
+            for entry in attendance_stats:
+                status = entry["status"]
+                count = entry["count"]
+                rsvp_counts[status] = count
+            # RSVP Rate
+            rsvped_users = EventAttendance.objects.filter(
+                event=event
+            ).values('profile').distinct().count()
+            rsvp_rate = (rsvped_users / reach * 100) if reach > 0 else 0
+
+            # Peak Engagement Time
+            peak_hour = EventActivityLog.objects.filter(
+                event=event,
+                activity_type__in=[EventActivityType.VIEW, EventActivityType.COMMENT]
+            ).annotate(hour=ExtractHour('timestamp')).values('hour').annotate(
+                total=Count('id')
+            ).order_by('-total').first()
+
+            # Top Commenters
+            top_commenters = EventComment.objects.filter(
+                event=event
+            ).values('profile__username').annotate(
+                total_comments=Count('id')
+            ).order_by('-total_comments')[:5]
+
+            return Response({
+                "reach": reach,
+                "rsvp_counts": rsvp_counts,
+                "rsvp_rate": round(rsvp_rate, 2),
+                "peak_engagement_hour": peak_hour,
+                "top_commenters": list(top_commenters)
+            })
+
+        except Event.DoesNotExist:
+            return Response({"detail": "Event not found."}, status=404)
+
+class BulkEventAttendanceAPIView(APIView):
+    """
+    Bulk RSVP API - Admin or Host can RSVP multiple profiles to an event.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            user_profile = get_user_profile(request.user)
+            data = request.data
+            event_id = data.get('event')
+            profile_ids = data.get('profiles', [])
+            status_value = data.get('status', AttendanceStatus.INTERESTED)
+
+            if not event_id:
+                return Response(error_response("Event ID is required"), status=status.HTTP_400_BAD_REQUEST)
+            if not profile_ids or not isinstance(profile_ids, list):
+                return Response(error_response("Profile list is required and must be a list"), status=status.HTTP_400_BAD_REQUEST)
+
+            event = Event.objects.get(id=event_id)
+
+            # Enforce RSVP approval setting
+            if event.aprove_attendees and status_value == AttendanceStatus.INTERESTED:
+                status_value = AttendanceStatus.PENDING
+
+            responses = []
+            errors = []
+            for profile_id in profile_ids:
+                attendance_data = {
+                    'event': event_id,
+                    'profile': profile_id,
+                    'status': status_value
+                }
+                serializer = EventAttendanceSerializer(data=attendance_data, context={'request': request})
+                if serializer.is_valid():
+                    attendance = serializer.save()
+                    responses.append(serializer.data)
+                    try:
+                        transaction.on_commit(lambda: send_event_rsvp_notification_task.delay(attendance.id))
+                    except:
+                        pass
+                else:
+                    errors.append({
+                        "profile_id": profile_id,
+                        "errors": serializer.errors
+                    })
+
+            return Response(success_response({
+                "success_count": len(responses),
+                "failure_count": len(errors),
+                "data": responses,
+                "errors": errors
+            }), status=status.HTTP_200_OK)
+
+        except Event.DoesNotExist:
+            return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

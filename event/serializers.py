@@ -6,7 +6,7 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog
 )
 from event.utils import generate_google_calendar_link
 from event.choices import (
@@ -47,7 +47,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_online', 'address', 'city', 'state', 'country', 'online_link',
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
-            'pending_count', 'allow_public_media', 'created_at', 'updated_at', 'user_rsvp_status'
+            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status'
         ]
 
     def get_host(self, obj):
@@ -306,3 +306,10 @@ class EventMediaCommentLikeSerializer(serializers.ModelSerializer):
     class Meta:
         model = EventMediaCommentLike
         fields = ['id', 'profile', 'profile_username','profile_picture', 'event_media_comment', 'created_at']
+
+
+class EventActivityLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EventActivityLog
+        fields = ['id', 'event', 'activity_type', 'timestamp']
+        read_only_fields = ['id', 'timestamp']
