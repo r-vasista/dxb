@@ -6,7 +6,7 @@ from django.utils.text import slugify
 
 # Local imports
 from event.choices import (
-    EventType, EventStatus, AttendanceStatus
+    EventType, EventStatus, AttendanceStatus,EventActivityType
 )
 from profiles.models import (
     Profile
@@ -94,6 +94,10 @@ class Event(BaseModel):
     # Media
     event_image = models.ImageField(upload_to='events/images/', blank=True, null=True)
     event_logo = models.ImageField(upload_to='events/logo/', blank=True, null=True)
+    view_count = models.PositiveIntegerField(default=0)
+    comment_count = models.PositiveIntegerField(default=0)
+    share_count = models.PositiveIntegerField(default=0)
+    
     
     # Attendees
     attendees = models.ManyToManyField(
@@ -324,3 +328,13 @@ class EventMediaCommentLike(BaseModel):
 
     def __str__(self):
         return f"{self.profile.username} like  on comment {self.event_media_comment}"
+    
+class EventActivityLog(BaseModel):
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
+    event = models.ForeignKey(Event, on_delete=models.CASCADE)
+    activity_type = models.CharField(max_length=20,choices=EventActivityType.choices)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('profile', 'event', 'activity_type')
+        indexes = [models.Index(fields=['event', 'activity_type'])]

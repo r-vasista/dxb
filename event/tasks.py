@@ -4,10 +4,13 @@ from datetime import timedelta
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 from django.core.exceptions import ObjectDoesNotExist
+from django.db.models import Q, Count, F
+from django.db.models.functions import ExtractHour
 
 from django.contrib.auth import get_user_model
-from event.models import Event, EventAttendance, EventComment, EventMedia,EventStatus
-from core.services import get_actual_user
+from event.choices import AttendanceStatus, EventActivityType
+from event.models import Event, EventActivityLog, EventAttendance, EventComment, EventMedia,EventStatus
+from core.services import get_actual_user, send_dynamic_email_using_template
 from profiles . models import Profile
 
 from notification.models import NotificationType
@@ -69,3 +72,106 @@ def mark_completed_events_and_notify():
                 logger.info(f"[MarkCompletedEvents] Notified attendee: {attendee.username}")
 
     logger.info(f"[MarkCompletedEvents] Task completed. Total events marked: {completed_count}")
+
+
+@shared_task
+def send_event_analytics_report_task(event_id):
+    try:
+        event = Event.objects.get(id=event_id)
+
+        reach = EventActivityLog.objects.filter(
+            event=event,
+            activity_type=EventActivityType.VIEW
+        ).values('profile').distinct().count()
+
+        attendance_stats = (
+            EventAttendance.objects
+            .filter(event=event)
+            .values('status')
+            .annotate(count=Count('id'))
+        )
+        rsvp_counts = {status: 0 for status in AttendanceStatus.values}
+        for entry in attendance_stats:
+            rsvp_counts[entry["status"]] = entry["count"]
+
+        rsvped_users = EventAttendance.objects.filter(
+            event=event
+        ).values('profile').distinct().count()
+
+        rsvp_rate = (rsvped_users / reach * 100) if reach > 0 else 0
+
+        peak_hour = EventActivityLog.objects.filter(
+            event=event,
+            activity_type__in=[EventActivityType.VIEW, EventActivityType.COMMENT]
+        ).annotate(hour=ExtractHour('timestamp')).values('hour').annotate(
+            total=Count('id')
+        ).order_by('-total').first()
+
+        top_commenters = EventComment.objects.filter(
+            event=event
+        ).values('profile__username').annotate(
+            total_comments=Count('id')
+        ).order_by('-total_comments')[:5]
+
+        context = {
+            "event_title": event.title,
+            "reach": reach,
+            "rsvp_counts": rsvp_counts,
+            "rsvp_rate": round(rsvp_rate, 2),
+            "peak_engagement_hour": peak_hour["hour"] if peak_hour else None,
+            "top_commenters": list(top_commenters),
+        }
+
+        def send_email_and_notify():
+            try:
+                all_profiles = [event.host] + list(event.co_hosts.all())
+                for profile in all_profiles:
+                    user = get_actual_user(profile)
+                    if not user or not user.email:
+                        continue
+
+                    # Send email
+                    send_dynamic_email_using_template(
+                        template_name="event-analytics-report",
+                        recipient_list=[user.email],
+                        context={**context, "name": profile.username},
+                    )
+
+                    # Send in-app notification
+                    create_notification(
+                        sender=None,
+                        recipient=profile,
+                        instance=event,
+                        message=f"Your weekly analytics report for event \"{event.title}\" is now available.",
+                        notification_type=NotificationType.EVENT_REMINDER
+                    )
+            except Exception as e:
+                logger.warning(f"[AnalyticsReport] Failed to send email or notify: {e}", exc_info=True)
+
+        transaction.on_commit(send_email_and_notify)
+
+    except Event.DoesNotExist:
+        logger.warning(f"[AnalyticsReport] Event with ID {event_id} not found.")
+    except Exception as e:
+        logger.error(f"[AnalyticsReport] Unexpected error: {e}", exc_info=True)
+
+@shared_task
+def trigger_event_analytics_for_all_events():
+    try:
+        now = timezone.now()
+        events = Event.objects.filter(
+            status__in=[
+                EventStatus.PUBLISHED,
+                EventStatus.DRAFT,
+                EventStatus.CANCELLED
+            ]
+        )
+
+        for event in events:
+            send_event_analytics_report_task.delay(event.id)
+
+        return f"Triggered analytics for {events.count()} events."
+
+    except Exception as e:
+        logger.error(f"[AnalyticsTrigger] Failed to schedule analytics: {e}", exc_info=True)
+        return "Error occurred"

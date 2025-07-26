@@ -35,12 +35,17 @@ app.conf.beat_schedule = {
         'task': 'notification.task.send_event_reminder_notifications',
         'schedule': crontab(minute=30), # Runs every 30 minutes
     },
-    'notify-low-rsvp-events-every-hour': {
+    'notify-low-rsvp-events-every-3-hour': {
         'task': 'notification.task.notify_low_rsvp_events',
-        'schedule': crontab(minute=0, hour='*/3'),  # Runs every hour
+        'schedule': crontab(minute=0, hour='*/3'),  # Runs every 3 hour
     },
-    'mark-completed-events-and-notify-every-10-min': {
+    'mark-completed-events-and-notify-every-1-hour': {
         'task': 'event.tasks.mark_completed_events_and_notify',
-        'schedule': crontab(minute=0),
+        'schedule': crontab(minute=0), #Runs every 1 hour
     },
+    'trigger_event_analytics_for_all_events':{
+        'task':'event.tasks.trigger_event_analytics_for_all_events',
+        'schedule' : crontab(minute=0),    #Runs for every one hour
+    },
+    
 }
