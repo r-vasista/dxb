@@ -49,7 +49,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
             'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status',
-            'updated_end_datetime', 'updated_start_datetime'
+            'updated_end_datetime', 'updated_start_datetime', 'max_attendees', 'aprove_attendees',
         ]
 
     def get_host(self, obj):
