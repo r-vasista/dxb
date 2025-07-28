@@ -6,13 +6,15 @@ from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser
 from django.db import transaction
+import openpyxl
+
 
 # Django imports
 from django.utils import timezone
 from django.db.models import Q, Count, F
 from django.db.models.functions import ExtractHour
 from django.shortcuts import get_object_or_404
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.db import IntegrityError
 
 # Local imports
@@ -1402,3 +1404,44 @@ class PublicEventDetailAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
+        
+
+class DownloadEventAttendanceExcel(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = get_user_profile(request.user)  
+        if profile != event.host and profile not in event.co_hosts.all():
+            return Response({"error": "Only host or co-host can download attendance"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"Attendance for {event.title}"
+
+        # Add headers
+        ws.append(["ID", "Username", "Email", "Status", "Joined At"])
+
+        # Order by status
+        attendance_qs = EventAttendance.objects.filter(event=event).select_related("profile").order_by("status")
+
+        for att in attendance_qs:
+            ws.append([
+                att.id,
+                att.profile.username,
+                att.profile.user.email,
+                att.status,
+                att.created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(att, 'created_at') else ''
+            ])
+
+        # Return Excel file
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"{event.title}_attendance.xlsx".replace(" ", "_")
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response
