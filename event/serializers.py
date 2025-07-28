@@ -49,8 +49,8 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'is_free', 'price', 'currency', 'event_image', 'host', 'slug', 
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
             'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status',
-            'updated_end_datetime', 'updated_start_datetime', 'max_attendees', 'aprove_attendees',
-            'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status','share_count'
+            'updated_end_datetime', 'updated_start_datetime', 'max_attendees', 'aprove_attendees', 'show_views',
+            'share_count'
         ]
 
     def get_host(self, obj):
@@ -277,7 +277,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
             "event_image", "event_logo", "tags","slug", "aprove_attendees", "allow_public_media",
-            "updated_end_datetime", "updated_start_datetime"
+            "updated_end_datetime", "updated_start_datetime", "show_views"
         ]
         read_only_fields = ["slug", "start_datetime", "end_datetime"]
     
