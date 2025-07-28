@@ -108,6 +108,7 @@ class PostSerializer(TimezoneAwareSerializerMixin):
         for name in custom_names:
             obj, _ = CustomArtType.objects.get_or_create(name=name)
             post.custom_art_types.add(obj)
+            
     def validate_visibility(self, value):
         request = self.context.get("request")
         profile = self.initial_data.get("profile_id") 
