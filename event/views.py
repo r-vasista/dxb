@@ -32,7 +32,7 @@ from event.utils import (
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
-    shared_event_media_comment_notification_task
+    shared_event_media_comment_notification_task,send_event_share_notification_task
 )
 from profiles.models import (
     Profile
@@ -1321,9 +1321,12 @@ class EventAnalyticsAPIView(APIView):
         except Event.DoesNotExist:
             return Response({"detail": "Event not found."}, status=404)
 
-class BulkEventAttendanceAPIView(APIView):
+
+
+class ShareEventWithProfilesAPIView(APIView):
     """
-    Bulk RSVP API - Admin or Host can RSVP multiple profiles to an event.
+    Share Event API - Share an event with multiple profiles (like sharing a post).
+    Only sends notifications and increments share count if not already shared.
     """
     permission_classes = [IsAuthenticated]
 
@@ -1331,51 +1334,84 @@ class BulkEventAttendanceAPIView(APIView):
         try:
             user_profile = get_user_profile(request.user)
             data = request.data
+
             event_id = data.get('event')
             profile_ids = data.get('profiles', [])
-            status_value = data.get('status', AttendanceStatus.INTERESTED)
+            custom_message = data.get('message', None)
 
             if not event_id:
                 return Response(error_response("Event ID is required"), status=status.HTTP_400_BAD_REQUEST)
             if not profile_ids or not isinstance(profile_ids, list):
                 return Response(error_response("Profile list is required and must be a list"), status=status.HTTP_400_BAD_REQUEST)
 
-            event = Event.objects.get(id=event_id)
-
-            # Enforce RSVP approval setting
-            if event.aprove_attendees and status_value == AttendanceStatus.INTERESTED:
-                status_value = AttendanceStatus.PENDING
+            try:
+                event = Event.objects.get(id=event_id)
+            except Event.DoesNotExist:
+                return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
 
             responses = []
             errors = []
+            share_counter = 0
+
             for profile_id in profile_ids:
-                attendance_data = {
-                    'event': event_id,
-                    'profile': profile_id,
-                    'status': status_value
-                }
-                serializer = EventAttendanceSerializer(data=attendance_data, context={'request': request})
-                if serializer.is_valid():
-                    attendance = serializer.save()
-                    responses.append(serializer.data)
+                try:
+                    already_shared = EventActivityLog.objects.filter(
+                        profile_id=profile_id,
+                        event_id=event_id,
+                        activity_type=EventActivityType.SHARE
+                    ).exists()
+
+                    if already_shared:
+                        responses.append({
+                            "profile_id": profile_id,
+                            "status": "Already shared"
+                        })
+                        continue
+
+                    # Send task
                     try:
-                        transaction.on_commit(lambda: send_event_rsvp_notification_task.delay(attendance.id))
+                        transaction.on_commit(lambda pid=profile_id: send_event_share_notification_task.delay(
+                            profile_id=pid,
+                            event_id=event_id,
+                            sender_id=user_profile.id,
+                            message=custom_message
+                        ))
                     except:
                         pass
-                else:
-                    errors.append({
+                        
+
+                    # Log the share
+                    EventActivityLog.objects.create(
+                        profile_id=profile_id,
+                        event=event,
+                        activity_type=EventActivityType.SHARE
+                    )
+
+                    # Count as a new share
+                    share_counter += 1
+
+                    responses.append({
                         "profile_id": profile_id,
-                        "errors": serializer.errors
+                        "status": "Shared successfully"
                     })
 
+                except Exception as notify_error:
+                    errors.append({
+                        "profile_id": profile_id,
+                        "error": str(notify_error)
+                    })
+
+            # Only update share_count once after loop
+            if share_counter > 0:
+                Event.objects.filter(id=event_id).update(share_count=F('share_count') + share_counter)
+
             return Response(success_response({
-                "success_count": len(responses),
+                "shared_count": len(responses) - len([r for r in responses if r["status"] == "Already shared"]),
+                "already_shared": len([r for r in responses if r["status"] == "Already shared"]),
                 "failure_count": len(errors),
-                "data": responses,
+                "shared": responses,
                 "errors": errors
             }), status=status.HTTP_200_OK)
 
-        except Event.DoesNotExist:
-            return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
