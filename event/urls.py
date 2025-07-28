@@ -6,7 +6,7 @@ from event.views import (
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
     EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, 
-    ShareEventWithProfilesAPIView
+    ShareEventWithProfilesAPIView, PublicEventDetailAPIView
 )
 
 
@@ -14,6 +14,8 @@ urlpatterns = [
     path('create/', CreateEventAPIView.as_view(), name='create'),
     path('details/<int:event_id>/', EventDetailAPIView.as_view(), name='detials'),
     path('details/<str:slug>/', EventDetailAPIView.as_view(), name='detials'),
+    path('public-details/<int:event_id>/', PublicEventDetailAPIView.as_view(), name='detials'),
+    path('public-details/<str:slug>/', PublicEventDetailAPIView.as_view(), name='detials'),
     path('update/<int:event_id>/', UpdateEventAPIView.as_view(), name='update'),
     path('list/', EventListAPIView.as_view(), name='event-list'),
     path('rsvp/', EventAttendacneAPIView.as_view(), name='event-rsvp'),

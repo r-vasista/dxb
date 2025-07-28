@@ -1,6 +1,6 @@
 # Rest Framework imports
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
@@ -19,7 +19,8 @@ from django.db import IntegrityError
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer,
+    PublicEventSerializer
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog
@@ -1365,3 +1366,40 @@ class ShareEventWithProfilesAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class PublicEventDetailAPIView(APIView):
+    """
+    GET /api/events/<event_id>/
+    Fetch a single event by its ID.
+    Includes full event details.
+    """
+    # permission_classes = [AllowAny]
+
+    def get(self, request, event_id=None, slug=None):
+        try:
+            if event_id:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    id=event_id,
+                    status='published'
+                )
+            elif slug:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    slug=slug,
+                    status='published'
+                )
+            else:
+                raise ValueError("Either profile_id or username is required.")
+
+            # Serialize the event
+            serializer = EventDetailSerializer(event, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
