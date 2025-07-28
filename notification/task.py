@@ -555,3 +555,47 @@ def notify_low_rsvp_events():
                 message=message,
                 notification_type=NotificationType.EVENT_REMINDER
             )
+
+
+@shared_task
+def send_event_share_notification_task(profile_id, event_id, sender_id=None, message=None):
+    try:
+        event = Event.objects.get(id=event_id)
+        recipient = Profile.objects.get(id=profile_id)
+        sender = Profile.objects.get(id=sender_id) if sender_id else event.host
+
+        final_message = (
+            message if message else
+            f"{sender.username} has shared an event with you: '{event.title}'."
+        )
+
+        # Create Notification object
+        Notification.objects.create(
+            sender=sender,
+            recipient=recipient,
+            notification_type=NotificationType.SHARE,
+            message=final_message,
+            content_type=ContentType.objects.get_for_model(event),
+            object_id=event.id
+        )
+
+        # Send email directly without using send_notification_email
+        user = get_actual_user(recipient)
+        if user and user.email and recipient.notify_email:
+            context = {
+                "user_name": recipient.username,
+                "message": final_message,
+                "notification_type": NotificationType.SHARE,
+                "sender_username": sender.username,
+            }
+            template_name = ""
+            send_dynamic_email_using_template(template_name, [user.email], context)
+
+        logger.info(f"Shared event email sent to Profile ID: {profile_id}")
+
+    except Event.DoesNotExist:
+        logger.warning(f"Event with ID {event_id} not found")
+    except Profile.DoesNotExist:
+        logger.warning(f"Profile with ID {profile_id} not found")
+    except Exception as e:
+        logger.error(f"Error sending shared event notification: {e}", exc_info=True)

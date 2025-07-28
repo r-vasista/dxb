@@ -5,7 +5,8 @@ from event.views import (
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
-    EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, BulkEventAttendanceAPIView
+    EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, 
+    ShareEventWithProfilesAPIView
 )
 
 
@@ -47,5 +48,5 @@ urlpatterns = [
     path('events/view/<int:event_id>/', EventViewActivityAPIView.as_view(), name='event-view-activity'),
     path('events/share_count/<int:event_id>/', EventShareActivityAPIView.as_view(), name='event-share-activity'),
     path('events/analytics/<int:event_id>/', EventAnalyticsAPIView.as_view(), name='event-analytics-activity'),
-    path('events/attendance/bulk/', BulkEventAttendanceAPIView.as_view(), name='event-attendance-bulk'),
+    path('share/event/bulk/', ShareEventWithProfilesAPIView.as_view(), name='share-event-bulk'),
 ]
