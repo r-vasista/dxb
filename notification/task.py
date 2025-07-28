@@ -569,7 +569,6 @@ def send_event_share_notification_task(profile_id, event_id, sender_id=None, mes
             f"{sender.username} has shared an event with you: '{event.title}'."
         )
 
-        # Create Notification object
         Notification.objects.create(
             sender=sender,
             recipient=recipient,
@@ -579,7 +578,6 @@ def send_event_share_notification_task(profile_id, event_id, sender_id=None, mes
             object_id=event.id
         )
 
-        # Send email directly without using send_notification_email
         user = get_actual_user(recipient)
         if user and user.email and recipient.notify_email:
             context = {
@@ -588,7 +586,7 @@ def send_event_share_notification_task(profile_id, event_id, sender_id=None, mes
                 "notification_type": NotificationType.SHARE,
                 "sender_username": sender.username,
             }
-            template_name = ""
+            template_name = "event-share-notification"
             send_dynamic_email_using_template(template_name, [user.email], context)
 
         logger.info(f"Shared event email sent to Profile ID: {profile_id}")
