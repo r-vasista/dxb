@@ -1,18 +1,20 @@
 # Rest Framework imports
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
+import openpyxl
+
 
 # Django imports
 from django.utils import timezone
 from django.db.models import Q, Count, F
 from django.db.models.functions import ExtractHour
 from django.shortcuts import get_object_or_404
-from django.http import Http404
+from django.http import Http404, HttpResponse
 from django.db import IntegrityError
 
 # Local imports
@@ -28,11 +30,11 @@ from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
 )
 from event.utils import (
-    handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug
+    handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug,handle_event_share
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
-    shared_event_media_comment_notification_task
+    shared_event_media_comment_notification_task,send_event_share_notification_task
 )
 from profiles.models import (
     Profile
@@ -51,17 +53,17 @@ class CreateEventAPIView(APIView):
     Creates a new event for the logged-in profile.
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
         try:
             profile = get_user_profile(request.user)
-            data=request.data.copy()
-            data['host'] = profile.id
+            data=request.data
 
             serializer = EventCreateSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
 
-            event = serializer.save()
+            event = serializer.save(host=profile)
             
             try:
                 transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))
@@ -1228,45 +1230,27 @@ class EventShareActivityAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, event_id):
-        try:
-            profile = get_user_profile(request.user)
-            event = Event.objects.get(id=event_id)
+            try:
+                profile = get_user_profile(request.user)
+                event = Event.objects.get(id=event_id)
 
-            # Check if this user has already shared this event
-            already_shared = EventActivityLog.objects.filter(
-                profile=profile,
-                event=event,
-                activity_type=EventActivityType.SHARE
-            ).exists()
+                status_msg, success = handle_event_share(profile, event)
 
-            if already_shared:
-                return Response(
-                    {"detail": "You have already shared this event."},
-                    status=status.HTTP_200_OK
-                )
+                if not success:
+                    return Response({"detail": status_msg}, status=status.HTTP_200_OK)
 
-            # Increment the shared count
-            event.share_count = F('share_count') + 1
-            event.save(update_fields=['share_count'])
-
-            # Log the share activity
-            data = {
-                'event': event.id,
-                'activity_type': EventActivityType.SHARE,
-            }
-
-            serializer = EventActivityLogSerializer(data=data)
-            if serializer.is_valid():
-                serializer.save(profile=profile)
                 event.refresh_from_db(fields=['share_count'])
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        except Event.DoesNotExist:
-            return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({
+                    "event_id": event.id,
+                    "share_count": event.share_count,
+                    "detail": status_msg
+                }, status=status.HTTP_201_CREATED)
 
+            except Event.DoesNotExist:
+                return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class EventAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1321,9 +1305,12 @@ class EventAnalyticsAPIView(APIView):
         except Event.DoesNotExist:
             return Response({"detail": "Event not found."}, status=404)
 
-class BulkEventAttendanceAPIView(APIView):
+
+
+class ShareEventWithProfilesAPIView(APIView):
     """
-    Bulk RSVP API - Admin or Host can RSVP multiple profiles to an event.
+    POST /api/events/share/
+    Shares an event with multiple profiles (excluding host/co-hosts).
     """
     permission_classes = [IsAuthenticated]
 
@@ -1331,51 +1318,130 @@ class BulkEventAttendanceAPIView(APIView):
         try:
             user_profile = get_user_profile(request.user)
             data = request.data
+
             event_id = data.get('event')
-            profile_ids = data.get('profiles', [])
-            status_value = data.get('status', AttendanceStatus.INTERESTED)
+            profile_ids = set(data.get('profiles', []))
+            custom_message = data.get('message')
 
             if not event_id:
                 return Response(error_response("Event ID is required"), status=status.HTTP_400_BAD_REQUEST)
-            if not profile_ids or not isinstance(profile_ids, list):
-                return Response(error_response("Profile list is required and must be a list"), status=status.HTTP_400_BAD_REQUEST)
+            if not profile_ids or not isinstance(profile_ids, set | list):
+                return Response(error_response("Profiles must be a list"), status=status.HTTP_400_BAD_REQUEST)
 
-            event = Event.objects.get(id=event_id)
-
-            # Enforce RSVP approval setting
-            if event.aprove_attendees and status_value == AttendanceStatus.INTERESTED:
-                status_value = AttendanceStatus.PENDING
+            try:
+                event = Event.objects.select_related('host').prefetch_related('co_hosts').get(id=event_id)
+            except Event.DoesNotExist:
+                return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
 
             responses = []
             errors = []
-            for profile_id in profile_ids:
-                attendance_data = {
-                    'event': event_id,
-                    'profile': profile_id,
-                    'status': status_value
-                }
-                serializer = EventAttendanceSerializer(data=attendance_data, context={'request': request})
-                if serializer.is_valid():
-                    attendance = serializer.save()
-                    responses.append(serializer.data)
-                    try:
-                        transaction.on_commit(lambda: send_event_rsvp_notification_task.delay(attendance.id))
-                    except:
-                        pass
-                else:
-                    errors.append({
-                        "profile_id": profile_id,
-                        "errors": serializer.errors
+            share_counter = 0
+
+            for pid in profile_ids:
+                try:
+                    profile = Profile.objects.get(id=pid)
+                    status_msg, success = handle_event_share(profile, event, message=custom_message, sender_id=user_profile.id)
+
+                    if success:
+                        share_counter += 1
+
+                    responses.append({
+                        "profile_id": pid,
+                        "status": status_msg
                     })
 
-            return Response(success_response({
-                "success_count": len(responses),
-                "failure_count": len(errors),
-                "data": responses,
-                "errors": errors
-            }), status=status.HTTP_200_OK)
+                except Exception as notify_error:
+                    errors.append({
+                        "profile_id": pid,
+                        "error": str(notify_error)
+                    })
 
-        except Event.DoesNotExist:
-            return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
+            return Response({
+                "shared_count": share_counter,
+                "already_shared": len([r for r in responses if r["status"] == "Already shared"]),
+                "skipped_count": len([r for r in responses if r["status"].startswith("Skipped")]),
+                "failure_count": len(errors),
+                "shared": responses,
+                "errors": errors
+            }, status=status.HTTP_200_OK)
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+
+class PublicEventDetailAPIView(APIView):
+    """
+    GET /api/events/<event_id>/
+    Fetch a single event by its ID.
+    Includes full event details.
+    """
+    # permission_classes = [AllowAny]
+
+    def get(self, request, event_id=None, slug=None):
+        try:
+            if event_id:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    id=event_id,
+                    status='published'
+                )
+            elif slug:
+                event = get_object_or_404(
+                    Event.objects.select_related('host'),
+                    slug=slug,
+                    status='published'
+                )
+            else:
+                raise ValueError("Either profile_id or username is required.")
+
+            # Serialize the event
+            serializer = EventDetailSerializer(event, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+
+class DownloadEventAttendanceExcel(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, event_id):
+        try:
+            event = Event.objects.get(id=event_id)
+        except Event.DoesNotExist:
+            return Response({"error": "Event not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        profile = get_user_profile(request.user)  
+        if profile != event.host and profile not in event.co_hosts.all():
+            return Response({"error": "Only host or co-host can download attendance"}, status=status.HTTP_403_FORBIDDEN)
+
+        # Create workbook
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = f"Attendance for {event.title}"
+
+        # Add headers
+        ws.append(["ID", "Username", "Email", "Status", "Joined At"])
+
+        # Order by status
+        attendance_qs = EventAttendance.objects.filter(event=event).select_related("profile").order_by("status")
+
+        for att in attendance_qs:
+            ws.append([
+                att.id,
+                att.profile.username,
+                att.profile.user.email,
+                att.status,
+                att.created_at.strftime('%Y-%m-%d %H:%M:%S') if hasattr(att, 'created_at') else ''
+            ])
+
+        # Return Excel file
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        filename = f"{event.title}_attendance.xlsx".replace(" ", "_")
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        wb.save(response)
+        return response

@@ -5,7 +5,8 @@ from event.views import (
     PopularEventsAPIView, CreateEventMediaCommentAPIView, ParentEventMediaCommentsAPIView, ChildEventMediaCommentListAPIView, 
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
-    EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, BulkEventAttendanceAPIView
+    EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, 
+    ShareEventWithProfilesAPIView, PublicEventDetailAPIView, DownloadEventAttendanceExcel
 )
 
 
@@ -13,6 +14,8 @@ urlpatterns = [
     path('create/', CreateEventAPIView.as_view(), name='create'),
     path('details/<int:event_id>/', EventDetailAPIView.as_view(), name='detials'),
     path('details/<str:slug>/', EventDetailAPIView.as_view(), name='detials'),
+    path('public-details/<int:event_id>/', PublicEventDetailAPIView.as_view(), name='detials'),
+    path('public-details/<str:slug>/', PublicEventDetailAPIView.as_view(), name='detials'),
     path('update/<int:event_id>/', UpdateEventAPIView.as_view(), name='update'),
     path('list/', EventListAPIView.as_view(), name='event-list'),
     path('rsvp/', EventAttendacneAPIView.as_view(), name='event-rsvp'),
@@ -47,5 +50,8 @@ urlpatterns = [
     path('events/view/<int:event_id>/', EventViewActivityAPIView.as_view(), name='event-view-activity'),
     path('events/share_count/<int:event_id>/', EventShareActivityAPIView.as_view(), name='event-share-activity'),
     path('events/analytics/<int:event_id>/', EventAnalyticsAPIView.as_view(), name='event-analytics-activity'),
-    path('events/attendance/bulk/', BulkEventAttendanceAPIView.as_view(), name='event-attendance-bulk'),
+    path('share/event/bulk/', ShareEventWithProfilesAPIView.as_view(), name='share-event-bulk'),
+
+    path('events/attendance/download/<int:event_id>/', DownloadEventAttendanceExcel.as_view(), name='download-attendance-excel'),
+
 ]

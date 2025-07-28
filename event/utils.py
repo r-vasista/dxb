@@ -1,7 +1,14 @@
 from urllib.parse import urlencode
+from django.db import transaction
+from django.db.models import F
 from django.utils.timezone import is_aware
-from event.models import EventTag, Event
 from django.shortcuts import get_object_or_404
+
+
+from event.models import EventTag, Event,EventActivityLog
+from notification.task import send_event_share_notification_task
+from event.choices import EventActivityType
+
 
 import pytz 
 import re
@@ -74,3 +81,42 @@ def get_event_by_id_or_slug(id=None, slug=None):
     else:
         raise ValueError('Event id or slug must be provided')
     return event
+
+
+def handle_event_share(profile, event, message=None, sender_id=None):
+    """
+    Handles sharing an event with a profile.
+    Skips if the profile is the host or a co-host.
+    Returns (message, success_flag).
+    """
+    if profile.id == event.host.id or profile.id in event.co_hosts.values_list('id', flat=True):
+        return "Skipped (Host or Co-host)", False
+
+    already_shared = EventActivityLog.objects.filter(
+        profile=profile,
+        event=event,
+        activity_type=EventActivityType.SHARE
+    ).exists()
+
+    if already_shared:
+        return "Already shared", False
+
+    Event.objects.filter(id=event.id).update(share_count=F('share_count') + 1)
+
+    EventActivityLog.objects.create(
+        profile=profile,
+        event=event,
+        activity_type=EventActivityType.SHARE
+    )
+
+    try:
+        transaction.on_commit(lambda: send_event_share_notification_task.delay(
+            profile_id=profile.id,
+            event_id=event.id,
+            sender_id=sender_id or profile.id,
+            message=message
+        ))
+    except:
+        pass
+
+    return "Shared successfully", True
