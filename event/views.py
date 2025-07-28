@@ -28,7 +28,7 @@ from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
 )
 from event.utils import (
-    handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug
+    handle_event_hashtags, is_host_or_cohost, get_event_by_id_or_slug,handle_event_share
 )
 from notification.task import (
     send_event_creation_notification_task, send_event_rsvp_notification_task, send_event_media_notification_task, 
@@ -1228,45 +1228,27 @@ class EventShareActivityAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request, event_id):
-        try:
-            profile = get_user_profile(request.user)
-            event = Event.objects.get(id=event_id)
+            try:
+                profile = get_user_profile(request.user)
+                event = Event.objects.get(id=event_id)
 
-            # Check if this user has already shared this event
-            already_shared = EventActivityLog.objects.filter(
-                profile=profile,
-                event=event,
-                activity_type=EventActivityType.SHARE
-            ).exists()
+                status_msg, success = handle_event_share(profile, event)
 
-            if already_shared:
-                return Response(
-                    {"detail": "You have already shared this event."},
-                    status=status.HTTP_200_OK
-                )
+                if not success:
+                    return Response({"detail": status_msg}, status=status.HTTP_200_OK)
 
-            # Increment the shared count
-            event.share_count = F('share_count') + 1
-            event.save(update_fields=['share_count'])
-
-            # Log the share activity
-            data = {
-                'event': event.id,
-                'activity_type': EventActivityType.SHARE,
-            }
-
-            serializer = EventActivityLogSerializer(data=data)
-            if serializer.is_valid():
-                serializer.save(profile=profile)
                 event.refresh_from_db(fields=['share_count'])
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-        except Event.DoesNotExist:
-            return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
-        except Exception as e:
-            return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+                return Response({
+                    "event_id": event.id,
+                    "share_count": event.share_count,
+                    "detail": status_msg
+                }, status=status.HTTP_201_CREATED)
 
+            except Event.DoesNotExist:
+                return Response({"detail": "Event not found."}, status=status.HTTP_404_NOT_FOUND)
+            except Exception as e:
+                return Response({"detail": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class EventAnalyticsAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -1325,8 +1307,8 @@ class EventAnalyticsAPIView(APIView):
 
 class ShareEventWithProfilesAPIView(APIView):
     """
-    Share Event API - Share an event with multiple profiles (like sharing a post).
-    Only sends notifications and increments share count if not already shared.
+    POST /api/events/share/
+    Shares an event with multiple profiles (excluding host/co-hosts).
     """
     permission_classes = [IsAuthenticated]
 
@@ -1336,16 +1318,16 @@ class ShareEventWithProfilesAPIView(APIView):
             data = request.data
 
             event_id = data.get('event')
-            profile_ids = data.get('profiles', [])
-            custom_message = data.get('message', None)
+            profile_ids = set(data.get('profiles', []))
+            custom_message = data.get('message')
 
             if not event_id:
                 return Response(error_response("Event ID is required"), status=status.HTTP_400_BAD_REQUEST)
-            if not profile_ids or not isinstance(profile_ids, list):
-                return Response(error_response("Profile list is required and must be a list"), status=status.HTTP_400_BAD_REQUEST)
+            if not profile_ids or not isinstance(profile_ids, set | list):
+                return Response(error_response("Profiles must be a list"), status=status.HTTP_400_BAD_REQUEST)
 
             try:
-                event = Event.objects.get(id=event_id)
+                event = Event.objects.select_related('host').prefetch_related('co_hosts').get(id=event_id)
             except Event.DoesNotExist:
                 return Response(error_response("Event not found"), status=status.HTTP_404_NOT_FOUND)
 
@@ -1353,65 +1335,33 @@ class ShareEventWithProfilesAPIView(APIView):
             errors = []
             share_counter = 0
 
-            for profile_id in profile_ids:
+            for pid in profile_ids:
                 try:
-                    already_shared = EventActivityLog.objects.filter(
-                        profile_id=profile_id,
-                        event_id=event_id,
-                        activity_type=EventActivityType.SHARE
-                    ).exists()
+                    profile = Profile.objects.get(id=pid)
+                    status_msg, success = handle_event_share(profile, event, message=custom_message, sender_id=user_profile.id)
 
-                    if already_shared:
-                        responses.append({
-                            "profile_id": profile_id,
-                            "status": "Already shared"
-                        })
-                        continue
-
-                    # Send task
-                    try:
-                        transaction.on_commit(lambda pid=profile_id: send_event_share_notification_task.delay(
-                            profile_id=pid,
-                            event_id=event_id,
-                            sender_id=user_profile.id,
-                            message=custom_message
-                        ))
-                    except:
-                        pass
-                        
-
-                    # Log the share
-                    EventActivityLog.objects.create(
-                        profile_id=profile_id,
-                        event=event,
-                        activity_type=EventActivityType.SHARE
-                    )
-
-                    # Count as a new share
-                    share_counter += 1
+                    if success:
+                        share_counter += 1
 
                     responses.append({
-                        "profile_id": profile_id,
-                        "status": "Shared successfully"
+                        "profile_id": pid,
+                        "status": status_msg
                     })
 
                 except Exception as notify_error:
                     errors.append({
-                        "profile_id": profile_id,
+                        "profile_id": pid,
                         "error": str(notify_error)
                     })
 
-            # Only update share_count once after loop
-            if share_counter > 0:
-                Event.objects.filter(id=event_id).update(share_count=F('share_count') + share_counter)
-
-            return Response(success_response({
-                "shared_count": len(responses) - len([r for r in responses if r["status"] == "Already shared"]),
+            return Response({
+                "shared_count": share_counter,
                 "already_shared": len([r for r in responses if r["status"] == "Already shared"]),
+                "skipped_count": len([r for r in responses if r["status"].startswith("Skipped")]),
                 "failure_count": len(errors),
                 "shared": responses,
                 "errors": errors
-            }), status=status.HTTP_200_OK)
+            }, status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
