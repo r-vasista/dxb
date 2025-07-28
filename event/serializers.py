@@ -39,6 +39,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     pending_count = serializers.SerializerMethodField()
     user_rsvp_status = serializers.SerializerMethodField()
     view_count = serializers.SerializerMethodField()
+    is_host_or_cohost = serializers.SerializerMethodField()
     
     class Meta:
         model = Event
@@ -50,7 +51,7 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             'event_logo', 'total_attendee_count', 'interested_count', 'not_interested_count',
             'pending_count', 'allow_public_media', 'created_at', 'updated_at','view_count', 'user_rsvp_status',
             'updated_end_datetime', 'updated_start_datetime', 'max_attendees', 'aprove_attendees', 'show_views',
-            'share_count'
+            'share_count', 'is_host_or_cohost'
         ]
 
     def get_host(self, obj):
@@ -84,11 +85,22 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
             return None
     
     def get_view_count(self, obj):
-        user = self.context.get('request').user
-        profile = get_user_profile(user)
-        if is_host_or_cohost(obj, profile):
-            return obj.view_count
-        return obj.view_count if obj.show_views else None
+        try:
+            user = self.context.get('request').user
+            profile = get_user_profile(user)
+            if is_host_or_cohost(obj, profile):
+                return obj.view_count
+            return obj.view_count if obj.show_views else None
+        except:
+            return None
+    
+    def get_is_host_or_cohost(self, obj):
+        try:
+            user = self.context.get('request').user
+            profile = get_user_profile(user)
+            return is_host_or_cohost(obj, profile)
+        except:
+            return None
         
         
 class EventCreateSerializer(TimezoneAwareSerializerMixin):
