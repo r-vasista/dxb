@@ -22,7 +22,7 @@ class ArtImageDescribeAPIView(APIView):
             return Response({"error": "No image provided."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
-            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.IMAGE_DESCRIPTION)
+            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.IMAGE_DESCRIPTION, is_active=True)
             base64_image = compress_and_encode_image(image)
             gpt_model= ai_config.gpt_model
             
