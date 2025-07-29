@@ -20,7 +20,9 @@ from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Local imports
-from core.services import success_response, error_response, get_user_profile, handle_hashtags
+from core.services import (
+    success_response, error_response, get_user_profile, handle_hashtags, handle_art_styles
+)
 from core.pagination import PaginationMixin
 from notification.task import notify_friends_of_new_post, send_comment_notification_task, send_mention_notification_task, send_post_reaction_notification_task, send_post_share_notification_task
 from post.models import ReactionType, PostView, SavedPost
@@ -103,6 +105,7 @@ class PostAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
+            handle_art_styles(post, request.data.get("art_types"))
             try:
                 transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
             except:
