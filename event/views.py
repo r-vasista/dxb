@@ -4,7 +4,7 @@ from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnl
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 import openpyxl
 
@@ -53,17 +53,17 @@ class CreateEventAPIView(APIView):
     Creates a new event for the logged-in profile.
     """
     permission_classes = [IsAuthenticated]
+    parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request):
         try:
             profile = get_user_profile(request.user)
-            data=request.data.copy()
-            data['host'] = profile.id
+            data=request.data
 
             serializer = EventCreateSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
 
-            event = serializer.save()
+            event = serializer.save(host=profile)
             
             try:
                 transaction.on_commit(lambda:send_event_creation_notification_task.delay(event.id))

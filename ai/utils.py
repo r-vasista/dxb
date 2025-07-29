@@ -3,6 +3,7 @@ import base64
 from io import BytesIO
 from openai import OpenAI
 from django.conf import settings
+import json
 
 OPEN_AI_KEY = settings.OPEN_AI_KEY
 
@@ -35,23 +36,55 @@ def compress_and_encode_image(file_obj, max_size=(1000, 1000), quality=85):
 
 def parse_gpt_response(text):
     """
-    Splits a GPT response into description and list of hashtags.
-    Assumes hashtags start with a line beginning with "#"
+    Handles GPT output in two formats:
+      1. JSON-like string: {"caption": "...", "hash_tags": "...", "art_style": "..."}
+      2. Old plain text format with hashtags and art_style lines.
+
+    Returns a dictionary with:
+      - description (string)
+      - hashtags (list of tags without "#")
+      - art_style (list of styles)
     """
-    lines = text.strip().splitlines()
-    description_lines = []
-    hashtags = []
+    # --- Case 1: JSON-like string ---
+    try:
+        parsed = json.loads(text)
+        description = parsed.get("description", "").strip()
+        # Split hashtags string into a list, strip "#" and spaces
+        hashtags = [tag.lstrip("#").strip() for tag in parsed.get("hash_tags", "").split() if tag.strip()]
+        # Split art_style into a list
+        art_style = [style.strip() for style in parsed.get("art_style", "").split(",") if style.strip()]
+        return {
+            "description": description,
+            "hashtags": hashtags,
+            "art_types": art_style
+        }
+    except json.JSONDecodeError:
+        # --- Case 2: Old plain text parsing ---
+        lines = text.strip().splitlines()
+        description_lines = []
+        hashtags = []
+        art_style = []
 
-    for line in lines:
-        if line.strip().startswith("#"):
-            hashtags += line.strip().split()
-        else:
-            description_lines.append(line.strip())
+        for line in lines:
+            line = line.strip()
 
-    return {
-        "description": " ".join(description_lines),
-        "hashtags": hashtags
-    }
+            if line.startswith("#"):
+                hashtags += [tag.lstrip("#") for tag in line.split() if tag.strip()]
+                continue
+
+            if line.lower().startswith("**art style:**") or line.lower().startswith("art_style:"):
+                raw_style = line.split(":", 1)[-1].strip()
+                art_style = [s.strip() for s in raw_style.split(",") if s.strip()]
+                continue
+
+            if line:
+                description_lines.append(line)
+
+        return {
+            "description": " ".join(description_lines),
+            "hashtags": hashtags,
+            "art_style": art_style
+        }
     
 def encode_image(image_file):
     return base64.b64encode(image_file.read()).decode('utf-8')

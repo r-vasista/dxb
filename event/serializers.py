@@ -107,6 +107,7 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
     class Meta:
         model = Event
         fields = "__all__"
+        read_only_fields = ['host']
         
     def validate(self, attrs):
         if attrs['end_datetime'] <= attrs['start_datetime']:
