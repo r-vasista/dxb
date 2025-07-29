@@ -5,7 +5,7 @@ from django.conf import settings
 from django.template import Template, Context
 
 from core.models import EmailTemplate, EmailConfiguration
-from post.models import Hashtag
+from post.models import Hashtag, ArtType
 
 
 import re
@@ -129,3 +129,36 @@ def get_actual_user(obj):
     elif hasattr(obj, 'organization') and hasattr(obj.organization, 'user'):
         return obj.organization.user
     return None
+
+def handle_art_styles(post, art_styles):
+    """
+    Handles art styles for a post:
+    - Normalizes each art style (lowercase for storage, slugified)
+    - Creates ArtType if it doesn't exist
+    - Links the ArtType objects to the post
+    """
+
+    if not art_styles:
+        post.art_types.clear()
+        return
+
+    # Normalize input (string -> list)
+    if isinstance(art_styles, str):
+        art_styles = [s.strip() for s in art_styles.split(",") if s.strip()]
+    elif isinstance(art_styles, list):
+        art_styles = [s.strip() for s in art_styles if isinstance(s, str) and s.strip()]
+    else:
+        art_styles = []
+
+    # Normalize names (store lowercase but can display Title Case elsewhere)
+    normalized_styles = [s.lower() for s in art_styles]
+
+    # Clear existing art types first
+    post.art_types.clear()
+
+    # Get or create each ArtType and link it
+    for style in normalized_styles:
+        art_type, _ = ArtType.objects.get_or_create(
+            name=style
+        )
+        post.art_types.add(art_type)
