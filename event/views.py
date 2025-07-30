@@ -405,6 +405,8 @@ class UpdateEventAPIView(APIView):
             serializer = EventUpdateSerializer(event, data=data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
+            
+            handle_event_hashtags(event)
 
             return Response(success_response(data=serializer.data), status=status.HTTP_200_OK)
 

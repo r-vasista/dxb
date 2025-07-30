@@ -66,7 +66,7 @@ class EventTagAIAPIView(APIView):
             data = request.data
             title = data.get('title', '')
             description = data.get('description', '')
-            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.IMAGE_DESCRIPTION)
+            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.EVENT_TAG)
             gpt_model = ai_config.gpt_model
             prompt_instruction = ai_config.prompt
             user_content = f"title: {title}, description: {description}"
