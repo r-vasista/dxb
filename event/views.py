@@ -7,12 +7,13 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 import openpyxl
+from datetime import datetime, time
 
 
 # Django imports
 from django.utils import timezone
-from django.db.models import Q, Count, F
-from django.db.models.functions import ExtractHour
+from django.db.models import Q, Count, F, IntegerField, ExpressionWrapper
+from django.db.models.functions import ExtractHour, Coalesce
 from django.shortcuts import get_object_or_404
 from django.http import Http404, HttpResponse
 from django.db import IntegrityError
@@ -1447,3 +1448,93 @@ class DownloadEventAttendanceExcel(APIView):
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
         wb.save(response)
         return response
+
+
+
+class FilterEventListAPIView(APIView):
+    def get(self, request):
+        queryset = Event.objects.all()
+        filters = Q()
+
+        # Basic filters
+        title = request.GET.get('title')
+        upcoming = request.GET.get('upcoming')
+        past = request.GET.get('past')
+        is_online = request.GET.get('is_online')
+        is_free = request.GET.get('is_free')
+        address = request.GET.get('address')
+        city_name = request.GET.get('city')
+        state_name = request.GET.get('state')
+        country_name = request.GET.get('country')
+        host_name = request.GET.get('host_name')
+        co_host_name = request.GET.get('co_host_name')
+        tag = request.GET.get('tag')
+        start_date = request.GET.get('start_date')
+        end_date = request.GET.get('end_date')
+        ordering = request.GET.get('ordering')
+
+        if title:
+            filters &= Q(title__icontains=title)
+        if is_online is not None:
+            filters &= Q(is_online=is_online.lower() == 'true')
+        if is_free is not None:
+            filters &= Q(is_free=is_free.lower() == 'true')
+        if address:
+            filters &= Q(address__icontains=address)
+        if city_name:
+            filters &= Q(city__name__icontains=city_name)
+        if state_name:
+            filters &= Q(state__name__icontains=state_name)
+        if country_name:
+            filters &= Q(country__name__icontains=country_name)
+        if host_name:
+            filters &= Q(host__username__icontains=host_name)
+        if co_host_name:
+            filters &= Q(co_hosts__username__icontains=co_host_name)
+        if tag:
+            filters &= Q(tags__name__icontains=tag)
+        if upcoming and upcoming.lower() == 'true':
+            filters &= Q(start_datetime__gt=timezone.now())
+        if past and past.lower() == 'true':
+            filters &= Q(end_datetime__lt=timezone.now())
+
+        # Start and end date filter (cover full day)
+        if start_date and end_date:
+            try:
+                start = datetime.strptime(start_date, "%Y-%m-%d")
+                end = datetime.strptime(end_date, "%Y-%m-%d")
+                end = datetime.combine(end, time.max)  # Include the full end day
+                filters &= Q(start_datetime__gte=start, end_datetime__lte=end)
+            except ValueError:
+                pass  # Ignore invalid date format
+
+        queryset = queryset.filter(filters)
+
+        # Annotate attendance count
+        queryset = queryset.annotate(
+            attendance_count=Count('eventattendance', distinct=True)
+        )
+
+        # Popularity = view + share + attendance
+        queryset = queryset.annotate(
+            popularity=ExpressionWrapper(
+                Coalesce(F('view_count'), 0) +
+                Coalesce(F('share_count'), 0) +
+                Coalesce(F('attendance_count'), 0),
+                output_field=IntegerField()
+            )
+        )
+
+        # Ordering
+        if ordering == 'popular':
+            queryset = queryset.order_by('-popularity')
+        elif ordering == 'date':
+            queryset = queryset.order_by('start_datetime')
+        elif ordering == 'latest':
+            queryset = queryset.order_by('-id')
+
+        queryset = queryset.distinct()
+        serializer = EventSerializer(queryset, many=True)
+        return Response(serializer.data)
+
+
