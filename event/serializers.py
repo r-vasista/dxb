@@ -75,13 +75,23 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     
     def get_user_rsvp_status(self, obj):
         try:
-            user = self.context.get('request').user
+            request = self.context.get('request')
+            if not request or not request.user.is_authenticated:
+                return None
+
+            user = request.user
             profile = get_user_profile(user)
-            event_attendance = profile.eventattendance_set.first()
+
+            # Now check for the specific event attendance
+            event_attendance = EventAttendance.objects.filter(
+                profile=profile,
+                event=obj
+            ).first()
+
             if event_attendance:
                 return event_attendance.status
             return None
-        except Exception as e:
+        except Exception:
             return None
     
     def get_view_count(self, obj):
