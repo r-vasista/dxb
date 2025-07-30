@@ -4,8 +4,12 @@ from django.db import models
 # Local imports
 from profiles.models import Profile
 from ai.choices import AiUseTypes
-from core.models import BaseModel
-
+from core.models import (
+    BaseModel, City, State, Country
+)
+from event.choices import (
+    EventStatus, EventType
+)
 
 class ArtImagePrompt(models.Model):
     profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='art_prompts')
@@ -41,7 +45,7 @@ class BaseAIPromptDetails(BaseAIConfig):
     total_tokens = models.PositiveIntegerField(blank=True, null=True)
     
     def __str__(self):
-        return f'{self.ai_config}'
+        return f'{self.response_text}'
     
 
 class EventTagPrompt(BaseAIPromptDetails):
@@ -50,4 +54,13 @@ class EventTagPrompt(BaseAIPromptDetails):
     profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_tag_prompts')
     
     def __str__(self):
-        return self.event_name
+        return str(self.id)
+    
+
+class EventDescriptionPrompt(BaseAIPromptDetails):
+    event_data = models.JSONField(help_text="Input event data used to generate description")
+    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_description_prompts')
+    
+    def __str__(self):
+        return str(self.id)
+    
