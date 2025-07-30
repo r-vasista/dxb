@@ -1451,90 +1451,100 @@ class DownloadEventAttendanceExcel(APIView):
 
 
 
-class FilterEventListAPIView(APIView):
+class FilterEventListAPIView(APIView, PaginationMixin):
     def get(self, request):
-        queryset = Event.objects.all()
-        filters = Q()
+        try:
+            queryset = Event.objects.all()
+            filters = Q()
 
-        # Basic filters
-        title = request.GET.get('title')
-        upcoming = request.GET.get('upcoming')
-        past = request.GET.get('past')
-        is_online = request.GET.get('is_online')
-        is_free = request.GET.get('is_free')
-        address = request.GET.get('address')
-        city_name = request.GET.get('city')
-        state_name = request.GET.get('state')
-        country_name = request.GET.get('country')
-        host_name = request.GET.get('host_name')
-        co_host_name = request.GET.get('co_host_name')
-        tag = request.GET.get('tag')
-        start_date = request.GET.get('start_date')
-        end_date = request.GET.get('end_date')
-        ordering = request.GET.get('ordering')
+            # Filters
+            title = request.GET.get('title')
+            upcoming = request.GET.get('upcoming')
+            past = request.GET.get('past')
+            is_online = request.GET.get('is_online')
+            is_free = request.GET.get('is_free')
+            address = request.GET.get('address')
+            city_name = request.GET.get('city')
+            state_name = request.GET.get('state')
+            country_name = request.GET.get('country')
+            host_name = request.GET.get('host_name')
+            co_host_name = request.GET.get('co_host_name')
+            tag = request.GET.get('tag')
+            start_date = request.GET.get('start_date')
+            end_date = request.GET.get('end_date')
+            ordering = request.GET.get('ordering')
 
-        if title:
-            filters &= Q(title__icontains=title)
-        if is_online is not None:
-            filters &= Q(is_online=is_online.lower() == 'true')
-        if is_free is not None:
-            filters &= Q(is_free=is_free.lower() == 'true')
-        if address:
-            filters &= Q(address__icontains=address)
-        if city_name:
-            filters &= Q(city__name__icontains=city_name)
-        if state_name:
-            filters &= Q(state__name__icontains=state_name)
-        if country_name:
-            filters &= Q(country__name__icontains=country_name)
-        if host_name:
-            filters &= Q(host__username__icontains=host_name)
-        if co_host_name:
-            filters &= Q(co_hosts__username__icontains=co_host_name)
-        if tag:
-            filters &= Q(tags__name__icontains=tag)
-        if upcoming and upcoming.lower() == 'true':
-            filters &= Q(start_datetime__gt=timezone.now())
-        if past and past.lower() == 'true':
-            filters &= Q(end_datetime__lt=timezone.now())
+            if title:
+                filters &= Q(title__icontains=title)
+            if is_online is not None:
+                filters &= Q(is_online=is_online.lower() == 'true')
+            if is_free is not None:
+                filters &= Q(is_free=is_free.lower() == 'true')
+            if address:
+                filters &= Q(address__icontains=address)
+            if city_name:
+                filters &= Q(city__name__icontains=city_name)
+            if state_name:
+                filters &= Q(state__name__icontains=state_name)
+            if country_name:
+                filters &= Q(country__name__icontains=country_name)
+            if host_name:
+                filters &= Q(host__username__icontains=host_name)
+            if co_host_name:
+                filters &= Q(co_hosts__username__icontains=co_host_name)
+            if tag:
+                filters &= Q(tags__name__icontains=tag)
+            if upcoming and upcoming.lower() == 'true':
+                filters &= Q(start_datetime__gt=timezone.now())
+            if past and past.lower() == 'true':
+                filters &= Q(end_datetime__lt=timezone.now())
 
-        # Start and end date filter (cover full day)
-        if start_date and end_date:
-            try:
-                start = datetime.strptime(start_date, "%Y-%m-%d")
-                end = datetime.strptime(end_date, "%Y-%m-%d")
-                end = datetime.combine(end, time.max)  # Include the full end day
-                filters &= Q(start_datetime__gte=start, end_datetime__lte=end)
-            except ValueError:
-                pass  # Ignore invalid date format
+            # Start and end date filter
+            if start_date and end_date:
+                try:
+                    start_date = timezone.make_aware(datetime.strptime(start_date, "%Y-%m-%d"))
+                    end_date = timezone.make_aware(datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time.max))
+                    filters &= Q(start_datetime__gte=start_date, end_datetime__lte=end_date)
+                except ValueError:
+                    return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=400)
 
-        queryset = queryset.filter(filters)
+            queryset = queryset.filter(filters)
 
-        # Annotate attendance count
-        queryset = queryset.annotate(
-            attendance_count=Count('eventattendance', distinct=True)
-        )
-
-        # Popularity = view + share + attendance
-        queryset = queryset.annotate(
-            popularity=ExpressionWrapper(
-                Coalesce(F('view_count'), 0) +
-                Coalesce(F('share_count'), 0) +
-                Coalesce(F('attendance_count'), 0),
-                output_field=IntegerField()
+            # Annotate attendance
+            queryset = queryset.annotate(
+                attendance_count=Count('eventattendance', distinct=True)
             )
-        )
 
-        # Ordering
-        if ordering == 'popular':
-            queryset = queryset.order_by('-popularity')
-        elif ordering == 'date':
-            queryset = queryset.order_by('start_datetime')
-        elif ordering == 'latest':
-            queryset = queryset.order_by('-id')
+            # Popularity
+            queryset = queryset.annotate(
+                popularity=ExpressionWrapper(
+                    Coalesce(F('view_count'), 0) +
+                    Coalesce(F('share_count'), 0) +
+                    Coalesce(F('attendance_count'), 0),
+                    output_field=IntegerField()
+                )
+            )
 
-        queryset = queryset.distinct()
-        serializer = EventSerializer(queryset, many=True)
-        return Response(serializer.data)
+            # Ordering
+            if ordering == 'popular':
+                queryset = queryset.order_by('-popularity')
+            elif ordering == 'date':
+                queryset = queryset.order_by('start_datetime')
+            elif ordering == 'latest':
+                queryset = queryset.order_by('-id')
+
+            queryset = queryset.distinct()
+            paginated_queryset = self.paginate_queryset(queryset, request)
+            serializer = EventDetailSerializer(paginated_queryset, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except ValueError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
 
 
