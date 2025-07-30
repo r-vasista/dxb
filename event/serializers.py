@@ -75,13 +75,23 @@ class EventDetailSerializer(TimezoneAwareSerializerMixin):
     
     def get_user_rsvp_status(self, obj):
         try:
-            user = self.context.get('request').user
+            request = self.context.get('request')
+            if not request or not request.user.is_authenticated:
+                return None
+
+            user = request.user
             profile = get_user_profile(user)
-            event_attendance = profile.eventattendance_set.first()
+
+            # Now check for the specific event attendance
+            event_attendance = EventAttendance.objects.filter(
+                profile=profile,
+                event=obj
+            ).first()
+
             if event_attendance:
                 return event_attendance.status
             return None
-        except Exception as e:
+        except Exception:
             return None
     
     def get_view_count(self, obj):
@@ -156,13 +166,17 @@ class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
 
 class EventSummarySerializer(TimezoneAwareSerializerMixin):
     calendar_link = serializers.SerializerMethodField()
+    host_username = serializers.CharField(source='host.username', read_only=True)
+    host_profile_picture = serializers.CharField(source='host.profile_picture', read_only=True)
+
 
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'city', 'state', 'country', 'is_online', 'online_link', 
-            'calendar_link', 'slug',
+            'calendar_link', 'slug','host_username', 'host_profile_picture',
+            'event_image','event_logo'
         ]
 
     def get_calendar_link(self, obj):
@@ -272,7 +286,7 @@ class EventSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'event_image', 'attendee_count', 'tags',
-            'is_online', 'city', 'country',
+            'is_online', 'city', 'country', 'slug', 'event_logo'
         ]
 
 
