@@ -1535,7 +1535,7 @@ class FilterEventListAPIView(APIView, PaginationMixin):
 
             queryset = queryset.distinct()
             paginated_queryset = self.paginate_queryset(queryset, request)
-            serializer = EventDetailSerializer(paginated_queryset, many=True)
+            serializer = EventListSerializer(paginated_queryset, many=True)
             return self.get_paginated_response(serializer.data)
 
         except ValueError as e:
