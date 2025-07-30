@@ -286,7 +286,7 @@ class EventSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'event_image', 'attendee_count', 'tags',
-            'is_online', 'city', 'country',
+            'is_online', 'city', 'country', 'slug', 'event_logo'
         ]
 
 
