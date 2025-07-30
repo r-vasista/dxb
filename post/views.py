@@ -6,7 +6,9 @@ from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.conf import settings
 from django.utils.dateparse import parse_datetime
-from django.db.models import Q
+from django.db.models import Q, F, ExpressionWrapper, IntegerField, FloatField
+from django.db.models.functions import Cast
+
 from datetime import timedelta,datetime, time
 from django.utils import timezone
 from django.db import IntegrityError
@@ -588,8 +590,15 @@ class TrendingPostsAPIView(APIView, PaginationMixin):
         try:
             visibility_filter = get_post_visibility_filter(request.user)
 
-            posts = Post.objects.filter(visibility_filter)\
-                .order_by('-reaction_count', '-view_count', '-comment_count', '-share_count')
+            posts = Post.objects.annotate(
+                    trending_score=ExpressionWrapper(
+                        F('reaction_count') +
+                        (F('comment_count') * 2) +
+                        (F('share_count') * 3) +
+                        ExpressionWrapper(Cast(F('view_count'), FloatField()) / 5, output_field=FloatField()),
+                        output_field=FloatField()
+                    )
+                ).filter(visibility_filter).order_by('-trending_score')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
