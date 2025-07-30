@@ -35,13 +35,16 @@ class NotificationListView(APIView, PaginationMixin):
 
             notifications = notifications.select_related("sender__user", "recipient__user").order_by("-created_at")
             paginated_notifications = self.paginate_queryset(notifications, request)
+            
+            unread_count =  notifications.filter(is_read=False).count()
 
             serializer = NotificationSerializer(paginated_notifications, many=True, context={"request": request})
             all_notification_types = [choice[0] for choice in Notification.notification_type.field.choices]
 
             return self.get_paginated_response({
                 "available_notification_types": all_notification_types,
-                "notifications": serializer.data
+                "unread_count":unread_count,
+                "notifications": serializer.data,
             })
 
         except ValueError as e:

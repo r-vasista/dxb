@@ -6,7 +6,7 @@ from event.views import (
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
     EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, 
-    ShareEventWithProfilesAPIView, PublicEventDetailAPIView, DownloadEventAttendanceExcel
+    ShareEventWithProfilesAPIView, PublicEventDetailAPIView, DownloadEventAttendanceExcel, FilterEventListAPIView
 )
 
 
@@ -53,5 +53,6 @@ urlpatterns = [
     path('share/event/bulk/', ShareEventWithProfilesAPIView.as_view(), name='share-event-bulk'),
 
     path('events/attendance/download/<int:event_id>/', DownloadEventAttendanceExcel.as_view(), name='download-attendance-excel'),
+    path('filter/events/', FilterEventListAPIView.as_view(), name='event-list'),
 
 ]

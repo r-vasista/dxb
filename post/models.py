@@ -73,7 +73,7 @@ class Post(BaseModel):
     )
 
     # Content
-    title = models.TextField()
+    title = models.TextField(blank=True, null=True)
     content = models.TextField(blank=True)
     caption = models.TextField(blank=True)
     art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
