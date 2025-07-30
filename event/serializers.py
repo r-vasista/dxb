@@ -166,13 +166,17 @@ class EventAttendanceSerializer(TimezoneAwareSerializerMixin):
 
 class EventSummarySerializer(TimezoneAwareSerializerMixin):
     calendar_link = serializers.SerializerMethodField()
+    host_username = serializers.CharField(source='host.username', read_only=True)
+    host_profile_picture = serializers.CharField(source='host.profile_picture', read_only=True)
+
 
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'city', 'state', 'country', 'is_online', 'online_link', 
-            'calendar_link', 'slug',
+            'calendar_link', 'slug','host_username', 'host_profile_picture',
+            'event_image','event_logo'
         ]
 
     def get_calendar_link(self, obj):
