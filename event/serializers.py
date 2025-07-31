@@ -280,13 +280,14 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
 
 class EventSerializer(serializers.ModelSerializer):
     attendee_count = serializers.IntegerField(read_only=True)
+    host_username = serializers.CharField(source='host.username', read_only=True)
 
     class Meta:
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
             'event_image', 'attendee_count', 'tags', 'description',
-            'is_online', 'city', 'country', 'slug', 'event_logo'
+            'is_online', 'city', 'country', 'slug', 'event_logo', 'host_username'
         ]
 
 
