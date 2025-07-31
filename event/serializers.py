@@ -176,7 +176,7 @@ class EventSummarySerializer(TimezoneAwareSerializerMixin):
             'id', 'title', 'start_datetime', 'end_datetime',
             'city', 'state', 'country', 'is_online', 'online_link', 
             'calendar_link', 'slug','host_username', 'host_profile_picture',
-            'event_image','event_logo'
+            'event_image','event_logo', 'description'
         ]
 
     def get_calendar_link(self, obj):
@@ -285,7 +285,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
-            'event_image', 'attendee_count', 'tags',
+            'event_image', 'attendee_count', 'tags', 'description',
             'is_online', 'city', 'country', 'slug', 'event_logo'
         ]
 
