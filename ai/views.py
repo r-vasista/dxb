@@ -8,7 +8,7 @@ from openai import OpenAI
 import json
 
 # Local imports
-from ai.models import ArtImagePrompt, BaseAIConfig, EventTagPrompt, EventDescriptionPrompt
+from ai.models import ArtImagePrompt, BaseAIConfig, EventTagResponse, EventDescriptionResponse
 from ai.choices import AiUseTypes
 from ai.utils import compress_and_encode_image, parse_gpt_response, get_ai_response, encode_image
 from core.services import get_user_profile, success_response, error_response
@@ -76,7 +76,7 @@ class EventTagAIAPIView(APIView):
             response = get_ai_response(gpt_model=gpt_model, prompt_instruction=prompt_instruction, user_content=user_content)
             result_text = parse_gpt_response(response.output_text)
             
-            EventTagPrompt.objects.create(
+            EventTagResponse.objects.create(
                 profile= get_user_profile(request.user) if request.user.is_authenticated else None,
                 use_type = AiUseTypes.EVENT_TAG,
                 description=ai_config.description,
@@ -112,7 +112,7 @@ class EventDescriptionAIAPIView(APIView):
             response = get_ai_response(gpt_model=gpt_model, prompt_instruction=prompt_instruction, user_content=content)
             result_text = parse_gpt_response(response.output_text)
             
-            EventDescriptionPrompt.objects.create(
+            EventDescriptionResponse.objects.create(
                 profile= get_user_profile(request.user) if request.user.is_authenticated else None,
                 use_type = AiUseTypes.EVENT_DESCRIPTION,
                 description=ai_config.description,
