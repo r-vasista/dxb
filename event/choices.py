@@ -9,6 +9,7 @@ class EventType(models.TextChoices):
     WEBINAR = 'webinar', 'Webinar'
     SOCIAL = 'social', 'Social Event'
     NETWORKING = 'networking', 'Networking'
+    EXHIBITION = 'exhibition', 'Exhibition'
     OTHER = 'other', 'Other'
 
 

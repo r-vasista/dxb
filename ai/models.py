@@ -37,18 +37,25 @@ class BaseAIConfig(BaseModel):
         return f'{self.use_type, self.gpt_model}'
 
 
-class BaseAIPromptDetails(BaseAIConfig):
+class BaseAIPResponseDetails(BaseModel):
     response = models.TextField(help_text="AI-generated whole response")
     response_text = models.TextField(help_text="AI-generated description and hashtags")
     input_tokens = models.PositiveIntegerField(blank=True, null=True)
     output_tokens = models.PositiveIntegerField(blank=True, null=True)
     total_tokens = models.PositiveIntegerField(blank=True, null=True)
+    use_type = models.CharField(choices=AiUseTypes.choices, max_length=50)
+    gpt_model = models.CharField(max_length=200, blank=True, null=True)
+    prompt = models.TextField(help_text="Prompt or instruction sent to OpenAI")
+    description = models.TextField()
     
+    class Meta:
+        abstract = True
+        
     def __str__(self):
         return f'{self.response_text}'
     
 
-class EventTagPrompt(BaseAIPromptDetails):
+class EventTagResponse(BaseAIPResponseDetails):
     event_name = models.CharField(max_length=200)
     event_description = models.TextField(blank=True, null=True)
     profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_tag_prompts')
@@ -57,7 +64,7 @@ class EventTagPrompt(BaseAIPromptDetails):
         return str(self.id)
     
 
-class EventDescriptionPrompt(BaseAIPromptDetails):
+class EventDescriptionResponse(BaseAIPResponseDetails):
     event_data = models.JSONField(help_text="Input event data used to generate description")
     profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='event_description_prompts')
     
