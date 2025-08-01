@@ -13,11 +13,11 @@ from profiles.models import (
 )
 
 class MentorEligibilityCriteria(BaseModel):
-    min_followers = models.IntegerField(default=500)  
-    min_posts = models.IntegerField(default=45)
-    post_streak_window_days = models.IntegerField(default=90)
-    min_account_age_months = models.IntegerField(default=3)
-    min_avg_engagement = models.FloatField(default=25.0)
+    min_followers = models.IntegerField(default=0)  
+    min_posts = models.IntegerField(default=0)
+    post_streak_window_days = models.IntegerField(default=0)
+    min_account_age_months = models.IntegerField(default=0)
+    min_avg_engagement = models.FloatField(default=0)
     require_verified_profile = models.BooleanField(default=True)
     
     def __str__(self):
@@ -26,7 +26,7 @@ class MentorEligibilityCriteria(BaseModel):
 
 class MentorMetrics(BaseModel):
     profile = models.OneToOneField(
-        Profile,  # Replace with your actual Profile model path
+        Profile,
         on_delete=models.CASCADE,
         related_name='mentor_eligibility'
     )
@@ -36,8 +36,7 @@ class MentorMetrics(BaseModel):
     posts_count = models.PositiveIntegerField(default=0)
     post_streak_window_days = models.IntegerField(default=90)
     min_account_age_months = models.PositiveIntegerField(default=0)
-    avg_engagement_per_post = models.FloatField(default=0.0)
-    avg_engagement = models.FloatField(default=25.0)
+    avg_engagement = models.FloatField(default=0)
     
     def __str__(self):
         return self.profile.username
