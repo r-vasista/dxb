@@ -65,7 +65,7 @@ INSTALLED_APPS = [
     "notification",
     "import_export",
     "ai",
-
+    "mentor",
     
 ]
 

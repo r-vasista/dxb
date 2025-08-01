@@ -81,6 +81,9 @@ class Profile(BaseModel):
     art_service_enabled = models.BooleanField(default=False)
     allow_mentions = models.BooleanField(default=True)
     
+    mentor_eligibile = models.BooleanField(default=False)
+    mentor_blacklisted = models.BooleanField(default=False)
+    
     wall_tutorial = models.BooleanField(default=False)
     profile_tutorial = models.BooleanField(default=False)
     onboarding_required = models.BooleanField(default=True)

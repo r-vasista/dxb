@@ -30,6 +30,7 @@ urlpatterns = [
     path('general/', include('core.urls')),
     path('notification/', include('notification.urls')),
     path('ai/', include('ai.urls')),
+    path('mentor/', include('mentor.urls')),
 ]
 
 if settings.DEBUG:
