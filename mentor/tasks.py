@@ -87,7 +87,7 @@ def calculate_mentor_metrics_for_profile(profile):
 
 @shared_task
 def run_mentor_eligibility_check():
-    profiles = Profile.objects.filter(profile_type=ProfileType.INDIVIDUAL, is_active=True, mentor_blacklisted=False)
+    profiles = Profile.objects.filter(is_active=True, mentor_blacklisted=False)
 
     for profile in profiles:
         calculate_mentor_metrics_for_profile(profile)
