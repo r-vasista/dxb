@@ -1,4 +1,10 @@
 import json
+import os
+import io
+from PIL import Image
+from moviepy.editor import VideoFileClip
+from django.core.files.uploadedfile import InMemoryUploadedFile
+from tempfile import NamedTemporaryFile
 from django.utils import timezone
 from core.models import Country, State, City, WeeklyChallenge
 
@@ -84,3 +90,90 @@ def get_inactivity_email_context(profile):
         "challenge_hashtag": challenge_hashtag,
         "top_posts": top_titles,
     }
+
+
+# Helper: get file extension
+def get_extension(file):
+    return os.path.splitext(file.name)[1].lower()
+
+def is_image(file):
+    return get_extension(file) in ['.jpg', '.jpeg', '.png', '.webp']
+
+def is_video(file):
+    return get_extension(file) in ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+
+# Resize image only to reduce file size (not dimensions)
+def resize_image(image_file, max_mb=10):
+    size_in_mb = image_file.size / (1024 * 1024)
+    if size_in_mb <= max_mb:
+        return image_file
+
+    try:
+        img = Image.open(image_file)
+        if img.mode != 'RGB':
+            img = img.convert('RGB')
+
+        buffer = io.BytesIO()
+        img.save(buffer, format='JPEG', quality=85, optimize=True)  # Keep original size, reduce quality
+        buffer.seek(0)
+
+        return InMemoryUploadedFile(
+            buffer,
+            field_name=None,  # <- Fix this line
+            name=image_file.name,
+            content_type='image/jpeg',
+            size=buffer.tell(),
+            charset=None
+        )
+
+    except Exception as e:
+        print(f"[Image Resize Error] {e}")
+        return image_file
+
+# Compress video with same dimensions, reduce bitrate only
+def compress_video(video_file, max_mb=20):
+    size_in_mb = video_file.size / (1024 * 1024)
+    if size_in_mb <= max_mb:
+        return video_file
+
+    try:
+        temp_input = NamedTemporaryFile(delete=False, suffix=get_extension(video_file))
+        for chunk in video_file.chunks():
+            temp_input.write(chunk)
+        temp_input.close()
+
+        clip = VideoFileClip(temp_input.name)
+
+        temp_output = NamedTemporaryFile(delete=False, suffix=".mp4")
+        clip.write_videofile(
+            temp_output.name,
+            codec="libx264",
+            audio_codec="aac",
+            bitrate="500k",  # Compress video using bitrate
+            verbose=False,
+            logger=None
+        )
+
+        temp_output.seek(0)
+        return InMemoryUploadedFile(
+            file=open(temp_output.name, 'rb'),
+            field_name=None,  # <- Fix this line
+            name=video_file.name,
+            content_type='video/mp4',
+            size=os.path.getsize(temp_output.name),
+            charset=None
+        )
+
+
+    except Exception as e:
+        print(f"[Video Compression Error] {e}")
+        return video_file
+
+# ✅ Unified Function
+def process_media_file(media_file):
+    if is_image(media_file):
+        return resize_image(media_file), 'image'      
+    elif is_video(media_file):
+        return compress_video(media_file), 'video'     
+    else:
+        return media_file, 'unknown'                   

@@ -26,6 +26,7 @@ from core.services import (
     success_response, error_response, get_user_profile, handle_hashtags, handle_art_styles
 )
 from core.pagination import PaginationMixin
+from core.utils import process_media_file
 from notification.task import notify_friends_of_new_post, send_comment_notification_task, send_mention_notification_task, send_post_reaction_notification_task, send_post_share_notification_task
 from post.models import ReactionType, PostView, SavedPost
 from profiles.models import (
@@ -126,10 +127,11 @@ class PostAPIView(APIView):
             # Handle media files safely
             media_files = request.FILES.getlist('media_files')
             for idx, media_file in enumerate(media_files):
+                processed_file, media_type = process_media_file(media_file)
                 PostMedia.objects.create(
                     post=post,
-                    file=media_file,
-                    media_type=media_file.content_type.split('/')[0],
+                    file=processed_file,
+                    media_type=media_type,
                     order=idx
                 )
 
