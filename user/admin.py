@@ -17,7 +17,7 @@ class CustomUserAdmin(BaseUserAdmin):
     list_display = ('id', 'email', 'user_type', 'is_active', 'is_staff', 'last_login', 'timezone')
     search_fields = ('email',)
     list_filter = ('user_type', 'is_active', 'is_staff', 'is_superuser')
-    ordering = ('email',)
+    ordering = ('-id',)
     readonly_fields = ('last_login',)
 
     fieldsets = (

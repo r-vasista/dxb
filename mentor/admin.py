@@ -15,9 +15,9 @@ class MentorEligibilityCriteriaAdmin(admin.ModelAdmin):
     
 @admin.register(MentorMetrics)
 class MentorMetricsAdmin(admin.ModelAdmin):
-    list_display = ['id', 'profile']
-    search_fields =  ['id', 'profile']
-    list_filter = ['id', 'profile']
+    list_display = ['id', 'profile', 'updated_at']
+    search_fields =  ['id', 'profile','updated_at']
+    list_filter = ['id', 'profile', 'updated_at']
 
 
 @admin.register(MentorProfile)
