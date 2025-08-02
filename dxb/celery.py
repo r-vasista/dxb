@@ -45,11 +45,11 @@ app.conf.beat_schedule = {
     },
     'trigger_event_analytics_for_all_events':{
         'task':'event.tasks.trigger_event_analytics_for_all_events',
-        'schedule' : crontab(minute=0),    #Runs for every one hour
+        'schedule': crontab(minute=0, hour='0'),
     },
     'run_mentor_eligibility_check': {
         'task': 'mentor.tasks.run_mentor_eligibility_check',
-        'schedule': crontab(hour=3, minute=30),  # Every day at 3 AM (hour=3, minute=0),
+        'schedule': crontab(hour=3, minute=30),  
     },
     
 }

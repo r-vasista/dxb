@@ -100,7 +100,9 @@ class Event(BaseModel):
     comment_count = models.PositiveIntegerField(default=0)
     share_count = models.PositiveIntegerField(default=0)
     show_views = models.BooleanField(default=False)
-    
+    # In Event model
+    completion_mail_sent = models.BooleanField(default=False)
+
     
     # Attendees
     attendees = models.ManyToManyField(
@@ -224,7 +226,8 @@ class EventMedia(BaseModel):
     is_active = models.BooleanField(default=True)
     
     is_pinned = models.BooleanField(default=False)
-    like_count=models.IntegerField(blank=True,null=True)
+    like_count=models.IntegerField(default=0)
+    comments_count=models.IntegerField(default=0)
     
     class Meta:
         ordering = ['-uploaded_at']

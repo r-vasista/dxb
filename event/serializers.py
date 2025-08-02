@@ -17,6 +17,7 @@ from core.serializers import TimezoneAwareSerializerMixin
 from core.services import (
     get_user_profile
 )
+from core.utils import process_media_file
 # Pyhton imports
 import pytz
 from pytz import timezone as pytz_timezone
@@ -131,6 +132,21 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
         
         return attrs
     
+    def create(self, validated_data):
+        event_image_file= validated_data .GET ('event_image')
+        if event_image_file:
+            new_image_file, filetype = process_media_file(event_image_file)
+            if filetype == 'image':
+                validated_data ['event_image'] = new_image_file
+            
+        event_logo_file= validated_data .GET ('event_logo')
+        if event_logo_file:
+            new_logo_file, filetype = process_media_file(event_logo_file)
+            if filetype == 'image':
+                validated_data ['event_logo'] = new_logo_file
+            
+        return super().create(validated_data) 
+    
 
 class EventListSerializer(TimezoneAwareSerializerMixin):
     host_username = serializers.CharField(source='host.username', read_only=True)
@@ -190,7 +206,7 @@ class EventMediaSerializer(serializers.ModelSerializer):
         model = EventMedia
         fields = [
                     'id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at',
-                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details'
+                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count'
                 ]
         read_only_fields = ['media_type', 'uploaded_at', 'uploaded_by_host']
     
@@ -200,6 +216,20 @@ class EventMediaSerializer(serializers.ModelSerializer):
             "username": obj.uploaded_by.username,
             "profile_picture": obj.uploaded_by.profile_picture.url if obj.uploaded_by.profile_picture else None,
         }
+    def create(self, validated_data):
+        uploaded_file =  validated_data.get('file',None)
+        if uploaded_file:
+            processed_file, filetype = process_media_file(uploaded_file)
+            validated_data ['file'] =processed_file
+
+        return super().create(validated_data)
+    def update(self, instance, validated_data):
+        uploaded_file = validated_data.get('file', None)
+        if uploaded_file:
+            processed_file, filetype = process_media_file(uploaded_file)
+            validated_data['file'] = processed_file
+
+        return super().update(instance, validated_data)
 
 
 class EventCommentSerializer(serializers.ModelSerializer):

@@ -83,6 +83,8 @@ class Profile(BaseModel):
     
     mentor_eligibile = models.BooleanField(default=False)
     mentor_blacklisted = models.BooleanField(default=False)
+    mentor_mail_sent = models.BooleanField(default=False)
+
     
     wall_tutorial = models.BooleanField(default=False)
     profile_tutorial = models.BooleanField(default=False)

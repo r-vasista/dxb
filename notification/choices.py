@@ -16,3 +16,4 @@ class NotificationType(models.TextChoices):
     STATUS_CHANGE = "status change","Status Change"
     EVENT_CREATE ='event create','Event Create'
     EVENT_RSVP='event rsvp','Event Rsvp'
+    MENTOR_ELIGIBILITY = 'mentor eligiblity', 'Mentor Eligiblity'
