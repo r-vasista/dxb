@@ -24,6 +24,7 @@ from organization.serializers import (
     OrganizationSerializer
 )
 from core.services import get_user_profile
+from core.utils import process_media_file
 from event.serializers import (
     EventListSerializer
 )
@@ -166,7 +167,19 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'username': {'required': False}, 
         }
-
+    def update(self, instance, validated_data):
+        profile_pic = validated_data.get('profile_picture',None)
+        if profile_pic:
+            processed_image, filetype = process_media_file(profile_pic)
+            if filetype == 'image':
+                validated_data ['profile_picture'] = processed_image
+        
+        cover_pic = validated_data .get('cover_picture',None)
+        if cover_pic:
+            processed_image,filetype = process_media_file(cover_pic)
+            if filetype == 'image':
+                validated_data ['cover_picture'] = process_media_file
+        return super().update(instance, validated_data)
 
 class ProfileFieldSerializer(serializers.ModelSerializer):
     value = serializers.SerializerMethodField()
@@ -365,6 +378,11 @@ class ProfileCanvasSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'profile', 'created_by']
     
     def create(self, validated_data):
+        image_file = validated_data.get('image', None)
+        if image_file:
+            new_image_file,filetype= process_media_file(image_file)
+            if filetype=='image':
+                validated_data['image'] = new_image_file
         profile = validated_data['profile']
 
         # Get the highest existing display_order for this profile
@@ -377,6 +395,14 @@ class ProfileCanvasSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
+    def update(self, instance, validated_data):
+        image_file = validated_data.get('image', None)
+        if image_file:
+            new_image_file, filetype = process_media_file(image_file)
+            if filetype == 'image':
+                validated_data['image'] = new_image_file
+
+        return super().update(instance, validated_data)
 
 class StaticFieldInputSerializer(serializers.Serializer):
     static_field_id = serializers.IntegerField()

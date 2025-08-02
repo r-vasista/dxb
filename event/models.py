@@ -100,7 +100,9 @@ class Event(BaseModel):
     comment_count = models.PositiveIntegerField(default=0)
     share_count = models.PositiveIntegerField(default=0)
     show_views = models.BooleanField(default=False)
-    
+    # In Event model
+    completion_mail_sent = models.BooleanField(default=False)
+
     
     # Attendees
     attendees = models.ManyToManyField(
