@@ -49,7 +49,7 @@ app.conf.beat_schedule = {
     },
     'run_mentor_eligibility_check': {
         'task': 'mentor.tasks.run_mentor_eligibility_check',
-        'schedule': crontab(hour=3, minute=0),  # Every day at 3 AM
+        'schedule': crontab(hour=3, minute=30),  # Every day at 3 AM (hour=3, minute=0),
     },
     
 }
