@@ -28,10 +28,14 @@ class NotificationListView(APIView, PaginationMixin):
         try:
             profile = get_user_profile(request.user)
             notif_type_filter = request.query_params.get("notification_type")
+            unread = request.query_params.get('unread')
 
             notifications = Notification.objects.filter(recipient=profile)
             if notif_type_filter:
                 notifications = notifications.filter(notification_type=notif_type_filter)
+            
+            if unread == 'true':
+                notifications = notifications.filter(is_read=False)
 
             notifications = notifications.select_related("sender__user", "recipient__user").order_by("-created_at")
             paginated_notifications = self.paginate_queryset(notifications, request)
