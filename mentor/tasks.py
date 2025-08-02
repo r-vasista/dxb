@@ -14,6 +14,9 @@ from celery import shared_task
 from mentor.models import (
     MentorEligibilityCriteria, MentorMetrics
 )
+from notification.choices import NotificationType
+from notification.models import Notification
+from notification.utils import create_notification
 from profiles.models import (
     Profile
 )
@@ -66,7 +69,6 @@ def calculate_mentor_metrics_for_profile(profile):
         # Update mentor_eligibile flag
         profile.mentor_eligibile = is_eligible
         profile.save(update_fields=['mentor_eligibile'])
-        print('USER:', profile.username, '    ',  'ELIGIBLE:', is_eligible)
 
         # Update or create mentor metrics
         MentorMetrics.objects.update_or_create(
@@ -80,6 +82,18 @@ def calculate_mentor_metrics_for_profile(profile):
                 'updated_at': timezone.now()
             }
         )
+        if is_eligible and not profile.mentor_mail_sent:
+            message =( F"Congratulations {profile.username}, you now meet the criteria to become a mentor!")
+            notification_type = NotificationType.MENTOR_ELIGIBILITY
+            create_notification(
+                sender =profile,
+                recipient = profile,
+                instance = profile,
+                message = message,
+                notification_type= notification_type,
+            )
+            profile.mentor_mail_sent = True
+            profile.save(update_fields=['mentor_mail_sent'])
 
     except Exception as e:
         # Optional: log error
@@ -87,7 +101,7 @@ def calculate_mentor_metrics_for_profile(profile):
 
 @shared_task
 def run_mentor_eligibility_check():
-    profiles = Profile.objects.filter(is_active=True, mentor_blacklisted=False)
+    profiles = Profile.objects.filter(is_active=True, mentor_blacklisted=False,mentor_mail_sent=False, )
 
     for profile in profiles:
         calculate_mentor_metrics_for_profile(profile)

@@ -32,7 +32,8 @@ def mark_completed_events_and_notify():
 
     event_to_mark = Event.objects.filter(
         end_datetime__lte=one_hour_ago,
-        status=EventStatus.PUBLISHED
+        status=EventStatus.PUBLISHED,
+        completion_mail_sent=False 
     )
 
     completed_count = 0
@@ -70,7 +71,8 @@ def mark_completed_events_and_notify():
                     notification_type=NotificationType.STATUS_CHANGE
                 )
                 logger.info(f"[MarkCompletedEvents] Notified attendee: {attendee.username}")
-
+        event.completion_mail_sent = True
+        event.save(update_fields=['completion_mail_sent'])
     logger.info(f"[MarkCompletedEvents] Task completed. Total events marked: {completed_count}")
 
 
@@ -175,3 +177,4 @@ def trigger_event_analytics_for_all_events():
     except Exception as e:
         logger.error(f"[AnalyticsTrigger] Failed to schedule analytics: {e}", exc_info=True)
         return "Error occurred"
+    
