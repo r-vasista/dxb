@@ -190,7 +190,7 @@ class EventMediaSerializer(serializers.ModelSerializer):
         model = EventMedia
         fields = [
                     'id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at',
-                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details'
+                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count'
                 ]
         read_only_fields = ['media_type', 'uploaded_at', 'uploaded_by_host']
     
