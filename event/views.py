@@ -641,6 +641,9 @@ class CreateEventMediaCommentAPIView(APIView):
 
             # Save the comment
             comment = serializer.save(profile=profile, event_media=event_media)
+            event_media.comments_count = event_media.comments.count()
+            event_media.save(update_fields=["comments_count"])
+            
             try:
                 transaction.on_commit(lambda: shared_event_media_comment_notification_task.delay(event_media.id, profile.id, comment.id))
             except:

@@ -224,7 +224,8 @@ class EventMedia(BaseModel):
     is_active = models.BooleanField(default=True)
     
     is_pinned = models.BooleanField(default=False)
-    like_count=models.IntegerField(blank=True,null=True)
+    like_count=models.IntegerField(default=0)
+    comments_count=models.IntegerField(default=0)
     
     class Meta:
         ordering = ['-uploaded_at']
