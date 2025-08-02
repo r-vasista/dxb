@@ -96,11 +96,23 @@ def get_inactivity_email_context(profile):
 def get_extension(file):
     return os.path.splitext(file.name)[1].lower()
 
+
 def is_image(file):
     return get_extension(file) in ['.jpg', '.jpeg', '.png', '.webp']
 
+
 def is_video(file):
     return get_extension(file) in ['.mp4', '.mov', '.avi', '.mkv', '.webm']
+
+
+def is_audio(file):
+    return get_extension(file) in ['.mp3', '.wav']
+
+
+def is_document(file):
+    return get_extension(file) in [
+        '.pdf', '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.txt'
+    ]
 
 # Resize image only to reduce file size (not dimensions)
 def resize_image(image_file, max_mb=10):
@@ -175,5 +187,9 @@ def process_media_file(media_file):
         return resize_image(media_file), 'image'      
     elif is_video(media_file):
         return compress_video(media_file), 'video'     
+    elif is_audio(media_file):
+        return media_file, 'audio' 
+    elif is_document(media_file):
+        return media_file, 'document'
     else:
         return media_file, 'unknown'                   

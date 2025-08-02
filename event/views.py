@@ -25,7 +25,8 @@ from event.serializers import (
     EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer
 )
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog,
+    EventTag
 )
 from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
@@ -641,6 +642,9 @@ class CreateEventMediaCommentAPIView(APIView):
 
             # Save the comment
             comment = serializer.save(profile=profile, event_media=event_media)
+            event_media.comments_count = event_media.comments.count()
+            event_media.save(update_fields=["comments_count"])
+            
             try:
                 transaction.on_commit(lambda: shared_event_media_comment_notification_task.delay(event_media.id, profile.id, comment.id))
             except:
@@ -1546,5 +1550,30 @@ class FilterEventListAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
         
+class EventByTagAPIView(APIView, PaginationMixin):
+    """
+    Get all events based on a hashtag (EventTag).
+    """
+    def get(self, request):
+        try:
+            tag_name = request.query_params.get("tag")
+            if not tag_name:
+                return Response({"error": "Tag name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
+            # Get tag instance
+            tag = get_object_or_404(EventTag, name__iexact=tag_name)
+            
+            # Get all events associated with this tag
+            events=tag.events.all().select_related("host").prefetch_related("tags")
+            print(events, 'events')
+            # events = Event.objects.filter(tags=tag, is_active=True).select_related("host").prefetch_related("tags")
 
+            # Serialize
+            paginated_queryset = self.paginate_queryset(events,request)
+            serializer = EventSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"status": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

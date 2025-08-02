@@ -50,7 +50,10 @@ def parse_gpt_response(text):
         parsed = json.loads(text)
         description = parsed.get("description", "").strip()
         # Split hashtags string into a list, strip "#" and spaces
-        hashtags = [tag.lstrip("#").strip() for tag in parsed.get("hash_tags", "").split() if tag.strip()]
+        hashtags_raw = parsed.get("hash_tags", "")
+        hashtags = [tag.strip() for tag in hashtags_raw.split(",") if tag.strip()]
+        # Ensure all hashtags start with "#"
+        hashtags = [tag if tag.startswith("#") else f"#{tag}" for tag in hashtags]
         # Split art_style into a list
         art_style = [style.strip() for style in parsed.get("art_style", "").split(",") if style.strip()]
         return {
