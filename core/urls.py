@@ -1,6 +1,6 @@
 from django.urls import path
 from core.views import (
-    LocationHierarchyAPIView, CountrySearchView, StateSearchView, CitySearchView, UpcomingFeatureAPIView, WeeklyChallengeAPIView
+    LocationHierarchyAPIView, CountrySearchView, StateSearchView, CitySearchView, UpcomingFeatureAPIView, WeeklyChallengeAPIView,
 )
 
 urlpatterns = [
