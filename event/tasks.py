@@ -139,7 +139,7 @@ def send_event_analytics_report_task(event_id):
 
                     # Send in-app notification
                     create_notification(
-                        sender=None,
+                        sender=event.host,
                         recipient=profile,
                         instance=event,
                         message=f"Your weekly analytics report for event \"{event.title}\" is now available.",

@@ -123,14 +123,14 @@ class Post(BaseModel):
 
     def save(self, *args, **kwargs):
         # Auto-generate slug per profile
-        if not self.slug and self.title:
-            base = slugify(self.title)
-            slug = base
-            counter = 1
-            while Post.objects.filter(profile=self.profile, slug=slug, status=PostStatus.PUBLISHED).exists():
-                slug = f"{base}-{counter}"
-                counter += 1
-            self.slug = slug
+        # if not self.slug and self.title:
+        #     base = slugify(self.title)
+        #     slug = base
+        #     counter = 1
+        #     while Post.objects.filter(profile=self.profile, slug=slug, status=PostStatus.PUBLISHED).exists():
+        #         slug = f"{base}-{counter}"
+        #         counter += 1
+        #     self.slug = slug
 
         # Set published_at when first going live
         if self.status == PostStatus.PUBLISHED and not self.published_at:
