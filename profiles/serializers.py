@@ -28,6 +28,9 @@ from core.utils import process_media_file
 from event.serializers import (
     EventListSerializer
 )
+from post.choices import (
+    PostStatus
+)
 
 
 class StaticFieldValueSerializer(serializers.ModelSerializer):
@@ -225,6 +228,7 @@ class ProfileFieldSectionSerializer(serializers.ModelSerializer):
         model = ProfileFieldSection
         fields = ['id', 'title', 'description', 'display_order', 'fields']
 
+
 class ProfileDetailSerializer(serializers.ModelSerializer):
     field_sections = ProfileFieldSectionSerializer(many=True, read_only=True)
     static_sections = serializers.SerializerMethodField()
@@ -233,6 +237,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     is_following = serializers.SerializerMethodField()
     friend_request_status = serializers.SerializerMethodField()
     friend_request_id = serializers.SerializerMethodField()
+    total_posts_count = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     organized_events = serializers.SerializerMethodField()
 
@@ -250,7 +255,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'friend_request_id', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
-            'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required'
+            'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required', 'followers_count', 
+            'following_count', 'friends_count', 'total_posts_count'
         ]
     
     def get_is_friend(self, obj):
@@ -362,6 +368,9 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
 
         except Profile.DoesNotExist:
             return None
+    
+    def get_total_posts_count(self, obj):
+        return obj.posts.filter(status=PostStatus.PUBLISHED).count()
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):

@@ -52,7 +52,6 @@ class ArtType(BaseModel):
         super().save(*args, **kwargs)
 
 
-
 class Post(BaseModel):
     """
     A Post authored by a Profile (either an individual user or an org profile),
