@@ -483,8 +483,7 @@ class RespondFriendRequestView(APIView):
                 return Response(success_response("Friend request accepted."), status=status.HTTP_200_OK)
 
             elif action == 'reject':
-                friend_request.status = 'rejected'
-                friend_request.save()
+                friend_request.delete()
                 return Response(success_response("Friend request rejected."), status=status.HTTP_200_OK)
 
         except ValidationError as e:
