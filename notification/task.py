@@ -133,24 +133,41 @@ def send_post_reaction_notification_task(reaction_id):
 
 @shared_task
 def send_comment_notification_task(comment_id):
-    """ Sends a notification when a user comments on a post. """
+    """Sends a notification when a user comments or replies to a comment."""
     try:
-        comment = Comment.objects.select_related('post', 'post__profile', 'profile').get(id=comment_id)
+        comment = Comment.objects.select_related('post', 'post__profile', 'profile', 'parent', 'parent__profile').get(id=comment_id)
     except ObjectDoesNotExist:
         logger.warning(f"Comment with ID {comment_id} not found.")
         return
-    if comment.post.profile == comment.profile:
-        logger.info(f"Sender and recipient are the same. Skipping notification for {comment.profile.username} on post {comment.post.id}")
-        return
-    recipient = comment.post.profile
-    sender = comment.profile
-    instance = comment.post
-    notification_type = NotificationType.COMMENT
-    message = f"{sender.username} commented on your post"
 
-    if recipient and sender:
-        logger.info(f"Sending comment notification: {message} to {recipient.username} from {sender.username}")
-        create_notification(comment, sender, recipient, instance, message, notification_type)
+    sender = comment.profile
+
+    # Check if this is a reply to another comment
+    if comment.parent:
+        recipient = comment.parent.profile
+        instance = comment.parent
+        notification_type = NotificationType.REPLY
+        message = f"{sender.username} replied to your comment"
+
+        # Skip notification if replying to self
+        if recipient == sender:
+            logger.info(f"Sender and recipient are the same. Skipping reply notification for {sender.username} on comment {comment.parent.id}")
+            return
+    else:
+        # Top-level comment: notify post owner
+        recipient = comment.post.profile
+        instance = comment.post
+        notification_type = NotificationType.COMMENT
+        message = f"{sender.username} commented on your post"
+
+        # Skip notification if commenting on own post
+        if recipient == sender:
+            logger.info(f"Sender and recipient are the same. Skipping post notification for {sender.username} on post {comment.post.id}")
+            return
+
+    logger.info(f"Sending comment notification: {message} to {recipient.username} from {sender.username}")
+    create_notification(comment, sender, recipient, instance, message, notification_type)
+
 
 @shared_task
 def send_friend_request_notification_task(friend_request_id):

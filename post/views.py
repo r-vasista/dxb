@@ -50,9 +50,9 @@ from user.permissions import (
 from organization.models import (
     OrganizationMember
 )
-from notification.utils import (
-    create_dynamic_notification
-)
+# from notification.utils import (
+#     create_dynamic_notification
+# )
 from core.permissions import (
     is_owner_or_org_member
 )
@@ -542,8 +542,7 @@ class CommentReplyView(APIView):
             serializer.is_valid(raise_exception=True)
             comment = serializer.save()
             try:
-
-                create_dynamic_notification('comment', comment)
+                transaction.on_commit(lambda: send_comment_notification_task.delay(comment.id))
             except:
                 pass
             # Update reply count
