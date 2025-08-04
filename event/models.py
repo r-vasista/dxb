@@ -323,6 +323,11 @@ class EventMediaComment(BaseModel):
 class EventMediaLike(BaseModel):
     event_media=models.ForeignKey(EventMedia,on_delete=models.CASCADE,related_name='media_like')
     profile=models.ForeignKey(Profile,on_delete=models.CASCADE)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['event_media', 'profile'], name='unique_event_media_like')
+        ]
 
     def __str__(self):
         return f"{self.profile.username} liked on media {self.event_media}"
@@ -331,6 +336,11 @@ class EventMediaLike(BaseModel):
 class EventMediaCommentLike(BaseModel):
     event_media_comment = models.ForeignKey(EventMediaComment,on_delete=models.CASCADE,related_name='event_media_comment_like')
     profile = models.ForeignKey(Profile,on_delete=models.CASCADE)
+    
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['event_media_comment', 'profile'], name='unique_event_media_comment_like')
+        ]
 
     def __str__(self):
         return f"{self.profile.username} like  on comment {self.event_media_comment}"
