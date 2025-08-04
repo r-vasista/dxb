@@ -232,6 +232,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     is_friend = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     friend_request_status = serializers.SerializerMethodField()
+    friend_request_id = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     organized_events = serializers.SerializerMethodField()
 
@@ -246,7 +247,7 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'bio', 'profile_picture', 'cover_picture',
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
-            'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'static_sections',
+            'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'friend_request_id', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
             'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required'
@@ -341,6 +342,26 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     def get_organized_events(self, obj):
         events = obj.organized_events.all()
         return EventListSerializer(events, many=True).data 
+    
+    def get_friend_request_id(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            user_profile = get_user_profile(request.user)
+
+            if user_profile == obj:
+                return None  # You can't send a request to yourself
+
+            # Try to find a friend request either direction
+            friend_request = FriendRequest.objects.filter(
+                from_profile=user_profile, to_profile=obj
+            ).order_by('-created_at').first()
+
+            return friend_request.id if friend_request else None
+
+        except Profile.DoesNotExist:
+            return None
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
