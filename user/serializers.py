@@ -2,8 +2,9 @@ from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainSerializer
 from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.models import update_last_login
+from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.exceptions import ValidationError
+from django.contrib.auth.models import update_last_login
 from django.contrib.auth import get_user_model
 from user.models import Role, Permission
 from organization.models import Organization
@@ -17,8 +18,20 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
 
         # Lower email while logging in
         email = attrs.get("email") or attrs.get("username")
+        password = attrs.get("password")
+        
         if email:
             attrs["email"] = email.lower()
+        
+        # Check if user exists
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist:
+            raise AuthenticationFailed("No account found with this email.")
+
+        # Check password
+        if not user.check_password(password):
+            raise AuthenticationFailed("Invalid password.")
 
         data = super().validate(attrs)
 
