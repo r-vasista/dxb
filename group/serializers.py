@@ -1,11 +1,26 @@
+# Rest Framework imports
 from rest_framework import serializers
 
-from group.models import GroupPost
+# Local imports
+from group.models import (
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+)
+from profiles.serializers import (
+    BasicProfileSerializer
+)
 
-from profiles.serializers import BasicProfileSerializer
 
+class GroupCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['name', 'type', 'description', 'logo', 'cover_image']
+
+    def validate_name(self, value):
+        if Group.objects.filter(name__iexact=value.strip()).exists():
+            raise serializers.ValidationError("A group with this name already exists.")
+        return value
+    
 class GroupPostSerializer(serializers.ModelSerializer):
     profile=BasicProfileSerializer(read_only=True)
     class Meta:
         model = GroupPost
-        fields = '__all__'

@@ -7,3 +7,7 @@ class RoleChoices(models.TextChoices):
     CONTRIBUTOR = 'contributor', 'Contributor'
     VIEWER = 'viewer', 'Viewer'
     
+
+class GroupType(models.TextChoices):
+    GROUP = 'group', 'Group'
+    
