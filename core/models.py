@@ -150,3 +150,7 @@ class FeatureStep(models.Model):
 
     def __str__(self):
         return f"{self.feature.title} - Step {self.order}: {self.title}"
+    
+
+class HashTag(models.Model):
+    name = models.CharField(max_length=255, unique=True)

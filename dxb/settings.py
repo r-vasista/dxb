@@ -66,7 +66,7 @@ INSTALLED_APPS = [
     "import_export",
     "ai",
     "mentor",
-    
+    "group"
 ]
 
 MIDDLEWARE = [
