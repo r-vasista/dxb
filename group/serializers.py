@@ -5,6 +5,9 @@ from rest_framework import serializers
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
 )
+from group.choices import (
+    RoleChoices
+)
 from profiles.serializers import (
     BasicProfileSerializer
 )
@@ -25,7 +28,7 @@ class GroupCreateSerializer(serializers.ModelSerializer):
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()
-
+    
     class Meta:
         model = Group
         fields = '__all__'
@@ -47,3 +50,32 @@ class GroupPostSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = GroupPost
+
+
+class AddGroupMemberSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=RoleChoices.choices)
+    
+    class Meta:
+        model = GroupMember
+        fields = '__all__'
+        read_only_fields = ['assigned_by']
+        extra_kwargs = {
+            'role': {'required': True}
+        }
+
+    def validate(self, data):
+        group = self.context.get('group')
+        profile = data['profile']
+
+        if GroupMember.objects.filter(group=group, profile=profile).exists():
+            raise serializers.ValidationError("This profile is already a member of the group.")
+
+        return data
+
+
+class GroupMemberSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = GroupMember
+        fields = ['id', 'profile', 'role', 'joined_at', 'is_banned']
