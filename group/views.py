@@ -8,7 +8,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 # Djnago imports
 from django.db import transaction
-
+from django.shortcuts import get_object_or_404
+from django.http import Http404
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
@@ -17,7 +18,10 @@ from group.choices import (
     RoleChoices
 )
 from group.serializers import (
-    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer
+    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, AddGroupMemberSerializer, GroupMemberSerializer
+)
+from group.permissions import (
+    can_add_members
 )
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
@@ -131,5 +135,66 @@ class GroupPostDetailAPIView(APIView):
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
             return Response(error_response("Group post not found."), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupAddMemberAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            data = request.data
+            # 1. Fetch group
+            group = get_object_or_404(Group, id=data.get('group'))
+            
+            # 2. Get request user's profile
+            acting_profile = get_user_profile(request.user)
+
+            # 3. Check permission: Only Admin or Moderator can add members
+            if not can_add_members(group, acting_profile):
+                return Response(error_response("You do not have permission to add members."),
+                                status=status.HTTP_403_FORBIDDEN)
+                
+            # 4. Save new member
+            serializer = AddGroupMemberSerializer(data=data, context={'group': group})
+            serializer.is_valid(raise_exception=True)
+            serializer.save(assigned_by=acting_profile)
+
+            # Update group member count
+            group.member_count = GroupMember.objects.filter(group=group).count()
+            group.save(update_fields=['member_count'])
+
+            return Response(success_response({"message": "Member added successfully."}),
+                            status=status.HTTP_201_CREATED)
+        except ValueError as e:
+                return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except ValidationError as e:
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupMemberListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id=None, group_name=None):
+        try:
+            
+            if group_id:
+                group = Group.objects.get(pk=group_id)
+            else:
+                group = Group.objects.get(name__iexact=group_name)
+
+            # Fetch all active members
+            members = GroupMember.objects.select_related('profile').filter(group=group)
+
+            serializer = GroupMemberSerializer(members, many=True, context={'request':request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Group.DoesNotExist:
+            return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
