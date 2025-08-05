@@ -509,3 +509,8 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'username', 'bio', 'profile_picture', 'tools', 'awards']
+
+class BasicProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id', 'username','profile_picture']
