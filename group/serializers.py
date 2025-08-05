@@ -5,6 +5,9 @@ from rest_framework import serializers
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
 )
+from profiles.serializers import (
+    BasicProfileSerializer
+)
 
 
 class GroupCreateSerializer(serializers.ModelSerializer):
@@ -16,3 +19,8 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         if Group.objects.filter(name__iexact=value.strip()).exists():
             raise serializers.ValidationError("A group with this name already exists.")
         return value
+    
+class GroupPostSerializer(serializers.ModelSerializer):
+    profile=BasicProfileSerializer(read_only=True)
+    class Meta:
+        model = GroupPost
