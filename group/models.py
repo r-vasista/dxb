@@ -22,8 +22,6 @@ class Group(BaseModel):
     activity_score = models.FloatField(default=0.0)
     last_activity = models.DateTimeField(auto_now_add=True)
     featured = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return self.name
@@ -59,8 +57,6 @@ class GroupPost(BaseModel):
     share_count = models.PositiveIntegerField(default=0)
     is_flagged = models.BooleanField(default=False)
     flag_count = models.PositiveIntegerField(default=0)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
     
     def __str__(self):
         return f'{self.group.name}, {self.id}'
@@ -77,9 +73,6 @@ class GroupPostComment(BaseModel):
     
     # Comment content
     content = models.TextField()
-
-    class Meta:
-        ordering = ['created_at']
         
     def __str__(self):
         return f"Comment by {self.profile.username} on {self.group_post.group.name} post"

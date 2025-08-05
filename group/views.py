@@ -17,7 +17,7 @@ from group.choices import (
     RoleChoices
 )
 from group.serializers import (
-    GroupCreateSerializer, GroupPostSerializer
+    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer
 )
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
@@ -55,6 +55,22 @@ class GroupCreateAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
+class GroupDetailAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request, group_id=None, group_name=None):
+        try:
+            if group_id:
+                group = Group.objects.get(pk=group_id)
+            else:
+                group = Group.objects.get(name__iexact=group_name)
+                
+            serializer = GroupDetailSerializer(group, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Group.DoesNotExist:
+            return Response(error_response('Group not found'), status=status.HTTP_404_NOT_FOUND)
+        
 
 class GroupPostCreateAPIView(APIView):
     parser_classes = [MultiPartParser, FormParser]
