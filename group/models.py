@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices
+    RoleChoices, GroupType
 )
 from profiles.models import (
     Profile
@@ -13,6 +13,7 @@ from core.models import (
 
 class Group(BaseModel):
     name = models.CharField(max_length=100, unique=True)
+    type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
     description = models.TextField(max_length=500)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
     logo = models.ImageField(upload_to='group_logo/', null=True, blank=True)
