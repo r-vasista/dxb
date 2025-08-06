@@ -51,6 +51,31 @@ class GroupPostSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupPost
 
+class GroupPostCommentSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+    replies = serializers.SerializerMethodField()
+    reply_count = serializers.IntegerField(read_only=True)
+    
+    class Meta:
+        model = GroupPostComment
+        fields = ['id', 'group_post', 'profile', 'content', 'parent', 'like_count', 'reply_count', 'replies']
+
+    def get_replies(self, obj):
+        queryset = obj.replies.filter(is_active=True)
+        return GroupPostCommentSerializer(queryset, many=True).data
+
+class GroupPostLikeSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+    class Meta:
+        model = GroupPostLike
+        fields = ['id', 'group_post', 'profile']
+
+class GroupPostCommentLikeSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+    class Meta:
+        model = GroupPostCommentLike
+        fields = ['id', 'comment', 'profile']
+
 
 class AddGroupMemberSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=RoleChoices.choices)
