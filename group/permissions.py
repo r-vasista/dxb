@@ -31,3 +31,22 @@ class IsGroupAdminOrModerator(BasePermission):
             return membership.role in [RoleChoices.ADMIN, RoleChoices.MODERATOR]
         except GroupMember.DoesNotExist:
             return False
+
+
+class IsGroupAdmin(BasePermission):
+    """
+    Allows access only to group Admin.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        """
+        `obj` is expected to be a Group instance.
+        """
+        if not request.user.is_authenticated:
+            return False
+
+        try:
+            membership = GroupMember.objects.get(group=obj, profile=get_user_profile(request.user))
+            return membership.role == RoleChoices.ADMIN
+        except GroupMember.DoesNotExist:
+            return False

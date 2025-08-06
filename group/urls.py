@@ -2,7 +2,7 @@ from django.urls import path
 
 from group.views import (
     GroupListAPIView, GroupPostCreateAPIView, GroupPostDetailAPIView, GroupCreateAPIView, GroupDetailAPIView, GroupAddMemberAPIView, 
-    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView
+    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView
 )
 
 urlpatterns = [
@@ -15,6 +15,8 @@ urlpatterns = [
     
     # Group Members
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
+    path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
+    path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<str:group_name>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
 

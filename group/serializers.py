@@ -117,3 +117,11 @@ class GroupListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['id', 'name', 'description', 'logo', 'cover_image', 'creator', 'created_at']
+
+
+class GroupMemberUpdateSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=RoleChoices.choices)
+
+    class Meta:
+        model = GroupMember
+        fields = ['role']
