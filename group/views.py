@@ -11,6 +11,8 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.http import Http404
+from django.db.models import F
+
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
@@ -20,7 +22,7 @@ from group.choices import (
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
-    GroupListSerializer
+    GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer
 )
 from group.permissions import (
     can_add_members
@@ -161,44 +163,129 @@ class GroupPostDetailAPIView(APIView):
         except GroupPost.DoesNotExist:
             return Response(error_response("Group Post Does not found"))
         except Exception as e:
-            return Response(error_response(str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR)        
+            return Response(error_response(str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
+        
+    def put(self, request, post_id):
+        try:
+            post = GroupPost.objects.get(id=post_id)
+            profile = get_user_profile(request.user)
+
+            # Only allow author or admin/moderator
+            is_author = post.profile == profile
+            group_member = GroupMember.objects.filter(
+                group=post.group, profile=profile, is_banned=False).first()
+            allowed_roles = [RoleChoices.ADMIN, RoleChoices.MODERATOR]
+            is_privileged = group_member and group_member.role in allowed_roles
+
+            if not (is_author or is_privileged):return Response(error_response("You do not have permission to update this post."),
+                    status=status.HTTP_403_FORBIDDEN,)
+
+            data = request.data.copy()
+            
+            updated = False
+
+            if "content" in data:
+                post.content = data["content"]
+                updated = True
+
+            if "tags" in data:
+                tag_ids = data.getlist("tags") if hasattr(data, "getlist") else data["tags"]
+                post.tags.set(tag_ids)
+                updated = True
+            handle_grouppost_hashtags(post)  # Define this as shown below.
+
+            if updated:
+                post.save()
+
+            serializer = GroupPostSerializer(post)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except GroupPost.DoesNotExist:
+            return Response(error_response("Group post not found."), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)       
         
 
-class AddGroupPostCommentAPIView(APIView):
+class CreateGroupPostCommentAPIView(APIView):
+    """
+    API view to create comments/replies for a group post.
+    """
     permission_classes = [IsAuthenticated]
 
     def post(self, request, post_id):
         try:
             profile = get_actual_user(request.user)
-            group_post = GroupPost.objects.get(id=post_id)
+            group_post = get_object_or_404(GroupPost, id=post_id)
+            
             data = request.data.copy()
-            data['group_post'] = post_id
+            data['group_post'] = group_post.id
             data['profile'] = profile.id
+
+            # Optional: validate parent
+            parent_id = data.get("parent")
+            if parent_id:
+                parent_comment = GroupPostComment.objects.filter(id=parent_id, group_post=group_post).first()
+                if not parent_comment:
+                    return Response(error_response("Invalid parent comment."),
+                                    status=status.HTTP_400_BAD_REQUEST)
+
             serializer = GroupPostCommentSerializer(data=data)
             serializer.is_valid(raise_exception=True)
-            serializer.save()
+            comment = serializer.save()
+
+            # If top-level, increment comments_count on post
             if not serializer.validated_data.get('parent'):
                 group_post.comments_count = F('comments_count') + 1
                 group_post.save(update_fields=['comments_count'])
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
-
-class ListGroupPostCommentsAPIView(APIView,PaginationMixin):
-    permission_classes = [IsAuthenticated]
-    def get(self, request, post_id):
-        try:
-            # Only top-level comments (parent=None)
-            comments = GroupPostComment.objects.filter(group_post_id=post_id, parent=None, is_active=True)
-            paginated_queryset = self.paginate_queryset(comments,request)
-            serializer = GroupPostCommentSerializer(paginated_queryset, many=True, context={'request': request})
-            return self.get_paginated_response(serializer.data)
-        
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response({"status": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class ParentGroupPostCommentsAPIView(APIView, PaginationMixin):
+    """
+    List all top-level comments for a group post (paginated).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            comments = GroupPostComment.objects.select_related('profile', 'parent').filter(
+                group_post__id=post_id, parent__isnull=True, is_active=True
+            ).order_by('-created_at')
+            
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = GroupPostCommentSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class ChildGroupPostCommentListAPIView(APIView, PaginationMixin):
+    """
+    List all child comments/replies for a parent comment on a group post (paginated).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id, parent_id):
+        try:
+            group_post = get_object_or_404(GroupPost, id=post_id)
+            comments = GroupPostComment.objects.select_related('profile', 'parent').filter(
+                group_post=group_post, parent_id=parent_id, is_active=True
+            ).order_by('created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = GroupPostCommentSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 
@@ -276,5 +363,132 @@ class NewGroupsListAPIView(APIView, PaginationMixin):
 
             return self.get_paginated_response(success_response(serializer.data))
 
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupPostLikesByIdAPIView(APIView, PaginationMixin):
+    """
+    GET /groups/posts/<post_id>/likes/
+        Returns paginated list of likes on a group post.
+
+    POST
+        Toggles like/unlike on a post for the authenticated user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = get_object_or_404(GroupPost, id=post_id)
+            likes_qs = GroupPostLike.objects.filter(group_post=post).order_by('-created_at')
+            paginated_likes = self.paginate_queryset(likes_qs, request)
+            serializer = GroupPostLikeSerializer(paginated_likes, many=True)
+            return self.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def post(self, request, post_id):
+        try:
+            profile = get_user_profile(request.user)
+            post = get_object_or_404(GroupPost, id=post_id)
+            existing_like = GroupPostLike.objects.filter(group_post=post, profile=profile).first()
+            with transaction.atomic():
+                if existing_like:
+                    existing_like.delete()
+                    post.likes_count = F('likes_count') - 1
+                    post.save(update_fields=["likes_count"])
+                    return Response({"message": "Like removed."}, status=status.HTTP_200_OK)
+                else:
+                    like = GroupPostLike.objects.create(group_post=post, profile=profile)
+                    post.likes_count = F('likes_count') + 1
+                    post.save(update_fields=["likes_count"])
+                    serializer = GroupPostLikeSerializer(like)
+                    return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class GroupPostLikeDetailAPIView(APIView):
+    """
+    GET: Retrieve like detail (only if owned)
+    DELETE: Remove like (only if owned)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self, pk, profile):
+        try:
+            return GroupPostLike.objects.get(pk=pk, profile=profile)
+        except GroupPostLike.DoesNotExist:
+            raise Http404("Like not found or not owned by you.")
+
+    def get(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            like = self.get_object(pk, profile)
+            serializer = GroupPostLikeSerializer(like)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+    def delete(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            like = self.get_object(pk, profile)
+            post = like.group_post
+            with transaction.atomic():
+                like.delete()
+                post.likes_count = F('likes_count') - 1
+                post.save(update_fields=['likes_count'])
+            return Response({"message": "Like deleted successfully."}, status=status.HTTP_204_NO_CONTENT)
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupPostCommentLikeToggleAPIView(APIView):
+    """
+    POST: Toggle like/unlike for a group post comment (by comment id)
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            comment_id = request.data.get("comment_id")
+            if not comment_id:
+                return Response(error_response("comment_id required."), status=status.HTTP_400_BAD_REQUEST)
+            comment = get_object_or_404(GroupPostComment, id=comment_id)
+            existing_like = GroupPostCommentLike.objects.filter(comment=comment, profile=profile).first()
+            with transaction.atomic():
+                if existing_like:
+                    existing_like.delete()
+                    comment.like_count = F("like_count") - 1
+                    comment.save(update_fields=["like_count"])
+                    return Response({"message": "Like removed."}, status=status.HTTP_200_OK)
+                else:
+                    like = GroupPostCommentLike.objects.create(comment=comment, profile=profile)
+                    comment.like_count = F("like_count") + 1
+                    comment.save(update_fields=["like_count"])
+                    serializer = GroupPostCommentLikeSerializer(like)
+                    return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class GroupPostCommentLikeListAPIView(APIView, PaginationMixin):
+    """
+    GET /groups/post-comments/<comment_id>/likes/
+    Returns paginated list of likes on a group post comment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, comment_id):
+        try:
+            comment = get_object_or_404(GroupPostComment, id=comment_id)
+            likes_qs = GroupPostCommentLike.objects.filter(comment=comment).order_by('-created_at')
+            paginated_likes = self.paginate_queryset(likes_qs, request)
+            serializer = GroupPostCommentLikeSerializer(paginated_likes, many=True)
+            return self.get_paginated_response(serializer.data)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
