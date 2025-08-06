@@ -25,6 +25,12 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+class GroupUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['name', 'description', 'logo', 'cover_image']
+        
+        
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()
@@ -127,3 +133,11 @@ class GroupListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['id', 'name', 'description', 'logo', 'cover_image', 'creator', 'created_at']
+
+
+class GroupMemberUpdateSerializer(serializers.ModelSerializer):
+    role = serializers.ChoiceField(choices=RoleChoices.choices)
+
+    class Meta:
+        model = GroupMember
+        fields = ['role']
