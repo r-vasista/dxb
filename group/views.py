@@ -20,10 +20,10 @@ from group.choices import (
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
-    GroupListSerializer
+    GroupListSerializer, GroupUpdateSerializer
 )
 from group.permissions import (
-    can_add_members
+    can_add_members, IsGroupAdminOrModerator
 )
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
@@ -59,6 +59,34 @@ class GroupCreateAPIView(APIView):
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupAdminOrModerator]
+
+    def get_object(self, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            self.check_object_permissions(self.request, group)  # This enforces IsGroupAdminOrModerator
+            return group
+        except Group.DoesNotExist:
+            return None
+
+    def put(self, request, group_id):
+        group = self.get_object(group_id)
+        if not group:
+            return Response(error_response("Group not found."), status=status.HTTP_404_NOT_FOUND)
+
+        serializer = GroupUpdateSerializer(group, data=request.data, partial=True)
+        if not serializer.is_valid():
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            with transaction.atomic():
+                serializer.save()
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -184,6 +212,7 @@ class AddGroupPostCommentAPIView(APIView):
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
 
 class ListGroupPostCommentsAPIView(APIView,PaginationMixin):
     permission_classes = [IsAuthenticated]

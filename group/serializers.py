@@ -25,6 +25,12 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         return value
 
 
+class GroupUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['name', 'description', 'logo', 'cover_image']
+        
+        
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()

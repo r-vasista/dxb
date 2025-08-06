@@ -2,12 +2,13 @@ from django.urls import path
 
 from group.views import (
     GroupListAPIView, GroupPostCreateAPIView, GroupPostDetailAPIView, GroupCreateAPIView, GroupDetailAPIView, GroupAddMemberAPIView, 
-    GroupMemberListAPIView, NewGroupsListAPIView
+    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView
 )
 
 urlpatterns = [
     # Group
     path('create-group/', GroupCreateAPIView.as_view(), name='create-group'),
+    path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('group-details/<str:group_name>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
