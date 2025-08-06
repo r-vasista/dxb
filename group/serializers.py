@@ -104,3 +104,10 @@ class GroupMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupMember
         fields = ['id', 'profile', 'role', 'joined_at', 'is_banned']
+        
+class GroupListSerializer(serializers.ModelSerializer):
+    creator = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'description', 'logo', 'cover_image', 'creator', 'created_at']

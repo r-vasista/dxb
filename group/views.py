@@ -19,7 +19,8 @@ from group.choices import (
     RoleChoices
 )
 from group.serializers import (
-    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer,GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer
+    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
+    GroupListSerializer
 )
 from group.permissions import (
     can_add_members
@@ -258,5 +259,22 @@ class GroupMemberListAPIView(APIView):
 
         except Group.DoesNotExist:
             return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class NewGroupsListAPIView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            groups = Group.objects.select_related('creator').order_by('-created_at')
+            
+            paginated_groups = self.paginate_queryset(groups, request)
+
+            serializer = GroupListSerializer(paginated_groups, many=True, context={'request': request})
+
+            return self.get_paginated_response(success_response(serializer.data))
+
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
