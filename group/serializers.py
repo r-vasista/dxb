@@ -58,29 +58,45 @@ class GroupPostSerializer(serializers.ModelSerializer):
         model = GroupPost
 
 class GroupPostCommentSerializer(serializers.ModelSerializer):
-    profile = BasicProfileSerializer(read_only=True)
-    replies = serializers.SerializerMethodField()
-    reply_count = serializers.IntegerField(read_only=True)
-    
+    profile = serializers.SerializerMethodField()
+    reply_count = serializers.SerializerMethodField()
+    is_reply = serializers.SerializerMethodField()
+
     class Meta:
         model = GroupPostComment
-        fields = ['id', 'group_post', 'profile', 'content', 'parent', 'like_count', 'reply_count', 'replies']
+        fields = [
+            'id', 'group_post', 'profile', 'content', 'parent',
+            'created_at', 'reply_count', 'is_reply', 'like_count'
+        ]
+        read_only_fields = [
+            'id', 'group_post', 'profile', 'created_at', 'reply_count', 'is_reply'
+        ]
 
-    def get_replies(self, obj):
-        queryset = obj.replies.filter(is_active=True)
-        return GroupPostCommentSerializer(queryset, many=True).data
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if getattr(obj.profile, "profile_picture", None) else None,
+        }
+
+    def get_reply_count(self, obj):
+        return obj.reply_count
+
+    def get_is_reply(self, obj):
+        return obj.is_reply
+
 
 class GroupPostLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
     class Meta:
         model = GroupPostLike
-        fields = ['id', 'group_post', 'profile']
+        fields = ['id', 'group_post', 'profile','created_at']
 
 class GroupPostCommentLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
     class Meta:
         model = GroupPostCommentLike
-        fields = ['id', 'comment', 'profile']
+        fields = ['id', 'comment', 'profile','created_at']
 
 
 class AddGroupMemberSerializer(serializers.ModelSerializer):
