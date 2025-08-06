@@ -28,6 +28,9 @@ from core.utils import process_media_file
 from event.serializers import (
     EventListSerializer
 )
+from post.choices import (
+    PostStatus
+)
 
 
 class StaticFieldValueSerializer(serializers.ModelSerializer):
@@ -225,6 +228,7 @@ class ProfileFieldSectionSerializer(serializers.ModelSerializer):
         model = ProfileFieldSection
         fields = ['id', 'title', 'description', 'display_order', 'fields']
 
+
 class ProfileDetailSerializer(serializers.ModelSerializer):
     field_sections = ProfileFieldSectionSerializer(many=True, read_only=True)
     static_sections = serializers.SerializerMethodField()
@@ -232,6 +236,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     is_friend = serializers.SerializerMethodField()
     is_following = serializers.SerializerMethodField()
     friend_request_status = serializers.SerializerMethodField()
+    friend_request_id = serializers.SerializerMethodField()
+    total_posts_count = serializers.SerializerMethodField()
     got_friend_request = serializers.SerializerMethodField()
     organized_events = serializers.SerializerMethodField()
 
@@ -246,10 +252,11 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'id', 'username', 'bio', 'profile_picture', 'cover_picture',
             'profile_type', 'visibility_status',
             'followers_count', 'following_count', 'friends_count',
-            'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'static_sections',
+            'field_sections', 'is_friend', 'is_following', 'friend_request_status', 'friend_request_id', 'static_sections',
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
-            'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required'
+            'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required', 'followers_count', 
+            'following_count', 'friends_count', 'total_posts_count'
         ]
     
     def get_is_friend(self, obj):
@@ -341,6 +348,29 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     def get_organized_events(self, obj):
         events = obj.organized_events.all()
         return EventListSerializer(events, many=True).data 
+    
+    def get_friend_request_id(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return None
+        try:
+            user_profile = get_user_profile(request.user)
+
+            if user_profile == obj:
+                return None  # You can't send a request to yourself
+
+            # Try to find a friend request either direction
+            friend_request = FriendRequest.objects.filter(
+                from_profile=user_profile, to_profile=obj
+            ).order_by('-created_at').first()
+
+            return friend_request.id if friend_request else None
+
+        except Profile.DoesNotExist:
+            return None
+    
+    def get_total_posts_count(self, obj):
+        return obj.posts.filter(status=PostStatus.PUBLISHED).count()
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
@@ -479,3 +509,8 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'username', 'bio', 'profile_picture', 'tools', 'awards']
+
+class BasicProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Profile
+        fields = ['id', 'username','profile_picture']

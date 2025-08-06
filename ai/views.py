@@ -102,8 +102,7 @@ class EventDescriptionAIAPIView(APIView):
     
     def post(self, request):
         try:
-            data = request.data
-            event_data = data.get('event_data', '')
+            event_data = request.data
             ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.EVENT_DESCRIPTION)
             gpt_model = ai_config.gpt_model
             prompt_instruction = ai_config.prompt

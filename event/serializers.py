@@ -133,13 +133,13 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
         return attrs
     
     def create(self, validated_data):
-        event_image_file= validated_data .GET ('event_image')
+        event_image_file= validated_data.get('event_image')
         if event_image_file:
             new_image_file, filetype = process_media_file(event_image_file)
             if filetype == 'image':
                 validated_data ['event_image'] = new_image_file
             
-        event_logo_file= validated_data .GET ('event_logo')
+        event_logo_file= validated_data.get('event_logo')
         if event_logo_file:
             new_logo_file, filetype = process_media_file(event_logo_file)
             if filetype == 'image':
@@ -307,6 +307,7 @@ class EventMediaCommentSerializer(serializers.ModelSerializer):
 
     def get_is_reply(self, obj):
         return obj.is_reply
+
 
 class EventSerializer(serializers.ModelSerializer):
     attendee_count = serializers.IntegerField(read_only=True)
