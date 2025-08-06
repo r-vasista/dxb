@@ -1,4 +1,5 @@
 # Rest Framework imports
+from django.http import Http404
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
@@ -18,7 +19,7 @@ from group.choices import (
     RoleChoices
 )
 from group.serializers import (
-    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, AddGroupMemberSerializer, GroupMemberSerializer
+    GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer,GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer
 )
 from group.permissions import (
     can_add_members
@@ -27,8 +28,9 @@ from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
 )
 from group.utils import (
-    can_post_to_group
+    can_post_to_group, handle_grouppost_hashtags
 )
+from core.pagination import PaginationMixin
 
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -94,6 +96,7 @@ class GroupPostCreateAPIView(APIView):
             serializer = GroupPostSerializer(data=data)
             serializer.is_valid(raise_exception=True)
             post=serializer.save()
+            handle_grouppost_hashtags(post)
             return Response(success_response,(serializer.data),status=status.HTTP_201_CREATED)
         except Group.DoesNotExist:
             return Response(error_response("Group Does not found"))
@@ -137,6 +140,65 @@ class GroupPostDetailAPIView(APIView):
             return Response(error_response("Group post not found."), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+    def delete(self,request,post_id):
+
+        try:
+            post = GroupPost.objects.get(id=post_id)
+            profile = get_user_profile(request.user)
+
+            is_author = post.profile == profile
+            group_member = GroupMember .objects.filter(group=post.group,
+                                profile=profile,is_banned=False).first()
+            allowed_roles = [RoleChoices.ADMIN,RoleChoices.MODERATOR]
+            is_privileged = group_member and group_member.role in allowed_roles
+
+            if not (is_author or is_privileged):
+                return Response(error_response("you do not have permission to delete this post"),status=status.HTTP_403_FORBIDDEN)
+            post.delete()
+            return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_204_NO_CONTENT)
+        except GroupPost.DoesNotExist:
+            return Response(error_response("Group Post Does not found"))
+        except Exception as e:
+            return Response(error_response(str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR)        
+        
+
+class AddGroupPostCommentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, post_id):
+        try:
+            profile = get_actual_user(request.user)
+            group_post = GroupPost.objects.get(id=post_id)
+            data = request.data.copy()
+            data['group_post'] = post_id
+            data['profile'] = profile.id
+            serializer = GroupPostCommentSerializer(data=data)
+            serializer.is_valid(raise_exception=True)
+            serializer.save()
+            if not serializer.validated_data.get('parent'):
+                group_post.comments_count = F('comments_count') + 1
+                group_post.save(update_fields=['comments_count'])
+
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+class ListGroupPostCommentsAPIView(APIView,PaginationMixin):
+    permission_classes = [IsAuthenticated]
+    def get(self, request, post_id):
+        try:
+            # Only top-level comments (parent=None)
+            comments = GroupPostComment.objects.filter(group_post_id=post_id, parent=None, is_active=True)
+            paginated_queryset = self.paginate_queryset(comments,request)
+            serializer = GroupPostCommentSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response({"status": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class GroupAddMemberAPIView(APIView):
