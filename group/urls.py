@@ -4,7 +4,8 @@ from group.views import (
     GroupListAPIView, GroupPostCreateAPIView, GroupPostDetailAPIView, GroupCreateAPIView, GroupDetailAPIView, GroupAddMemberAPIView, 
     GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
-    GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView
+    GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
+    GroupJoinRequestCreateAPIView
 )
 
 urlpatterns = [
@@ -16,11 +17,13 @@ urlpatterns = [
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
     
     # Group Members
+    path('join-group/<int:group_id>/', GroupJoinRequestCreateAPIView.as_view(), name='join-group'),
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<str:group_name>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
+    
 
     #Group Post
     path('group/post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),

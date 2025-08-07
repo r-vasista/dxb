@@ -1,7 +1,7 @@
 from django.contrib import admin
     
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 
 @admin.register(Group)
@@ -21,3 +21,12 @@ class GroupPostAdmin(admin.ModelAdmin):
     list_display = ['id', 'group', 'profile', 'content']
     search_fields =  ['id', 'group', 'profile', 'content']
     list_filter = ['id', 'group', 'profile', 'content']
+
+
+@admin.register(GroupJoinRequest)
+class GroupJoinRequestAdmin(admin.ModelAdmin):
+    list_display = ['id', 'group', 'profile', 'status']
+    search_fields =  ['id', 'group', 'profile', 'status']
+    list_filter = ['id', 'group', 'profile', 'status']
+
+    
