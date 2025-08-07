@@ -30,3 +30,16 @@ class GroupJoinRequestAdmin(admin.ModelAdmin):
     list_filter = ['id', 'group', 'profile', 'status']
 
     
+    
+@admin.register(GroupPostComment)
+class GroupPostCommentAdmin(admin.ModelAdmin):
+    list_display = ['id', 'group_post', 'profile', 'content']
+    search_fields =  ['id', 'group_post', 'profile', 'content']
+    list_filter = ['id', 'group_post', 'profile', 'content']
+
+@admin.register(GroupPostLike)
+class GroupPostLikeAdmin(admin.ModelAdmin):
+    list_display = ['id', 'group_post', 'profile']
+    search_fields =  ['id', 'group_post', 'profile']
+    list_filter = ['id', 'group_post', 'profile', ]
+

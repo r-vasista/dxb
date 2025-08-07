@@ -4,7 +4,7 @@ from django.db.models.fields import DateTimeField
 from datetime import datetime
 
 from core.models import (
-    Country, State, City, WeeklyChallenge,UpcomingFeature, FeatureStep
+    Country, State, City, WeeklyChallenge,UpcomingFeature, FeatureStep,HashTag
 )
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
@@ -109,3 +109,8 @@ class UpcomingFeatureSerializer(serializers.ModelSerializer):
     class Meta:
         model = UpcomingFeature
         fields = ['id', 'title', 'description', 'status', 'steps', 'created_at']
+
+class HashTagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HashTag
+        fields = ['name'] 

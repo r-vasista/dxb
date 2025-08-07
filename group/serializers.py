@@ -11,7 +11,7 @@ from group.choices import (
 from profiles.serializers import (
     BasicProfileSerializer
 )
-
+from core.serializers import HashTagSerializer
 
 class GroupCreateSerializer(serializers.ModelSerializer):
     
@@ -68,14 +68,27 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     
 class GroupPostSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
-    
+    tags = HashTagSerializer(many=True, read_only=True)
+    comments_count = serializers.SerializerMethodField()
     class Meta:
         model = GroupPost
+        fields = [
+            'id', 'group', 'profile', 'content', 'media_file', 'tags',
+            'is_pinned', 'is_announcement', 'likes_count',
+            'comments_count', 'share_count', 'is_flagged', 'flag_count'
+        ]
+    def get_comments_count(self, obj):
+        return GroupPostComment.objects.filter(
+            group_post=obj,
+            is_active=True,
+            parent__isnull=True  # ✅ Count only top-level comments
+        ).count()
+
 
 class GroupPostCommentSerializer(serializers.ModelSerializer):
-    profile = serializers.SerializerMethodField()
-    reply_count = serializers.SerializerMethodField()
-    is_reply = serializers.SerializerMethodField()
+    profile = serializers.SerializerMethodField(read_only=True)
+    reply_count = serializers.SerializerMethodField(read_only=True)
+    is_reply = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = GroupPostComment
@@ -84,7 +97,7 @@ class GroupPostCommentSerializer(serializers.ModelSerializer):
             'created_at', 'reply_count', 'is_reply', 'like_count'
         ]
         read_only_fields = [
-            'id', 'group_post', 'profile', 'created_at', 'reply_count', 'is_reply'
+            'id', 'group_post', 'profile', 'created_at', 'reply_count', 'is_reply', 'like_count'
         ]
 
     def get_profile(self, obj):
@@ -95,11 +108,15 @@ class GroupPostCommentSerializer(serializers.ModelSerializer):
         }
 
     def get_reply_count(self, obj):
-        return obj.reply_count
+        return obj.replies.filter(is_active=True).count()
 
     def get_is_reply(self, obj):
-        return obj.is_reply
+        return obj.parent is not None
 
+    def create(self, validated_data):
+        return GroupPostComment.objects.create(**validated_data)
+
+    
 
 class GroupPostLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
