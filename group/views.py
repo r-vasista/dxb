@@ -15,14 +15,15 @@ from django.db.models import Count, Q, F
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 from group.choices import (
     RoleChoices
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
-    GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer
+    GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
+    GroupJoinRequestSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
@@ -626,6 +627,7 @@ class GroupPostCommentLikeToggleAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
+
 class GroupPostCommentLikeListAPIView(APIView, PaginationMixin):
     """
     GET /groups/post-comments/<comment_id>/likes/
@@ -640,6 +642,106 @@ class GroupPostCommentLikeListAPIView(APIView, PaginationMixin):
             paginated_likes = self.paginate_queryset(likes_qs, request)
             serializer = GroupPostCommentLikeSerializer(paginated_likes, many=True)
             return self.get_paginated_response(serializer.data)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupJoinRequestCreateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        try:
+            group = get_object_or_404(Group, id=group_id)
+            profile = get_user_profile(request.user)
+
+            # Already a member check
+            if GroupMember.objects.filter(group=group, profile=profile).exists():
+                return Response(error_response("You are already a member of this group."), status=status.HTTP_400_BAD_REQUEST)
+
+            if group.privacy == 'public':
+                # Auto add as viewer without any request
+                GroupMember.objects.create(
+                    group=group,
+                    profile=profile,
+                    role=RoleChoices.VIEWER,
+                    assigned_by=None  # or system user
+                )
+                return Response(success_response({"message": "You have successfully joined the group as a viewer."}), status=status.HTTP_201_CREATED)
+
+            # PRIVATE: Check if request already exists
+            join_request, created = GroupJoinRequest.objects.get_or_create(group=group, profile=profile)
+
+            if not created and join_request.status == 'pending':
+                return Response(error_response("You have already requested to join this group."), status=status.HTTP_400_BAD_REQUEST)
+
+            join_request.status = 'pending'
+            join_request.message = request.data.get('message', '')
+            join_request.save()
+
+            return Response(success_response({"message": "Join request sent successfully."}), status=status.HTTP_201_CREATED)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupJoinRequestListAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupAdmin]
+
+    def get(self, request, group_id):
+        try:
+            group = get_object_or_404(Group, id=group_id)
+            self.check_object_permissions(request, group)
+
+            requests_qs = GroupJoinRequest.objects.filter(group=group, status='pending').select_related('profile')
+            serializer = GroupJoinRequestSerializer(requests_qs, many=True)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupJoinRequestActionAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupAdminOrModerator]
+
+    def put(self, request, group_id, request_id):
+        try:
+            group = get_object_or_404(Group, id=group_id)
+            self.check_object_permissions(request, group)
+
+            join_request = get_object_or_404(GroupJoinRequest, id=request_id, group=group)
+
+            action = request.data.get('action')
+            if action not in ['accept', 'reject']:
+                return Response(error_response("Invalid action. Use 'accept' or 'reject'."), status=status.HTTP_400_BAD_REQUEST)
+
+            if action == 'accept':
+                join_request.status = 'accepted'
+                join_request.save()
+
+                # Add user as a member
+                GroupMember.objects.create(
+                    group=group,
+                    profile=join_request.profile,
+                    role=RoleChoices.CONTRIBUTOR,
+                    assigned_by=get_user_profile(request.user)
+                )
+
+            elif action == 'reject':
+                join_request.status = 'rejected'
+                join_request.save()
+
+            return Response(success_response({"message": f"Request {action}ed successfully."}), status=status.HTTP_200_OK)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 

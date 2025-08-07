@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices, GroupType
+    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus
 )
 from profiles.models import (
     Profile
@@ -16,6 +16,7 @@ class Group(BaseModel):
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
     description = models.TextField(max_length=500)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
+    privacy = models.CharField(max_length=20, choices=PrivacyChoices.choices, default=PrivacyChoices.PUBLIC)
     logo = models.ImageField(upload_to='group_logo/', null=True, blank=True)
     cover_image = models.ImageField(upload_to='group_covers/', null=True, blank=True)
     member_count = models.PositiveIntegerField(default=1)
@@ -113,3 +114,18 @@ class GroupPostCommentLike(BaseModel):
 
     def __str__(self):
         return f"{self.profile.username} liked comment by {self.comment.profile.username}"
+
+
+class GroupJoinRequest(BaseModel):
+    """
+    Model to handle join requests for groups.
+    """
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="join_requests")
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="group_join_requests")
+    status = models.CharField(max_length=20, choices=JoiningRequestStatus, default=JoiningRequestStatus.PENDING)
+
+    class Meta:
+        unique_together = ('group', 'profile')
+
+    def __str__(self):
+        return f"{self.profile.username} → {self.group.name} ({self.status})"

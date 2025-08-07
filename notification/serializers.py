@@ -8,6 +8,7 @@ class NotificationSerializer(serializers.ModelSerializer):
     sender_profile_picture = serializers.SerializerMethodField()
     recipient_username = serializers.CharField(source='recipient.username', read_only=True)
     post_id = serializers.SerializerMethodField()
+    post_slug = serializers.SerializerMethodField()
 
     def get_sender_id(self, obj):
         return obj.sender.id if obj.sender else None
@@ -17,6 +18,12 @@ class NotificationSerializer(serializers.ModelSerializer):
     def get_post_id(self, obj):
         if obj.content_type and obj.content_type.model == 'post' and obj.object_id:
             return obj.object_id
+        return None
+    
+    def get_post_slug(self, obj):
+        if obj.content_type and obj.content_type.model == 'post' and obj.object_id:
+            post = obj.content_object
+            return post.slug if post and hasattr(post, 'slug') else None
         return None
 
     class Meta:
@@ -34,4 +41,5 @@ class NotificationSerializer(serializers.ModelSerializer):
             'object_id',
             'content_type',
             'post_id',
+            'post_slug',
         ]

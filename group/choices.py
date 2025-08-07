@@ -11,3 +11,13 @@ class RoleChoices(models.TextChoices):
 class GroupType(models.TextChoices):
     GROUP = 'group', 'Group'
     
+
+class PrivacyChoices(models.TextChoices):
+    PUBLIC = 'public', 'Public'
+    PRIVATE = 'private', 'Private'
+
+
+class JoiningRequestStatus(models.TextChoices):
+    PENDING ='pending', 'Pending'
+    ACCEPTED = 'accepted', 'Accepted'
+    REJECTED = 'rejected', 'Rejected'
