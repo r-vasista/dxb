@@ -107,6 +107,7 @@ class GroupPostLikeSerializer(serializers.ModelSerializer):
         model = GroupPostLike
         fields = ['id', 'group_post', 'profile','created_at']
 
+
 class GroupPostCommentLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
     class Meta:
