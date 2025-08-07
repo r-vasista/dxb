@@ -35,8 +35,8 @@ urlpatterns = [
     path('group-post/<int:post_id>/comments/create/', CreateGroupPostCommentAPIView.as_view(),name='create-group-post-comment'),
     path('group-post/<int:post_id>/comments/', ParentGroupPostCommentsAPIView.as_view(),name='group-post-comments'),
     path('group-post/<int:post_id>/comments/<int:parent_id>/replies/', ChildGroupPostCommentListAPIView.as_view(),name='group-post-comment-replies'),
-    path('comments/<int:comment_id>/update/', UpdateGroupPostCommentAPIView.as_view(), name='update-comment',name='group-post-comment-update'),
-    path('comments/<int:comment_id>/delete/', DeleteGroupPostCommentAPIView.as_view(), name='delete-comment',name='group-post-comment-delete' ),
+    path('comments/<int:comment_id>/update/', UpdateGroupPostCommentAPIView.as_view(), name='group-post-comment-update'),
+    path('comments/<int:comment_id>/delete/', DeleteGroupPostCommentAPIView.as_view(), name='group-post-comment-delete' ),
 
     #group-post-like part
     path('groups/posts/<int:post_id>/likes/', GroupPostLikesByIdAPIView.as_view(), name='group-post-likes'),
