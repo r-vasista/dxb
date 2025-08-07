@@ -69,7 +69,7 @@ class GroupPostComment(BaseModel):
     group_post = models.ForeignKey(GroupPost, on_delete=models.CASCADE, related_name='comments')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, blank=True, null=True, related_name='replies')
-    like_count = models.IntegerField(blank=True, null=True)
+    like_count = models.IntegerField(default=0)
     
     # Comment content
     content = models.TextField()
