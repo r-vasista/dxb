@@ -6,6 +6,7 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 from rest_framework.serializers import ValidationError
 from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.exceptions import PermissionDenied
 
 # Djnago imports
 from django.db import transaction
@@ -18,7 +19,7 @@ from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 from group.choices import (
-    RoleChoices
+    RoleChoices, JoiningRequestStatus
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
@@ -702,6 +703,8 @@ class GroupJoinRequestListAPIView(APIView):
 
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -717,8 +720,12 @@ class GroupJoinRequestActionAPIView(APIView):
             self.check_object_permissions(request, group)
 
             join_request = get_object_or_404(GroupJoinRequest, id=request_id, group=group)
+            
+            if not join_request.status == JoiningRequestStatus.PENDING:
+                return Response(success_response('Already responded'), status=status.HTTP_200_OK)
 
             action = request.data.get('action')
+            role = request.data.get('role')
             if action not in ['accept', 'reject']:
                 return Response(error_response("Invalid action. Use 'accept' or 'reject'."), status=status.HTTP_400_BAD_REQUEST)
 
@@ -730,7 +737,7 @@ class GroupJoinRequestActionAPIView(APIView):
                 GroupMember.objects.create(
                     group=group,
                     profile=join_request.profile,
-                    role=RoleChoices.CONTRIBUTOR,
+                    role=role if role else RoleChoices.VIEWER,
                     assigned_by=get_user_profile(request.user)
                 )
 

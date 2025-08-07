@@ -5,7 +5,7 @@ from group.views import (
     GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
-    GroupJoinRequestCreateAPIView,
+    GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView
 )
 
@@ -19,6 +19,8 @@ urlpatterns = [
     
     # Group Members
     path('join-group/<int:group_id>/', GroupJoinRequestCreateAPIView.as_view(), name='join-group'),
+    path('group-requests/<int:group_id>/', GroupJoinRequestListAPIView.as_view(), name='group-requests'),
+    path('respond-request/<int:group_id>/<int:request_id>/', GroupJoinRequestActionAPIView.as_view(), name='respond-requests'),
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),

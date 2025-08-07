@@ -33,7 +33,7 @@ class GroupMember(BaseModel):
     group = models.ForeignKey(Group, on_delete=models.CASCADE)
     role = models.CharField(max_length=20, choices=RoleChoices.choices)
     joined_at = models.DateTimeField(auto_now_add=True)
-    assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles')
+    assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles', blank=True, null=True)
     is_banned = models.BooleanField(default=False)
     top_contributor = models.BooleanField(default=False)
     recent_activity_score = models.IntegerField(default=0)
@@ -123,6 +123,7 @@ class GroupJoinRequest(BaseModel):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="join_requests")
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="group_join_requests")
     status = models.CharField(max_length=20, choices=JoiningRequestStatus, default=JoiningRequestStatus.PENDING)
+    message = models.TextField(blank=True)
 
     class Meta:
         unique_together = ('group', 'profile')
