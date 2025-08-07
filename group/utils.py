@@ -6,6 +6,7 @@ from core.services import extract_hashtags
 def can_post_to_group(group, profile):
     try:
         member = GroupMember.objects.get(group=group, profile=profile, is_banned=False)
+        print(member)
         return member.role in [
             RoleChoices.ADMIN,
             RoleChoices.MODERATOR,
