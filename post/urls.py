@@ -11,6 +11,7 @@ from post.views import (
 urlpatterns = [
     path('post/', PostAPIView.as_view(), name='post'),
     path('post/<int:post_id>/', PostAPIView.as_view(), name='post'),
+    path('post/<str:post_slug>/', PostAPIView.as_view(), name='post'),
     path('profile-posts/username/<str:username>/', ProfilePostListView.as_view(), name='profile-post-username'),
     path('profile-posts/profile-id/<str:profile_id>/', ProfilePostListView.as_view(), name='profile-post-profile_id'),
     path('all-posts/', AllPostsAPIView.as_view(), name='all-post'),
