@@ -15,13 +15,16 @@ class Group(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
     description = models.TextField(max_length=500)
+    tags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
     privacy = models.CharField(max_length=20, choices=PrivacyChoices.choices, default=PrivacyChoices.PUBLIC)
     logo = models.ImageField(upload_to='group_logo/', null=True, blank=True)
     cover_image = models.ImageField(upload_to='group_covers/', null=True, blank=True)
     member_count = models.PositiveIntegerField(default=1)
-    activity_score = models.FloatField(default=0.0)
-    last_activity = models.DateTimeField(auto_now_add=True)
+    post_count = models.PositiveIntegerField(default=0)
+    avg_engagement = models.FloatField(default=0.0)  # avg reactions + comments per post
+    trending_score = models.FloatField(default=0.0)
+    last_activity_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
     
     def __str__(self):

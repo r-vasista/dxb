@@ -6,9 +6,9 @@ from group.models import (
 
 @admin.register(Group)
 class GroupAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name', 'creator']
-    search_fields =  ['id', 'name', 'creator']
-    list_filter = ['id', 'name', 'creator']
+    list_display = ['id', 'name', 'creator', 'trending_score', 'avg_engagement', 'post_count']
+    search_fields =  ['id', 'name', 'creator', 'trending_score', 'avg_engagement', 'post_count']
+    list_filter = ['id', 'name', 'creator', 'trending_score', 'avg_engagement', 'post_count']
     
 @admin.register(GroupMember)
 class GroupMemberAdmin(admin.ModelAdmin):
