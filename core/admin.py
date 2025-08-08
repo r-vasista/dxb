@@ -2,7 +2,7 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
 from core.models import (
-    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge,UpcomingFeature, FeatureStep
+    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge,UpcomingFeature, FeatureStep, HashTag
 )
 from core.resource import (
     WeeklyChallengeResource
@@ -55,3 +55,9 @@ class FeatureStepInline(admin.StackedInline):
 class UpcomingFeatureAdmin(admin.ModelAdmin):
     list_display = ['title', 'status', 'created_at']
     inlines = [FeatureStepInline]
+
+@admin.register(HashTag)
+class HashTagAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name',]
+    search_fields = ['id', 'name',]
+    list_filter = ['id', 'name',]

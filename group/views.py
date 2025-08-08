@@ -36,6 +36,9 @@ from group.utils import (
     can_post_to_group, handle_grouppost_hashtags
 )
 from core.pagination import PaginationMixin
+from core.utils import (
+    extract_and_assign_hashtags
+)
 
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -58,6 +61,7 @@ class GroupCreateAPIView(APIView):
                     role=RoleChoices.ADMIN,
                     assigned_by=profile,
                 )
+                extract_and_assign_hashtags(group.description, group)
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
         
@@ -89,7 +93,8 @@ class GroupUpdateAPIView(APIView):
 
         try:
             with transaction.atomic():
-                serializer.save()
+                group = serializer.save()
+                extract_and_assign_hashtags(group.description, group)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -821,3 +826,14 @@ class DeleteGroupPostCommentAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class TrendingGroupsAPIView(APIView, PaginationMixin):
+    def get(self, request):
+        try:
+            groups = Group.objects.filter(is_active=True).order_by('-trending_score')
+            paginated_qs= self.paginate_queryset(groups,request)
+            serializer = GroupListSerializer(paginated_qs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
