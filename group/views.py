@@ -29,15 +29,15 @@ from group.serializers import (
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
 )
-from core.services import (
-    success_response, error_response, get_user_profile, get_actual_user
-)
 from group.utils import (
     can_post_to_group, handle_grouppost_hashtags
 )
 from core.pagination import PaginationMixin
 from core.utils import (
     extract_and_assign_hashtags
+)
+from core.services import (
+    success_response, error_response, get_user_profile, get_actual_user
 )
 
 class GroupCreateAPIView(APIView):
@@ -837,3 +837,5 @@ class TrendingGroupsAPIView(APIView, PaginationMixin):
             return self.get_paginated_response(serializer.data)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

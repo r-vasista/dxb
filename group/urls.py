@@ -10,6 +10,7 @@ from group.views import (
 )
 
 urlpatterns = [
+    
     # Group
     path('create-group/', GroupCreateAPIView.as_view(), name='create-group'),
     path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
