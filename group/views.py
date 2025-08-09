@@ -858,3 +858,29 @@ class GroupyHashTagAPIView(APIView, PaginationMixin):
         paginated_qs = self.paginate_queryset(groups, request)
         serializer = GroupListSerializer(paginated_qs, many=True)
         return self.get_paginated_response(serializer.data)
+
+
+class RecommendedGroupsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+
+        # Step 1: Groups user is already a member of
+        user_groups = Group.objects.filter(members__profile=profile)
+
+        # Step 2: Collect hashtags from these groups
+        hashtags = HashTag.objects.filter(groups__in=user_groups).distinct()
+
+        # Step 3: Find other groups with these hashtags, exclude groups user is already in
+        recommended_groups = (
+            Group.objects.filter(tags__in=hashtags)
+            .exclude(id__in=user_groups.values_list("id", flat=True))
+            .distinct()
+            .order_by("-trending_score")
+        )
+
+        # Step 4: Paginate & serialize
+        paginated_qs = self.paginate_queryset(recommended_groups, request)
+        serializer = GroupListSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)

@@ -32,8 +32,8 @@ class Group(BaseModel):
     
 
 class GroupMember(BaseModel):
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='group_members')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='members')
     role = models.CharField(max_length=20, choices=RoleChoices.choices)
     joined_at = models.DateTimeField(auto_now_add=True)
     assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles', blank=True, null=True)
