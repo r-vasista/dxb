@@ -19,7 +19,7 @@ from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 from group.choices import (
-    RoleChoices, JoiningRequestStatus
+    RoleChoices, JoiningRequestStatus, GroupAction
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
@@ -30,7 +30,7 @@ from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
 )
 from group.utils import (
-    can_post_to_group, handle_grouppost_hashtags
+    can_post_to_group, handle_grouppost_hashtags, log_group_action
 )
 from core.pagination import PaginationMixin
 from core.utils import (
@@ -65,6 +65,8 @@ class GroupCreateAPIView(APIView):
                     assigned_by=profile,
                 )
                 extract_and_assign_hashtags(group.description, group)
+                
+                log_group_action(group, profile, GroupAction.CREATE, "Group created by user")
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
         
@@ -98,6 +100,7 @@ class GroupUpdateAPIView(APIView):
             with transaction.atomic():
                 group = serializer.save()
                 extract_and_assign_hashtags(group.description, group)
+                log_group_action(group, get_user_profile(request.user), GroupAction.UPDATE, "Group updated by user")
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -140,6 +143,7 @@ class GroupPostCreateAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile)
             handle_grouppost_hashtags(post)
+            log_group_action(group, profile, GroupAction.POST_CREATE, "Group post created by user", group_post=post)
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Group.DoesNotExist:
             return Response(error_response("Group Not Found"), status=status.HTTP_404_NOT_FOUND)
@@ -197,7 +201,6 @@ class GroupPostDetailAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def delete(self,request,post_id):
-
         try:
             post = GroupPost.objects.get(id=post_id)
             profile = get_user_profile(request.user)
@@ -210,10 +213,11 @@ class GroupPostDetailAPIView(APIView):
 
             if not (is_author or is_privileged):
                 return Response(error_response("you do not have permission to delete this post"),status=status.HTTP_403_FORBIDDEN)
+            log_group_action(post.group, profile, GroupAction.POST_DELETE, "Group post deleted by user")
             post.delete()
-            return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_204_NO_CONTENT)
+            return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
-            return Response(error_response("Group Post Does not found"))
+            return Response(error_response("Group Post Does not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
         
@@ -248,6 +252,7 @@ class GroupPostDetailAPIView(APIView):
 
             if updated:
                 post.save()
+            log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)
 
             serializer = GroupPostSerializer(post)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -403,11 +408,12 @@ class GroupAddMemberAPIView(APIView):
             # 4. Save new member
             serializer = AddGroupMemberSerializer(data=data, context={'group': group})
             serializer.is_valid(raise_exception=True)
-            serializer.save(assigned_by=acting_profile)
+            member = serializer.save(assigned_by=acting_profile)
 
             # Update group member count
             group.member_count = GroupMember.objects.filter(group=group).count()
             group.save(update_fields=['member_count'])
+            log_group_action(group, acting_profile, GroupAction.MEMBER_ADD, "Group member added", group_member=member)
 
             return Response(success_response({"message": "Member added successfully."}),
                             status=status.HTTP_201_CREATED)
@@ -443,14 +449,15 @@ class GroupMemberDetailAPIView(APIView):
         """
         try:
             group = self.get_object(request.data.get('group'))
-            member = request.data.get('profile')
+            profile = request.data.get('profile')
 
-            member = get_object_or_404(GroupMember, profile=member, group=group)
+            member = get_object_or_404(GroupMember, profile=profile, group=group)
 
             serializer = GroupMemberUpdateSerializer(member, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
 
             serializer.save()
+            log_group_action(group, member.profile, GroupAction.MEMBER_UPDATE, "Group member role updated", group_member=member)
 
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         
@@ -469,9 +476,10 @@ class GroupMemberDetailAPIView(APIView):
             group = self.get_object(request.data.get('group'))
             member = request.data.get('profile')
 
-            member = get_object_or_404(GroupMember, profile=member, group=group)
+            group_member = get_object_or_404(GroupMember, profile=member, group=group)
 
-            member.delete()
+            group_member.delete()
+            log_group_action(group, member, GroupAction.MEMBER_REMOVE, "Group member role updated")
 
             return Response(success_response("Member removed successfully"), status=status.HTTP_200_OK)
         except Http404 as e:

@@ -1,7 +1,7 @@
 from django.contrib import admin
     
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupActionLog
 )
 
 @admin.register(Group)
@@ -10,11 +10,13 @@ class GroupAdmin(admin.ModelAdmin):
     search_fields =  ['id', 'name', 'creator', 'trending_score', 'avg_engagement', 'post_count']
     list_filter = ['id', 'name', 'creator', 'trending_score', 'avg_engagement', 'post_count']
     
+    
 @admin.register(GroupMember)
 class GroupMemberAdmin(admin.ModelAdmin):
     list_display = ['id', 'group', 'profile', 'role']
     search_fields =  ['id', 'group', 'profile', 'role']
     list_filter = ['id', 'group', 'profile', 'role']
+
 
 @admin.register(GroupPost)
 class GroupPostAdmin(admin.ModelAdmin):
@@ -43,3 +45,9 @@ class GroupPostLikeAdmin(admin.ModelAdmin):
     search_fields =  ['id', 'group_post', 'profile']
     list_filter = ['id', 'group_post', 'profile', ]
 
+
+@admin.register(GroupActionLog)
+class GroupActionLogAdmin(admin.ModelAdmin):
+    list_display = ['id', 'group', 'profile', 'action']
+    search_fields =  ['id', 'group', 'profile', 'action']
+    list_filter = ['id', 'group', 'profile', 'action']

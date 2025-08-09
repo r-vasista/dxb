@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus
+    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction
 )
 from profiles.models import (
     Profile
@@ -133,3 +133,24 @@ class GroupJoinRequest(BaseModel):
 
     def __str__(self):
         return f"{self.profile.username} → {self.group.name} ({self.status})"
+
+
+class GroupActionLog(BaseModel):
+
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="action_logs")
+    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=50, choices=GroupAction.choices)
+    group_post = models.ForeignKey(GroupPost, on_delete=models.SET_NULL, blank=True, null=True)
+    group_member = models.ForeignKey(GroupMember, on_delete=models.SET_NULL, blank=True, null=True)
+    member_request = models.ForeignKey(GroupJoinRequest, on_delete=models.SET_NULL, blank=True, null=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["action"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.profile} - {self.action} - {self.group}"
+    
