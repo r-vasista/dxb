@@ -37,6 +37,8 @@ from group.utils import (
 )
 from core.pagination import PaginationMixin
 
+from group.task import notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like, send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
+
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -58,6 +60,10 @@ class GroupCreateAPIView(APIView):
                     role=RoleChoices.ADMIN,
                     assigned_by=profile,
                 )
+                try:
+                    transaction.on_commit(lambda: send_group_creation_notifications_task.delay(group.id, profile.id))
+                except:
+                    pass
 
             return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
         
@@ -132,11 +138,15 @@ class GroupPostCreateAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile)
             handle_grouppost_hashtags(post)
+            try:
+                transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post.id))
+            except:
+                pass
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Group.DoesNotExist:
             return Response(error_response("Group Not Found"), status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
-            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+            return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)                       
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
        
@@ -299,7 +309,11 @@ class CreateGroupPostCommentAPIView(APIView):
                     # Atomic update on GroupPost comments_count
                     GroupPost.objects.filter(id=group_post.id).update(comments_count=total_top_level_comments)
                     group_post.refresh_from_db(fields=['comments_count'])
-
+                if group_post.profile != profile:
+                    try:
+                        transaction.on_commit(lambda:notify_owner_of_group_post_comment.delay(comment.id))
+                    except :
+                        pass
             return Response(
                 success_response(GroupPostCommentSerializer(comment).data),
                 status=201
@@ -395,8 +409,12 @@ class GroupAddMemberAPIView(APIView):
             # 4. Save new member
             serializer = AddGroupMemberSerializer(data=data, context={'group': group})
             serializer.is_valid(raise_exception=True)
-            serializer.save(assigned_by=acting_profile)
+            group_member= serializer.save(assigned_by=acting_profile)
+            try:
 
+                transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='joined',sender=acting_profile.id))
+            except:
+                pass
             # Update group member count
             group.member_count = GroupMember.objects.filter(group=group).count()
             group.save(update_fields=['member_count'])
@@ -442,7 +460,11 @@ class GroupMemberDetailAPIView(APIView):
             serializer = GroupMemberUpdateSerializer(member, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
 
-            serializer.save()
+            group_member=serializer.save()
+            try:
+                transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='updated',sender_id=get_user_profile(request.user).id))
+            except:
+                pass
 
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         
@@ -463,7 +485,12 @@ class GroupMemberDetailAPIView(APIView):
 
             member = get_object_or_404(GroupMember, profile=member, group=group)
 
-            member.delete()
+            group_member=member.delete()
+            try:
+            
+                transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='removed',sender_id=member))
+            except: 
+                pass
 
             return Response(success_response("Member removed successfully"), status=status.HTTP_200_OK)
         except Http404 as e:
@@ -548,7 +575,12 @@ class GroupPostLikesByIdAPIView(APIView, PaginationMixin):
                     post.likes_count = F('likes_count') + 1
                     post.save(update_fields=["likes_count"])
                     serializer = GroupPostLikeSerializer(like)
+                    try:
+                        transaction.on_commit(lambda:notify_owner_of_group_post_like.delay(post.id, profile.id))
+                    except:
+                        pass
                     return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+                
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -624,6 +656,10 @@ class GroupPostCommentLikeToggleAPIView(APIView):
                     serializer = GroupPostCommentLikeSerializer(
                         GroupPostCommentLike.objects.get(comment=comment, profile=profile)
                     )
+                    try:
+                        transaction.on_commit(lambda: notify_owner_of_group_comment_like.delay(comment.id, profile.id))
+                    except:
+                        pass
                     return Response(success_response(serializer.data), status=201)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -670,6 +706,10 @@ class GroupJoinRequestCreateAPIView(APIView):
                     role=RoleChoices.VIEWER,
                     assigned_by=None  # or system user
                 )
+                try:
+                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
+                except:
+                    pass
                 return Response(success_response({"message": "You have successfully joined the group as a viewer."}), status=status.HTTP_201_CREATED)
 
             # PRIVATE: Check if request already exists
@@ -718,7 +758,7 @@ class GroupJoinRequestActionAPIView(APIView):
         try:
             group = get_object_or_404(Group, id=group_id)
             self.check_object_permissions(request, group)
-
+            
             join_request = get_object_or_404(GroupJoinRequest, id=request_id, group=group)
             
             if not join_request.status == JoiningRequestStatus.PENDING:
@@ -740,11 +780,17 @@ class GroupJoinRequestActionAPIView(APIView):
                     role=role if role else RoleChoices.VIEWER,
                     assigned_by=get_user_profile(request.user)
                 )
-
+                try:
+                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, join_request.profile.id, action='accepted',sender_id=get_user_profile(request.user)))
+                except:
+                    pass
             elif action == 'reject':
                 join_request.status = 'rejected'
                 join_request.save()
-
+                try :
+                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, join_request.profile.id, action='rejected',sender_id=get_user_profile(request.user)))
+                except:
+                    pass
             return Response(success_response({"message": f"Request {action}ed successfully."}), status=status.HTTP_200_OK)
         
         except Http404 as e:

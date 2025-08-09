@@ -51,5 +51,9 @@ app.conf.beat_schedule = {
         'task': 'mentor.tasks.run_mentor_eligibility_check',
         'schedule': crontab(hour=3, minute=30),  
     },
+    'send-group-inactivity-reminders-daily': {
+        'task': 'group.task.send_inactivity_reminders_task',
+        'schedule': crontab(hour=0, minute=0),  # daily at midnight
+    },
     
 }
