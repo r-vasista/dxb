@@ -39,6 +39,9 @@ from core.utils import (
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
 )
+from core.models import (
+    HashTag
+)
 
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -839,3 +842,19 @@ class TrendingGroupsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class GroupyHashTagAPIView(APIView, PaginationMixin):
+    """
+    Get all groups for a given hashtag name.
+    """
+
+    def get(self, request, hashtag_name):
+        
+        # Get the hashtag by name (case-insensitive) or return 404
+        hashtag = get_object_or_404(HashTag, name__iexact=hashtag_name)
+
+        # Filter groups linked to this hashtag
+        groups = Group.objects.filter(tags=hashtag).order_by("-trending_score")
+
+        paginated_qs = self.paginate_queryset(groups, request)
+        serializer = GroupListSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)

@@ -6,7 +6,7 @@ from group.views import (
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
-    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView
+    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView
 )
 
 urlpatterns = [
@@ -17,7 +17,9 @@ urlpatterns = [
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('group-details/<str:group_name>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
-    path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list/'),
+    path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list'),
+    path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
+    
     
     # Group Members
     path('join-group/<int:group_id>/', GroupJoinRequestCreateAPIView.as_view(), name='join-group'),
