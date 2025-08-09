@@ -2,7 +2,7 @@ from datetime import timedelta
 import logging
 import random
 from celery import shared_task
-
+from django.utils.timezone import now
 
 from django.core.exceptions import ObjectDoesNotExist
 from django.utils import timezone
@@ -19,6 +19,7 @@ from notification.choices import NotificationType
 from post.models import PostReaction,Comment ,Post, PostView,SharePost
 from profiles.models import FriendRequest
 from notification.utils import create_notification, send_notification_email
+
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -204,7 +205,7 @@ def send_friend_request_response_notification_task(friend_request_id, response_t
     sender = friend_request.to_profile      # The one who accepted
     recipient = friend_request.from_profile # The one who sent the request
     message = f"{sender.username} accepted your friend request"
-    notification_type = NotificationType.FRIEND_ACCEPTED
+    notification_type = NotificationType.FRIEND_ACCEPT
     create_notification(sender, recipient, friend_request, message, notification_type)
     """
     Sends a notification when a friend request is accepted or rejected.
@@ -219,10 +220,10 @@ def send_friend_request_response_notification_task(friend_request_id, response_t
 
     if response_type == "accepted":
         message = f"{sender.username} accepted your friend request"
-        notification_type = NotificationType.FRIEND_ACCEPTED
+        notification_type = NotificationType.FRIEND_ACCEPT
     else:
         message = f"{sender.username} rejected your friend request"
-        notification_type = NotificationType.FRIEND_REQUEST_REJECTED
+        notification_type = NotificationType.FRIEND_REQUEST
     logger.info(f"Sending friend request response notification: {message} to {recipient.username} from {sender.username}")
     create_notification(sender, recipient, friend_request, message, notification_type)
 
