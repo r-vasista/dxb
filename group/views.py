@@ -19,7 +19,7 @@ from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 from group.choices import (
-    RoleChoices, JoiningRequestStatus
+    RoleChoices, JoiningRequestStatus, GroupAction
 )
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
@@ -29,13 +29,19 @@ from group.serializers import (
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
 )
+from group.utils import (
+    can_post_to_group, handle_grouppost_hashtags, log_group_action
+)
+from core.pagination import PaginationMixin
+from core.utils import (
+    extract_and_assign_hashtags
+)
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
 )
-from group.utils import (
-    can_post_to_group, handle_grouppost_hashtags
+from core.models import (
+    HashTag
 )
-from core.pagination import PaginationMixin
 
 from group.task import notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like, send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
 
@@ -60,6 +66,9 @@ class GroupCreateAPIView(APIView):
                     role=RoleChoices.ADMIN,
                     assigned_by=profile,
                 )
+                extract_and_assign_hashtags(group.description, group)
+                
+                log_group_action(group, profile, GroupAction.CREATE, "Group created by user")
                 try:
                     transaction.on_commit(lambda: send_group_creation_notifications_task.delay(group.id, profile.id))
                 except:
@@ -95,7 +104,9 @@ class GroupUpdateAPIView(APIView):
 
         try:
             with transaction.atomic():
-                serializer.save()
+                group = serializer.save()
+                extract_and_assign_hashtags(group.description, group)
+                log_group_action(group, get_user_profile(request.user), GroupAction.UPDATE, "Group updated by user")
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
@@ -138,6 +149,7 @@ class GroupPostCreateAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile)
             handle_grouppost_hashtags(post)
+            log_group_action(group, profile, GroupAction.POST_CREATE, "Group post created by user", group_post=post)
             try:
                 transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post.id))
             except:
@@ -199,7 +211,6 @@ class GroupPostDetailAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
     def delete(self,request,post_id):
-
         try:
             post = GroupPost.objects.get(id=post_id)
             profile = get_user_profile(request.user)
@@ -212,10 +223,11 @@ class GroupPostDetailAPIView(APIView):
 
             if not (is_author or is_privileged):
                 return Response(error_response("you do not have permission to delete this post"),status=status.HTTP_403_FORBIDDEN)
+            log_group_action(post.group, profile, GroupAction.POST_DELETE, "Group post deleted by user")
             post.delete()
-            return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_204_NO_CONTENT)
+            return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
-            return Response(error_response("Group Post Does not found"))
+            return Response(error_response("Group Post Does not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)),status=status.HTTP_500_INTERNAL_SERVER_ERROR) 
         
@@ -250,6 +262,7 @@ class GroupPostDetailAPIView(APIView):
 
             if updated:
                 post.save()
+            log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)
 
             serializer = GroupPostSerializer(post)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -418,6 +431,7 @@ class GroupAddMemberAPIView(APIView):
             # Update group member count
             group.member_count = GroupMember.objects.filter(group=group).count()
             group.save(update_fields=['member_count'])
+            log_group_action(group, acting_profile, GroupAction.MEMBER_ADD, "Group member added", group_member=group_member)
 
             return Response(success_response({"message": "Member added successfully."}),
                             status=status.HTTP_201_CREATED)
@@ -453,14 +467,15 @@ class GroupMemberDetailAPIView(APIView):
         """
         try:
             group = self.get_object(request.data.get('group'))
-            member = request.data.get('profile')
+            profile = request.data.get('profile')
 
-            member = get_object_or_404(GroupMember, profile=member, group=group)
+            member = get_object_or_404(GroupMember, profile=profile, group=group)
 
             serializer = GroupMemberUpdateSerializer(member, data=request.data, partial=True)
             serializer.is_valid(raise_exception=True)
 
             group_member=serializer.save()
+            log_group_action(group, member.profile, GroupAction.MEMBER_UPDATE, "Group member role updated", group_member=member)
             try:
                 transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='updated',sender_id=get_user_profile(request.user).id))
             except:
@@ -483,9 +498,10 @@ class GroupMemberDetailAPIView(APIView):
             group = self.get_object(request.data.get('group'))
             member = request.data.get('profile')
 
-            member = get_object_or_404(GroupMember, profile=member, group=group)
+            group_member = get_object_or_404(GroupMember, profile=member, group=group)
 
-            group_member=member.delete()
+            group_member.delete()
+            log_group_action(group, member, GroupAction.MEMBER_REMOVE, "Group member role updated")
             try:
             
                 transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='removed',sender_id=member))
@@ -867,3 +883,58 @@ class DeleteGroupPostCommentAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class TrendingGroupsAPIView(APIView, PaginationMixin):
+    def get(self, request):
+        try:
+            groups = Group.objects.filter(is_active=True).order_by('-trending_score')
+            paginated_qs= self.paginate_queryset(groups,request)
+            serializer = GroupListSerializer(paginated_qs, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupyHashTagAPIView(APIView, PaginationMixin):
+    """
+    Get all groups for a given hashtag name.
+    """
+
+    def get(self, request, hashtag_name):
+        
+        # Get the hashtag by name (case-insensitive) or return 404
+        hashtag = get_object_or_404(HashTag, name__iexact=hashtag_name)
+
+        # Filter groups linked to this hashtag
+        groups = Group.objects.filter(tags=hashtag).order_by("-trending_score")
+
+        paginated_qs = self.paginate_queryset(groups, request)
+        serializer = GroupListSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
+
+
+class RecommendedGroupsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+
+        # Step 1: Groups user is already a member of
+        user_groups = Group.objects.filter(members__profile=profile)
+
+        # Step 2: Collect hashtags from these groups
+        hashtags = HashTag.objects.filter(groups__in=user_groups).distinct()
+
+        # Step 3: Find other groups with these hashtags, exclude groups user is already in
+        recommended_groups = (
+            Group.objects.filter(tags__in=hashtags)
+            .exclude(id__in=user_groups.values_list("id", flat=True))
+            .distinct()
+            .order_by("-trending_score")
+        )
+
+        # Step 4: Paginate & serialize
+        paginated_qs = self.paginate_queryset(recommended_groups, request)
+        serializer = GroupListSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)

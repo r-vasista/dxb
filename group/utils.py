@@ -1,4 +1,4 @@
-from group.models import GroupMember
+from group.models import GroupMember, GroupActionLog
 from group.choices import RoleChoices
 from core.models import HashTag
 from core.services import extract_hashtags
@@ -23,3 +23,19 @@ def handle_grouppost_hashtags(post):
     for tag in hashtags:
         hashtag_obj, _ = HashTag.objects.get_or_create(name=tag.lower())
         post.tags.add(hashtag_obj)
+        
+
+def log_group_action(group, profile, action, description="", group_post=None, group_member=None, member_request=None):
+    try:
+        GroupActionLog.objects.create(
+            group=group,
+            profile=profile if hasattr(profile, "id") else None,
+            action=action,
+            description=description,
+            group_post=group_post,
+            group_member=group_member,
+            member_request=member_request
+        )
+    except Exception as e:
+        print(str(e))
+        pass

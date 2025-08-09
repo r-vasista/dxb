@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus
+    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction
 )
 from profiles.models import (
     Profile
@@ -15,13 +15,16 @@ class Group(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
     description = models.TextField(max_length=500)
+    tags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
     privacy = models.CharField(max_length=20, choices=PrivacyChoices.choices, default=PrivacyChoices.PUBLIC)
     logo = models.ImageField(upload_to='group_logo/', null=True, blank=True)
     cover_image = models.ImageField(upload_to='group_covers/', null=True, blank=True)
     member_count = models.PositiveIntegerField(default=1)
-    activity_score = models.FloatField(default=0.0)
-    last_activity = models.DateTimeField(auto_now_add=True)
+    post_count = models.PositiveIntegerField(default=0)
+    avg_engagement = models.FloatField(default=0.0)  # avg reactions + comments per post
+    trending_score = models.FloatField(default=0.0)
+    last_activity_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
     
     def __str__(self):
@@ -29,8 +32,8 @@ class Group(BaseModel):
     
 
 class GroupMember(BaseModel):
-    profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
-    group = models.ForeignKey(Group, on_delete=models.CASCADE)
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='group_members')
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='members')
     role = models.CharField(max_length=20, choices=RoleChoices.choices)
     joined_at = models.DateTimeField(auto_now_add=True)
     assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles', blank=True, null=True)
@@ -130,3 +133,24 @@ class GroupJoinRequest(BaseModel):
 
     def __str__(self):
         return f"{self.profile.username} → {self.group.name} ({self.status})"
+
+
+class GroupActionLog(BaseModel):
+
+    group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name="action_logs")
+    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True)
+    action = models.CharField(max_length=50, choices=GroupAction.choices)
+    group_post = models.ForeignKey(GroupPost, on_delete=models.SET_NULL, blank=True, null=True)
+    group_member = models.ForeignKey(GroupMember, on_delete=models.SET_NULL, blank=True, null=True)
+    member_request = models.ForeignKey(GroupJoinRequest, on_delete=models.SET_NULL, blank=True, null=True)
+    description = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["action"]),
+        ]
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.profile} - {self.action} - {self.group}"
+    
