@@ -39,7 +39,7 @@ class GroupMember(BaseModel):
     assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles', blank=True, null=True)
     is_banned = models.BooleanField(default=False)
     top_contributor = models.BooleanField(default=False)
-    recent_activity_score = models.IntegerField(default=0)
+    activity_score = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('profile', 'group')

@@ -30,7 +30,7 @@ from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
 )
 from group.utils import (
-    can_post_to_group, handle_grouppost_hashtags, log_group_action
+    can_post_to_group, handle_grouppost_hashtags, log_group_action, increment_group_member_activity
 )
 from core.pagination import PaginationMixin
 from core.utils import (
@@ -150,6 +150,7 @@ class GroupPostCreateAPIView(APIView):
             post = serializer.save(profile=profile)
             handle_grouppost_hashtags(post)
             log_group_action(group, profile, GroupAction.POST_CREATE, "Group post created by user", group_post=post)
+            increment_group_member_activity(profile, group, points=5)
             try:
                 transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post.id))
             except:
@@ -212,7 +213,7 @@ class GroupPostDetailAPIView(APIView):
         
     def delete(self,request,post_id):
         try:
-            post = GroupPost.objects.get(id=post_id)
+            post = GroupPost.objects.select_related("group").get(id=post_id)
             profile = get_user_profile(request.user)
 
             is_author = post.profile == profile
@@ -224,6 +225,7 @@ class GroupPostDetailAPIView(APIView):
             if not (is_author or is_privileged):
                 return Response(error_response("you do not have permission to delete this post"),status=status.HTTP_403_FORBIDDEN)
             log_group_action(post.group, profile, GroupAction.POST_DELETE, "Group post deleted by user")
+            increment_group_member_activity(profile, post.group, points=2)
             post.delete()
             return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
@@ -233,7 +235,7 @@ class GroupPostDetailAPIView(APIView):
         
     def put(self, request, post_id):
         try:
-            post = GroupPost.objects.get(id=post_id)
+            post = GroupPost.objects.select_related("group").get(id=post_id)
             profile = get_user_profile(request.user)
 
             # Only allow author or admin/moderator
@@ -263,6 +265,7 @@ class GroupPostDetailAPIView(APIView):
             if updated:
                 post.save()
             log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)
+            increment_group_member_activity(profile, post.group, points=3)
 
             serializer = GroupPostSerializer(post)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
