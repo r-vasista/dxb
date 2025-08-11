@@ -27,8 +27,6 @@ class GroupAction(models.TextChoices):
     CREATE = "CREATE", "Group Created"
     UPDATE = "UPDATE", "Group Updated"
     DELETE = "DELETE", "Group Deleted"
-    JOIN = "JOIN", "Member Joined"
-    LEAVE = "LEAVE", "Member Left"
     POST_CREATE = "POST_CREATE", "Post Created"
     POST_DELETE = "POST_DELETE", "Post Deleted"
     POST_UPDATE = "POST_UPDATE", "Post Update"
