@@ -70,7 +70,7 @@ class PostAPIView(APIView):
     POST /api/organizations/{org_id}/posts/
     Create a post for either a user or an organization.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     parser_classes = (MultiPartParser, FormParser, JSONParser)
 
     def post(self, request, org_id=None):

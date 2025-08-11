@@ -158,7 +158,7 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GroupMember
-        fields = ['id', 'profile', 'role', 'joined_at', 'is_banned']
+        fields = ['id', 'profile', 'role', 'joined_at', 'is_banned', 'activity_score']
       
         
 class GroupListSerializer(serializers.ModelSerializer):

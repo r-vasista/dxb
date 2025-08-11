@@ -27,6 +27,7 @@ urlpatterns = [
     path('group-requests/<int:group_id>/', GroupJoinRequestListAPIView.as_view(), name='group-requests'),
     path('respond-request/<int:group_id>/<int:request_id>/', GroupJoinRequestActionAPIView.as_view(), name='respond-requests'),
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
+    path('group-member-detail/<int:id>/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),

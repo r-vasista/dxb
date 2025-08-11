@@ -30,7 +30,7 @@ from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
 )
 from group.utils import (
-    can_post_to_group, handle_grouppost_hashtags, log_group_action
+    can_post_to_group, handle_grouppost_hashtags, log_group_action, increment_group_member_activity
 )
 from core.pagination import PaginationMixin
 from core.utils import (
@@ -150,6 +150,7 @@ class GroupPostCreateAPIView(APIView):
             post = serializer.save(profile=profile)
             handle_grouppost_hashtags(post)
             log_group_action(group, profile, GroupAction.POST_CREATE, "Group post created by user", group_post=post)
+            increment_group_member_activity(profile, group, points=5)
             try:
                 transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post.id))
             except:
@@ -212,7 +213,7 @@ class GroupPostDetailAPIView(APIView):
         
     def delete(self,request,post_id):
         try:
-            post = GroupPost.objects.get(id=post_id)
+            post = GroupPost.objects.select_related("group").get(id=post_id)
             profile = get_user_profile(request.user)
 
             is_author = post.profile == profile
@@ -224,6 +225,7 @@ class GroupPostDetailAPIView(APIView):
             if not (is_author or is_privileged):
                 return Response(error_response("you do not have permission to delete this post"),status=status.HTTP_403_FORBIDDEN)
             log_group_action(post.group, profile, GroupAction.POST_DELETE, "Group post deleted by user")
+            increment_group_member_activity(profile, post.group, points=2)
             post.delete()
             return Response(success_response("Post Was Delted SucessFully"),status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
@@ -233,7 +235,7 @@ class GroupPostDetailAPIView(APIView):
         
     def put(self, request, post_id):
         try:
-            post = GroupPost.objects.get(id=post_id)
+            post = GroupPost.objects.select_related("group").get(id=post_id)
             profile = get_user_profile(request.user)
 
             # Only allow author or admin/moderator
@@ -263,6 +265,7 @@ class GroupPostDetailAPIView(APIView):
             if updated:
                 post.save()
             log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)
+            increment_group_member_activity(profile, post.group, points=3)
 
             serializer = GroupPostSerializer(post)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -460,6 +463,23 @@ class GroupMemberDetailAPIView(APIView):
             return group
         except Group.DoesNotExist:
             return None
+        
+    def get(self, request, id):
+        """
+        Retrieve details of a specific member in the group.
+        """
+        try:
+
+            group_member = get_object_or_404(GroupMember.objects.select_related('profile', 'group'), id=id)
+            serializer = GroupMemberSerializer(group_member)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
     def put(self, request):
         """
@@ -716,7 +736,7 @@ class GroupJoinRequestCreateAPIView(APIView):
 
             if group.privacy == 'public':
                 # Auto add as viewer without any request
-                GroupMember.objects.create(
+                group_member = GroupMember.objects.create(
                     group=group,
                     profile=profile,
                     role=RoleChoices.VIEWER,
@@ -726,6 +746,8 @@ class GroupJoinRequestCreateAPIView(APIView):
                     transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
                 except:
                     pass
+                
+                log_group_action(group, profile, GroupAction.PUBLIC_JOIN, "Group member has joined group as it is public", group_member=group_member)
                 return Response(success_response({"message": "You have successfully joined the group as a viewer."}), status=status.HTTP_201_CREATED)
 
             # PRIVATE: Check if request already exists
@@ -737,7 +759,7 @@ class GroupJoinRequestCreateAPIView(APIView):
             join_request.status = 'pending'
             join_request.message = request.data.get('message', '')
             join_request.save()
-
+            log_group_action(group, profile, GroupAction.JOIN_REQUEST, "Group member has requested to join", member_request=join_request)
             return Response(success_response({"message": "Join request sent successfully."}), status=status.HTTP_201_CREATED)
         
         except Http404 as e:

@@ -1,9 +1,10 @@
 # urls.py
 from django.urls import path
-from .views import ArtImageDescribeAPIView, EventTagAIAPIView, EventDescriptionAIAPIView
+from .views import ArtImageDescribeAPIView, EventTagAIAPIView, EventDescriptionAIAPIView, GroupDescriptionAIAPIView
 
 urlpatterns = [
     path('art/describe/', ArtImageDescribeAPIView.as_view(), name='art-image-describe'),
     path('event/tags/', EventTagAIAPIView.as_view(), name='event-tags'),
     path('event/description/', EventDescriptionAIAPIView.as_view(), name='event-description'),
+    path('group/tags/', GroupDescriptionAIAPIView.as_view(), name='group-tags'),
 ]

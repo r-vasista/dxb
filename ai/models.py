@@ -70,4 +70,12 @@ class EventDescriptionResponse(BaseAIPResponseDetails):
     
     def __str__(self):
         return str(self.id)
+
+
+class GroupTagsResponse(BaseAIPResponseDetails):
+    group_name = models.CharField(max_length=200)
+    group_description = models.TextField(blank=True, null=True)
+    profile = models.ForeignKey(Profile, on_delete=models.SET_NULL, null=True, blank=True, related_name='group_description_prompts')
     
+    def __str__(self):
+        return str(self.id)
