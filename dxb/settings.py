@@ -236,7 +236,7 @@ FRONTEND_URL = 'http://127.0.0.1:8000'
 # }
 
 
-CELERY_BROKER_URL = "redis://127.0.0.1:6379/0"
+CELERY_BROKER_URL = REDIS_HOST
 
 
 CELERY_ACCEPT_CONTENT = ['application/json']

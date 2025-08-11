@@ -138,7 +138,7 @@ class RegisterAccountAPIView(APIView):
                     )
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
-                    except:
+                    except Exception:
                         pass
 
                 elif user_type == "user":
@@ -164,7 +164,7 @@ class RegisterAccountAPIView(APIView):
                     )
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
-                    except:
+                    except Exception:
                         pass
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
