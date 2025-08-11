@@ -463,6 +463,23 @@ class GroupMemberDetailAPIView(APIView):
             return group
         except Group.DoesNotExist:
             return None
+        
+    def get(self, request, id):
+        """
+        Retrieve details of a specific member in the group.
+        """
+        try:
+
+            group_member = get_object_or_404(GroupMember.objects.select_related('profile', 'group'), id=id)
+            serializer = GroupMemberSerializer(group_member)
+
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
 
     def put(self, request):
         """
