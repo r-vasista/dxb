@@ -167,9 +167,14 @@ class PostAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
     
-    def get(self, request, post_id):
+    def get(self, request, post_id=None, post_slug=None):
         try:
-            post = get_object_or_404(Post, id=post_id)
+            if post_id:
+                post = get_object_or_404(Post, id=post_id)
+            elif post_slug:
+                post = get_object_or_404(Post, slug=post_slug)
+            else:
+                return Response(error_response('Either post id or slug must be provided'), status=status.HTTP_400_BAD_REQUEST)
             user = request.user
             requester_profile = get_user_profile(user) if user.is_authenticated else None
 

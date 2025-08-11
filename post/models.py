@@ -5,6 +5,7 @@ from django.core.exceptions import ValidationError
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
+
 # Local import
 from core.models import BaseModel
 from organization.models import Organization
@@ -51,6 +52,8 @@ class ArtType(BaseModel):
         self.slug = slugify(self.name)
         super().save(*args, **kwargs)
 
+
+MAX_SLUG_BASE_LENGTH = 20
 
 class Post(BaseModel):
     """
@@ -121,15 +124,15 @@ class Post(BaseModel):
         return f"{author}: {self.title or self.content[:50]}"
 
     def save(self, *args, **kwargs):
-        # Auto-generate slug per profile
-        # if not self.slug and self.title:
-        #     base = slugify(self.title)
-        #     slug = base
-        #     counter = 1
-        #     while Post.objects.filter(profile=self.profile, slug=slug, status=PostStatus.PUBLISHED).exists():
-        #         slug = f"{base}-{counter}"
-        #         counter += 1
-        #     self.slug = slug
+        # Auto-generate slug per post
+        if not self.slug and self.title:
+            base_title = self.title.strip()[:MAX_SLUG_BASE_LENGTH]
+            base_slug = slugify(base_title)
+
+            username = self.profile.username if self.profile and self.profile.username else "user"
+            timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+
+            self.slug = f"{base_slug}-{username}-{timestamp}".lower()
 
         # Set published_at when first going live
         if self.status == PostStatus.PUBLISHED and not self.published_at:

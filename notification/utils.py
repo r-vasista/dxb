@@ -6,13 +6,16 @@ from django.db import transaction
 
 from notification.models import Notification,DailyQuote, DailyQuoteSeen
 
+import logging
 
 from core.services import send_dynamic_email_using_template,get_user_profile,get_actual_user
-
+logger = logging.getLogger(__name__)
 
 def send_notification_email(recipient, sender, message, notification_type):
     user = get_actual_user(recipient)
-    if user and user.email and recipient.notify_email:
+    logger.info(f"[send_notification_email] Preparing to send email. user={user}, email={getattr(user, 'email', None)}, notify_email={recipient.notify_email}")
+
+    if user and getattr(user, 'email', None) and recipient.notify_email:
         context = {
             "user_name": recipient.username,
             "message": message,
@@ -22,8 +25,13 @@ def send_notification_email(recipient, sender, message, notification_type):
         template_name = "generic-notification"
         try:
             send_dynamic_email_using_template(template_name, [user.email], context)
-        except Exception:
-            pass
+            logger.info(f"[send_notification_email] Email sent successfully to {user.email}")
+        except Exception as e:
+            logger.error(f"[send_notification_email] Failed to send email to {user.email}: {str(e)}", exc_info=True)
+    else:
+        logger.warning(f"[send_notification_email] Skipping email send for {recipient.username} (conditions not met)")
+
+
 
         
 def create_notification(*args, **kwargs):

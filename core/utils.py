@@ -1,12 +1,13 @@
 import json
 import os
 import io
+import re
 from PIL import Image
 from moviepy.editor import VideoFileClip
 from django.core.files.uploadedfile import InMemoryUploadedFile
 from tempfile import NamedTemporaryFile
 from django.utils import timezone
-from core.models import Country, State, City, WeeklyChallenge
+from core.models import Country, State, City, WeeklyChallenge, HashTag
 
 def normalize_name(name):
     return name.strip().lower()
@@ -193,3 +194,21 @@ def process_media_file(media_file):
         return media_file, 'document'
     else:
         return media_file, 'unknown'                   
+
+def extract_and_assign_hashtags(text, obj):
+    """
+    Extract hashtags from text and assign them to the group.
+    """
+    if not text:
+        return
+
+    hashtags = set(re.findall(r"#(\w+)", text))  # Extracts words after #
+    if not hashtags:
+        return
+
+    tag_instances = []
+    for tag_name in hashtags:
+        tag_obj, _ = HashTag.objects.get_or_create(name=tag_name.lower())  # normalize lowercase
+        tag_instances.append(tag_obj)
+
+    obj.tags.set(tag_instances) 

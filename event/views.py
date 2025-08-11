@@ -337,7 +337,7 @@ class EventMediaUploadAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class EventMediaListAPIView(APIView):
+class EventMediaListAPIView(APIView, PaginationMixin):
     """
     GET /api/events/<event_id>/media/
     Returns all media items (images, videos, docs) for a given event.
@@ -353,9 +353,9 @@ class EventMediaListAPIView(APIView):
                 is_host = uploaded_by_host.strip().lower() == 'true'
                 media_qs = media_qs.filter(uploaded_by_host=is_host)
                 
-                
-            serializer = EventMediaSerializer(media_qs, many=True)
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            paginaged_qs = self.paginate_queryset(media_qs, request=request)
+            serializer = EventMediaSerializer(paginaged_qs, many=True)
+            return self.get_paginated_response(serializer.data)
 
         except Event.DoesNotExist:
             return Response(error_response("Event not found."), status=status.HTTP_404_NOT_FOUND)

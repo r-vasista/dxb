@@ -17,3 +17,4 @@ class NotificationType(models.TextChoices):
     EVENT_CREATE ='event create','Event Create'
     EVENT_RSVP='event rsvp','Event Rsvp'
     MENTOR_ELIGIBILITY = 'mentor eligiblity', 'Mentor Eligiblity'
+    Group = 'Group', 'group'

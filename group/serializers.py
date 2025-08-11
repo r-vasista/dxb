@@ -3,7 +3,7 @@ from rest_framework import serializers
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
 )
 from group.choices import (
     RoleChoices
@@ -11,13 +11,13 @@ from group.choices import (
 from profiles.serializers import (
     BasicProfileSerializer
 )
-
+from core.serializers import HashTagSerializer
 
 class GroupCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['name', 'type', 'description', 'logo', 'cover_image']
+        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy']
 
     def validate_name(self, value):
         if Group.objects.filter(name__iexact=value.strip()).exists():
@@ -34,6 +34,7 @@ class GroupUpdateSerializer(serializers.ModelSerializer):
 class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()
+    join_request_status = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -49,18 +50,45 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             except GroupMember.DoesNotExist:
                 return None
         return None
+    
+    def get_join_request_status(self, obj):
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            try:
+                join_request = GroupJoinRequest.objects.get(group=obj, profile=request.user.profile)
+                if join_request.status in ['pending', 'accepted']:
+                    return {
+                        "id": join_request.id,
+                        "status": join_request.status
+                    }
+            except GroupJoinRequest.DoesNotExist:
+                pass
+        return None
 
     
 class GroupPostSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
-    
+    tags = HashTagSerializer(many=True, read_only=True)
+    comments_count = serializers.SerializerMethodField()
     class Meta:
         model = GroupPost
+        fields = [
+            'id', 'group', 'profile', 'content', 'media_file', 'tags',
+            'is_pinned', 'is_announcement', 'likes_count',
+            'comments_count', 'share_count', 'is_flagged', 'flag_count'
+        ]
+    def get_comments_count(self, obj):
+        return GroupPostComment.objects.filter(
+            group_post=obj,
+            is_active=True,
+            parent__isnull=True  # ✅ Count only top-level comments
+        ).count()
+
 
 class GroupPostCommentSerializer(serializers.ModelSerializer):
-    profile = serializers.SerializerMethodField()
-    reply_count = serializers.SerializerMethodField()
-    is_reply = serializers.SerializerMethodField()
+    profile = serializers.SerializerMethodField(read_only=True)
+    reply_count = serializers.SerializerMethodField(read_only=True)
+    is_reply = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = GroupPostComment
@@ -69,7 +97,7 @@ class GroupPostCommentSerializer(serializers.ModelSerializer):
             'created_at', 'reply_count', 'is_reply', 'like_count'
         ]
         read_only_fields = [
-            'id', 'group_post', 'profile', 'created_at', 'reply_count', 'is_reply'
+            'id', 'group_post', 'profile', 'created_at', 'reply_count', 'is_reply', 'like_count'
         ]
 
     def get_profile(self, obj):
@@ -80,17 +108,22 @@ class GroupPostCommentSerializer(serializers.ModelSerializer):
         }
 
     def get_reply_count(self, obj):
-        return obj.reply_count
+        return obj.replies.filter(is_active=True).count()
 
     def get_is_reply(self, obj):
-        return obj.is_reply
+        return obj.parent is not None
 
+    def create(self, validated_data):
+        return GroupPostComment.objects.create(**validated_data)
+
+    
 
 class GroupPostLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
     class Meta:
         model = GroupPostLike
         fields = ['id', 'group_post', 'profile','created_at']
+
 
 class GroupPostCommentLikeSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
@@ -126,6 +159,7 @@ class GroupMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupMember
         fields = ['id', 'profile', 'role', 'joined_at', 'is_banned']
+      
         
 class GroupListSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer(read_only=True)
@@ -141,3 +175,12 @@ class GroupMemberUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupMember
         fields = ['role']
+        
+
+class GroupJoinRequestSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = GroupJoinRequest
+        fields = ['id', 'group', 'profile', 'status', 'message', 'created_at']
+        read_only_fields = ['id', 'group', 'profile', 'status', 'created_at']

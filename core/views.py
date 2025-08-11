@@ -17,6 +17,12 @@ from core.serializers import (
 )
 from core.services import success_response, error_response
 from core.pagination import PaginationMixin
+from core.models import (
+    HashTag
+)
+from core.serializers import (
+    HashTagSerializer
+)
 
 
 class LocationHierarchyAPIView(APIView, PaginationMixin):
@@ -154,3 +160,18 @@ class UpcomingFeatureAPIView(APIView, PaginationMixin):
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class HashTagSearchAPIView(APIView, PaginationMixin):
+    """
+    Search hashtags by partial name.
+    """
+    def get(self, request):
+        query = request.query_params.get("q", "").strip()
+        if not query:
+            return Response(error_response("Missing 'q' query parameter."), status=status.HTTP_400_BAD_REQUEST)
+        
+        hashtags = HashTag.objects.filter(name__icontains=query).order_by("name")
+        paginated_qs = self.paginate_queryset(hashtags, request)
+        serializer = HashTagSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
