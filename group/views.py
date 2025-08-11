@@ -716,7 +716,7 @@ class GroupJoinRequestCreateAPIView(APIView):
 
             if group.privacy == 'public':
                 # Auto add as viewer without any request
-                GroupMember.objects.create(
+                group_member = GroupMember.objects.create(
                     group=group,
                     profile=profile,
                     role=RoleChoices.VIEWER,
@@ -726,6 +726,8 @@ class GroupJoinRequestCreateAPIView(APIView):
                     transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
                 except:
                     pass
+                
+                log_group_action(group, profile, GroupAction.PUBLIC_JOIN, "Group member has joined group as it is public", group_member=group_member)
                 return Response(success_response({"message": "You have successfully joined the group as a viewer."}), status=status.HTTP_201_CREATED)
 
             # PRIVATE: Check if request already exists
@@ -737,7 +739,7 @@ class GroupJoinRequestCreateAPIView(APIView):
             join_request.status = 'pending'
             join_request.message = request.data.get('message', '')
             join_request.save()
-
+            log_group_action(group, profile, GroupAction.JOIN_REQUEST, "Group member has requested to join", member_request=join_request)
             return Response(success_response({"message": "Join request sent successfully."}), status=status.HTTP_201_CREATED)
         
         except Http404 as e:

@@ -37,5 +37,4 @@ def log_group_action(group, profile, action, description="", group_post=None, gr
             member_request=member_request
         )
     except Exception as e:
-        print(str(e))
         pass

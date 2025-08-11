@@ -33,6 +33,7 @@ class GroupAction(models.TextChoices):
     TAG_ADD = "TAG_ADD", "Hashtag Added"
     TAG_REMOVE = "TAG_REMOVE", "Hashtag Removed"
     JOIN_REQUEST = "JOIN_REQUEST", "Join Request"
+    PUBLIC_JOIN = "PUBLIC_JOIN", "Public Join"
     MEMBER_ADD = "MEMBER_ADD", "Member add"
     MEMBER_UPDATE = "MEMBER_UPDATE", "Member update"
     MEMBER_REMOVE = "MEMBER_REMOVE", "Member remove"
