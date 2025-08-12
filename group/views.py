@@ -43,8 +43,10 @@ from core.models import (
     HashTag
 )
 
-from group.task import notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like, send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
-
+from group.task import (notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like,
+                         send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
+)
+        
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -170,31 +172,35 @@ class GroupListAPIView(APIView, PaginationMixin):
     def get(self, request, group_id):
         try:
             group = Group.objects.get(id=group_id)
-            filters = {'group': group}
+
+            posts_qs = GroupPost.objects.select_related('profile').filter(group=group)
+
+            # Optional filter for is_pinned
             is_pinned = request.query_params.get('is_pinned')
-
             if is_pinned is not None:
-                filters['is_pinned'] = is_pinned.lower() == 'true'
+                posts_qs = posts_qs.filter(is_pinned=is_pinned.lower() == 'true')
 
-            posts = GroupPost.objects.select_related('profile').filter(
-                **filters
-            ).order_by('-is_pinned', '-created_at')
+            # Get pinned posts separately
+            pinned_qs = posts_qs.filter(is_pinned=True).order_by('-created_at')
+            pinned_data = GroupPostSerializer(pinned_qs, many=True, context={'request': request}).data
 
-            paginated_posts = self.paginate_queryset(posts, request)
-            serializer = GroupPostSerializer(
-                paginated_posts, many=True, context={'request': request}
-            )
+            # Paginate ALL posts (pinned + normal)
+            all_posts_qs = posts_qs.order_by('-is_pinned', '-created_at')
+            paginated_posts = self.paginate_queryset(all_posts_qs, request)
+            serialized_posts = GroupPostSerializer(paginated_posts, many=True, context={'request': request}).data
 
-            return self.get_paginated_response(serializer.data)
+            # Get default paginated response and inject pinned
+            paginated_response = self.get_paginated_response(serialized_posts)
+            paginated_response.data['pinned'] = pinned_data
+
+            return paginated_response
 
         except Group.DoesNotExist:
-            return Response(
-                error_response("Group Not Found"), status=status.HTTP_404_NOT_FOUND
-            )
+            return Response(error_response("Group Not Found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(
-                error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
       
 
 class GroupPostDetailAPIView(APIView):
@@ -261,7 +267,15 @@ class GroupPostDetailAPIView(APIView):
                 post.tags.set(tag_ids)
                 updated = True
             handle_grouppost_hashtags(post)  # Define this as shown below.
-
+            if "is_pinned" in data:
+                if is_privileged:  # Only privileged members can pin/unpin
+                    post.is_pinned = str(data["is_pinned"]).lower() in ["true", "1", "yes"]
+                    updated = True
+                else:
+                    return Response(
+                        error_response("Only admins/moderators can pin posts."),
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
             if updated:
                 post.save()
             log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)

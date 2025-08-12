@@ -77,6 +77,9 @@ class GroupPostSerializer(serializers.ModelSerializer):
             'is_pinned', 'is_announcement', 'likes_count',
             'comments_count', 'share_count', 'is_flagged', 'flag_count'
         ]
+        extra_kwargs = {
+            'is_pinned': {'default': False}  # Ensures default False
+        }
     def get_comments_count(self, obj):
         return GroupPostComment.objects.filter(
             group_post=obj,
