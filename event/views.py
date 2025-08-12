@@ -88,7 +88,7 @@ class EventDetailAPIView(APIView):
     Fetch a single event by its ID.
     Includes full event details.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, event_id=None, slug=None):
         try:
@@ -1166,7 +1166,7 @@ class GetCoHostListAPIView(APIView, PaginationMixin):
     """
     gets the list of all co hosts in an event
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     def get(self, request, event_id=None, event_slug=None):
         try:
