@@ -55,5 +55,9 @@ app.conf.beat_schedule = {
         'task': 'group.task.send_inactivity_reminders_task',
         'schedule': crontab(hour=0, minute=0),  # daily at midnight
     },
+    'send-group-inactivity-reminders-weekly': {
+        'task': 'group.task.send_weekly_group_digest',
+        'schedule': crontab(hour=8, minute=0, day_of_week=1),  # Every week at 8:00 AM on Monday
+    },
     
 }
