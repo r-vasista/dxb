@@ -66,3 +66,19 @@ class DailyQuoteSeen(BaseModel):
     
     class Meta:
         unique_together = ('profile', 'quote')
+
+
+class ScheduledTaskMonitor(models.Model):
+    task_name = models.CharField(max_length=255, unique=True)
+    last_run_at = models.DateTimeField(null=True, blank=True)
+    expected_interval_minutes = models.PositiveIntegerField(default=60)  # default 1 hour
+
+    last_response = models.JSONField(default=dict, blank=True, null=True)
+
+    def is_overdue(self):
+        if not self.last_run_at:
+            return True
+        return timezone.now() - self.last_run_at > timezone.timedelta(minutes=self.expected_interval_minutes + 5)
+
+    def __str__(self):
+        return self.task_name
