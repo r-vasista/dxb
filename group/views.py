@@ -1027,3 +1027,24 @@ class GroupFlaggedPostsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
+class GroupMemberLeaderboardListAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id=None, group_name=None):
+        try:
+            
+            if group_id:
+                group = Group.objects.get(pk=group_id)
+            else:
+                group = Group.objects.get(name__iexact=group_name)
+
+            # Fetch all active members
+            members = GroupMember.objects.select_related('profile').filter(group=group).order_by("-activity_score", "profile__username")
+
+            serializer = GroupMemberSerializer(members, many=True, context={'request':request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Group.DoesNotExist:
+            return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
