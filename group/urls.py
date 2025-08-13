@@ -6,7 +6,8 @@ from group.views import (
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
-    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView
+    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView,
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView
 )
 
 urlpatterns = [
@@ -32,11 +33,17 @@ urlpatterns = [
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<str:group_name>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
+    path('group-members-Leaderboard-list/<int:group_id>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
+    path('group-members-Leaderboard-list/<str:group_name>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
     
     #Group Post
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),
     path('group-post-all/<int:group_id>/',GroupListAPIView.as_view(),name='list-group-posts'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
+    
+    # Flag Group POst
+    path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),
+    path('flagged-group-posts/<int:group_id>/',GroupFlaggedPostsAPIView.as_view(),name='flag-group-post'),
 
     #Group_Post_Comment 
     path('group-post/<int:post_id>/comments/create/', CreateGroupPostCommentAPIView.as_view(),name='create-group-post-comment'),

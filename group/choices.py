@@ -37,3 +37,12 @@ class GroupAction(models.TextChoices):
     MEMBER_ADD = "MEMBER_ADD", "Member add"
     MEMBER_UPDATE = "MEMBER_UPDATE", "Member update"
     MEMBER_REMOVE = "MEMBER_REMOVE", "Member remove"
+    
+class PostFlagReasonChoices(models.TextChoices):
+    SPAM = "spam", "Spam"
+    HARASSMENT = "harassment", "Harassment or bullying"
+    HATE_SPEECH = "hate_speech", "Hate speech"
+    MISINFORMATION = "misinformation", "Misinformation"
+    NUDITY = "nudity", "Nudity or sexual content"
+    VIOLENCE = "violence", "Violence or dangerous acts"
+    OTHER = "other", "Other"
