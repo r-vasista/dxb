@@ -6,7 +6,8 @@ from group.views import (
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
-    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView
+    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView,
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView
 )
 
 urlpatterns = [
@@ -37,6 +38,10 @@ urlpatterns = [
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),
     path('group-post-all/<int:group_id>/',GroupListAPIView.as_view(),name='list-group-posts'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
+    
+    # Flag Group POst
+    path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),
+    path('flagged-group-posts/<int:group_id>/',GroupFlaggedPostsAPIView.as_view(),name='flag-group-post'),
 
     #Group_Post_Comment 
     path('group-post/<int:post_id>/comments/create/', CreateGroupPostCommentAPIView.as_view(),name='create-group-post-comment'),

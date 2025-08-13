@@ -9,14 +9,14 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.exceptions import PermissionDenied
 
 # Djnago imports
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db.models import Count, Q, F
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag
 )
 from group.choices import (
     RoleChoices, JoiningRequestStatus, GroupAction
@@ -24,7 +24,7 @@ from group.choices import (
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
-    GroupJoinRequestSerializer
+    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
@@ -845,6 +845,8 @@ class GroupJoinRequestActionAPIView(APIView):
                     pass
             return Response(success_response({"message": f"Request {action}ed successfully."}), status=status.HTTP_200_OK)
         
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
@@ -974,3 +976,54 @@ class RecommendedGroupsAPIView(APIView, PaginationMixin):
         paginated_qs = self.paginate_queryset(recommended_groups, request)
         serializer = GroupListSerializer(paginated_qs, many=True)
         return self.get_paginated_response(serializer.data)
+
+
+class FlagGroupPostAPIView(APIView):
+    def post(self, request, post_id):
+        try:
+            post = GroupPost.objects.get(id=post_id)
+            profile = get_user_profile(request.user)
+
+            serializer = GroupPostFlagSerializer(
+                data=request.data,
+                # context={"profile": profile, "post": post}
+            )
+            serializer.is_valid(raise_exception=True)
+            serializer.save(reported_by=profile, post=post)
+
+            # Increment flag count
+            post.flag_count = F('flag_count') + 1
+            post.is_flagged = True
+            post.save(update_fields=["flag_count", "is_flagged"])
+
+            return Response(success_response("Post flagged successfully"), status=status.HTTP_201_CREATED)
+
+        except GroupPost.DoesNotExist:
+            return Response(error_response("Post not found"), status=status.HTTP_404_NOT_FOUND)
+        except IntegrityError:
+            return Response(error_response("You have already flagged this post"), status=status.HTTP_409_CONFLICT)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupFlaggedPostsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated, IsGroupAdmin]
+    def get(self, request, group_id):
+        try:
+            
+            flagged_posts =GroupPostFlag.objects.filter(
+                post__group_id=group_id
+                ).select_related(
+                    "post", "reported_by", "post__group", "post__profile"
+                    ).order_by("-created_at")
+                
+            paginated_qs = self.paginate_queryset(flagged_posts, request)
+            serializer = GroupPostFlagListSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+

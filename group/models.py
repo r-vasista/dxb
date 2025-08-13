@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction
+    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction, PostFlagReasonChoices
 )
 from profiles.models import (
     Profile
@@ -154,3 +154,17 @@ class GroupActionLog(BaseModel):
     def __str__(self):
         return f"{self.profile} - {self.action} - {self.group}"
     
+
+class GroupPostFlag(models.Model):
+    post = models.ForeignKey(GroupPost, on_delete=models.CASCADE, related_name="flags")
+    reported_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="post_flags")
+    reason = models.CharField(max_length=50, choices=PostFlagReasonChoices.choices)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("post", "reported_by")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Flag by {self.reported_by} on Post {self.post}"
