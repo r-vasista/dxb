@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated, IsAuthenticatedOrReadOnly, AllowAny
 from rest_framework.response import Response
 from rest_framework import status
-from rest_framework.exceptions import ValidationError
+from rest_framework.exceptions import ValidationError, PermissionDenied
 from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
 from django.db import transaction
 import openpyxl
@@ -44,6 +44,12 @@ from profiles.models import (
 from profiles.serializers import (
     ProfileListSerializer
 )
+from group.models import (
+    Group, GroupMember
+)
+from group.choices import (
+    RoleChoices
+)
 
 from core.services import success_response, error_response, get_user_profile
 from core.pagination import PaginationMixin
@@ -61,6 +67,20 @@ class CreateEventAPIView(APIView):
         try:
             profile = get_user_profile(request.user)
             data=request.data
+            
+            group_id = data.get("group")
+            if group_id:
+                try:
+                    group = Group.objects.get(id=group_id)
+                except Group.DoesNotExist:
+                    return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
+
+                try:
+                    membership = GroupMember.objects.get(group=group, profile=profile)
+                    if membership.role != RoleChoices.ADMIN:
+                        raise PermissionDenied("Only group admins can create events for this group.")
+                except GroupMember.DoesNotExist:
+                    raise PermissionDenied("You are not a member of this group.")
 
             serializer = EventCreateSerializer(data=data, context={'request': request})
             serializer.is_valid(raise_exception=True)
@@ -75,7 +95,9 @@ class CreateEventAPIView(APIView):
             handle_event_hashtags(event)
             
             return Response(success_response(data=serializer.data), status=status.HTTP_201_CREATED)
-
+        
+        except PermissionDenied as e:
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
@@ -88,7 +110,7 @@ class EventDetailAPIView(APIView):
     Fetch a single event by its ID.
     Includes full event details.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, event_id=None, slug=None):
         try:
@@ -1166,7 +1188,7 @@ class GetCoHostListAPIView(APIView, PaginationMixin):
     """
     gets the list of all co hosts in an event
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     
     def get(self, request, event_id=None, event_slug=None):
         try:

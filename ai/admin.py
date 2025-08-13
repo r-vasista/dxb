@@ -1,6 +1,6 @@
 from django.contrib import admin
 from ai.models import (
-    ArtImagePrompt, BaseAIConfig, EventDescriptionResponse, EventTagResponse
+    ArtImagePrompt, BaseAIConfig, EventDescriptionResponse, EventTagResponse, GroupTagsResponse
 )
 # Register your models here.
 
@@ -26,6 +26,13 @@ class EventTagResponseAdmin(admin.ModelAdmin):
 
 @admin.register(EventDescriptionResponse)
 class EventDescriptionResponseAdmin(admin.ModelAdmin):
+    list_display = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
+    search_fields = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
+    list_filter = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
+
+
+@admin.register(GroupTagsResponse)
+class GroupTagsResponseAdmin(admin.ModelAdmin):
     list_display = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
     search_fields = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']
     list_filter = ['id', 'profile', 'gpt_model', 'input_tokens', 'output_tokens', 'total_tokens']

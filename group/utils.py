@@ -1,3 +1,5 @@
+from django.db.models import F
+
 from group.models import GroupMember, GroupActionLog
 from group.choices import RoleChoices
 from core.models import HashTag
@@ -6,7 +8,6 @@ from core.services import extract_hashtags
 def can_post_to_group(group, profile):
     try:
         member = GroupMember.objects.get(group=group, profile=profile, is_banned=False)
-        print(member)
         return member.role in [
             RoleChoices.ADMIN,
             RoleChoices.MODERATOR,
@@ -37,5 +38,18 @@ def log_group_action(group, profile, action, description="", group_post=None, gr
             member_request=member_request
         )
     except Exception as e:
-        print(str(e))
+        pass
+
+
+def increment_group_member_activity(profile, group, points=1):
+    """
+    Increase activity_score for a group member if they are 
+    contributor/moderator/admin.
+    """
+    try:
+        member = GroupMember.objects.get(profile=profile, group=group)
+        if member.role in [RoleChoices.ADMIN, RoleChoices.MODERATOR, RoleChoices.CONTRIBUTOR]:
+            member.activity_score = F('activity_score') + points
+            member.save(update_fields=['activity_score'])
+    except GroupMember.DoesNotExist:
         pass
