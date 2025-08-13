@@ -8,7 +8,9 @@ from openai import OpenAI
 import json
 
 # Local imports
-from ai.models import ArtImagePrompt, BaseAIConfig, EventTagResponse, EventDescriptionResponse
+from ai.models import (
+    ArtImagePrompt, BaseAIConfig, EventTagResponse, EventDescriptionResponse, GroupTagsResponse
+)
 from ai.choices import AiUseTypes
 from ai.utils import compress_and_encode_image, parse_gpt_response, get_ai_response, encode_image
 from core.services import get_user_profile, success_response, error_response
@@ -123,6 +125,48 @@ class EventDescriptionAIAPIView(APIView):
                 output_tokens = response.usage.output_tokens,
                 total_tokens = response.usage.total_tokens,
                 event_data=content
+            )
+           
+            return Response(success_response(result_text))
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            
+
+class GroupDescriptionAIAPIView(APIView):
+    """
+    This API returns hash tags based on the group description
+    """
+    
+    def post(self, request):
+        try:
+            group_data = request.data
+            group_name = group_data.get('group_name')
+            group_description = group_data.get('group_description')
+            
+            if not group_description or not group_name:
+                return Response(error_response('group name and description should be provided'), status=status.HTTP_400_BAD_REQUEST)
+    
+            ai_config = BaseAIConfig.objects.get(use_type=AiUseTypes.GROUP_DESCRIPTION)
+            gpt_model = ai_config.gpt_model
+            prompt_instruction = ai_config.prompt
+            user_content = f"name: {group_name}, description: {group_description}"
+            
+            response = get_ai_response(gpt_model=gpt_model, prompt_instruction=prompt_instruction, user_content=user_content)
+            result_text = parse_gpt_response(response.output_text)
+            
+            GroupTagsResponse.objects.create(
+                profile= get_user_profile(request.user) if request.user.is_authenticated else None,
+                use_type = AiUseTypes.GROUP_DESCRIPTION,
+                description=ai_config.description,
+                prompt=prompt_instruction,
+                response=response,
+                response_text=result_text,
+                gpt_model = gpt_model,
+                input_tokens = response.usage.input_tokens,
+                output_tokens = response.usage.output_tokens,
+                total_tokens = response.usage.total_tokens,
+                group_name = group_name,
+                group_description = group_description
             )
            
             return Response(success_response(result_text))

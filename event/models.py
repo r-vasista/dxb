@@ -17,6 +17,9 @@ from core.models import (
 from core.models import (
     BaseModel
 )
+from group.models import (
+    Group
+)
 
 # Python imports
 import pytz
@@ -50,6 +53,13 @@ class Event(BaseModel):
         related_name='co_hosted_events',
         blank=True,
         null= True
+    )
+    group = models.ForeignKey(
+        Group,
+        on_delete=models.CASCADE,
+        related_name='events',
+        null=True,
+        blank=True
     )
     
     # Basic event information

@@ -3,7 +3,8 @@ from rest_framework import serializers
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
+     GroupActionLog
 )
 from group.choices import (
     RoleChoices
@@ -74,9 +75,12 @@ class GroupPostSerializer(serializers.ModelSerializer):
         model = GroupPost
         fields = [
             'id', 'group', 'profile', 'content', 'media_file', 'tags',
-            'is_pinned', 'is_announcement', 'likes_count',
+            'is_pinned', 'is_announcement', 'likes_count','pinned_at',
             'comments_count', 'share_count', 'is_flagged', 'flag_count'
         ]
+        extra_kwargs = {
+            'is_pinned': {'default': False}  # Ensures default False
+        }
     def get_comments_count(self, obj):
         return GroupPostComment.objects.filter(
             group_post=obj,
@@ -158,7 +162,7 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = GroupMember
-        fields = ['id', 'profile', 'role', 'joined_at', 'is_banned']
+        fields = ['id', 'profile', 'role', 'joined_at', 'is_banned', 'activity_score']
       
         
 class GroupListSerializer(serializers.ModelSerializer):
@@ -184,3 +188,30 @@ class GroupJoinRequestSerializer(serializers.ModelSerializer):
         model = GroupJoinRequest
         fields = ['id', 'group', 'profile', 'status', 'message', 'created_at']
         read_only_fields = ['id', 'group', 'profile', 'status', 'created_at']
+
+
+class GroupActionLogSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source="group.name", read_only=True)
+    profile = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = GroupActionLog
+        fields = [
+            "id", "group", "group_name", "profile",
+            "action", "description", "group_post", "group_member", "member_request",
+            "created_at"
+        ]
+
+class GroupPostFlagSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = GroupPostFlag
+        fields = ["id", "post", "reported_by", "reason", "description", "created_at"]
+        read_only_fields = ["id", "post", "reported_by", "created_at"]
+    
+class GroupPostFlagListSerializer(serializers.ModelSerializer):
+    post = GroupPostSerializer(read_only=True)
+    reported_by = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = GroupPostFlag
+        fields = '__all__'

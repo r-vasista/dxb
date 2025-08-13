@@ -1,20 +1,23 @@
 from celery import shared_task
 from django.utils.timezone import now
 from django.contrib.contenttypes.models import ContentType
-
+from django.db.models import Count, Q
+from django.db import transaction
 
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Max, Q
 
+from notification.task_monitor import monitor_task
 from profiles.models import Profile
-from group.models import Group ,GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+from group.models import (Group ,GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupActionLog)
 from group.choices import RoleChoices,JoiningRequestStatus
 from notification.choices import NotificationType
 from notification.models import Notification
 from notification.utils import create_notification  
 from core.services import send_dynamic_email_using_template,get_actual_user
 
+from event.models import Event
 import logging
 
 logger = logging.getLogger(__name__)
@@ -32,7 +35,7 @@ def send_group_creation_notifications_task(group_id, profile_id):
             group = Group.objects.get(id=group_id)
             logger.info(f"Loaded group: {group.name} (ID: {group_id})")
         except Group.DoesNotExist:
-            logger.warning(f"Group {group_id} not found.")
+            print(f"Group {group_id} not found.")
             return
 
         # 2. Fetch Profile and User
@@ -194,7 +197,9 @@ def send_group_join_notifications_task(group_id, profile_id, action='joined',sen
 
 
 @shared_task
+@monitor_task(task_name="send_inactivity_reminders_task", expected_interval_minutes=1440)
 def send_inactivity_reminders_task():
+    logger.info("Running: send_inactivity_reminders_task")
     cutoff_date = timezone.now() - timedelta(days=1)
 
     # Annotate groups with latest post date
@@ -379,3 +384,98 @@ def notify_owner_of_group_comment_like(comment_like_id):
     except Exception as e:
         logger.error(f"[notify_owner_of_group_comment_like] Error: {e}", exc_info=True)
 
+
+@shared_task
+@monitor_task(task_name="send_weekly_group_digest", expected_interval_minutes=10080)
+def send_weekly_group_digest(event_id=None, debug=False, return_data=False):
+    logger.info("Running: send_weekly_group_digest")
+    one_week_ago = timezone.now() - timedelta(days=7)
+    now = timezone.now()
+
+
+    try:
+        groups = Group.objects.all()
+
+        for group in groups:
+            # Top posts (past week)
+            top_posts = (
+                GroupPost.objects.filter(group=group, created_at__range=(one_week_ago, now))
+                .annotate(total_likes=Count("post_likes"))
+                .order_by("-total_likes")[:5]
+            )
+
+            # Top contributors
+            top_contributors = (
+                GroupPost.objects.filter(group=group, created_at__range=(one_week_ago, now))
+                .values("profile__username")
+                .annotate(post_count=Count("id"))
+                .order_by("-post_count")[:5]
+            )
+
+            # Upcoming events
+            upcoming_events = (
+                Event.objects.filter(start_datetime__gte=now)
+                .order_by("start_datetime")[:5]
+            )
+
+            # Admin members with email notifications enabled
+            admin_members = Profile.objects.filter(
+                id__in=GroupMember.objects.filter(
+                    group=group, role=RoleChoices.ADMIN
+                ).values_list("profile_id", flat=True),
+                notify_email=True
+            )
+
+
+
+            def send_emails_and_notify():
+                for member in admin_members:
+                    user = get_actual_user(member)
+                    if not user or not user.email:
+                        continue
+
+                    context = {
+                        "group_name": group.name,
+                        "member_name": member.username,
+                        "top_posts": top_posts,
+                        "top_contributors": top_contributors,
+                        "upcoming_events": upcoming_events,
+                        "date_range": f"{one_week_ago.date()} to {now.date()}",
+                    }
+
+                    try:
+                        status, msg = send_dynamic_email_using_template(
+                            template_name="weekly-group-digest",
+                            recipient_list=[user.email],
+                            context=context,
+                        )
+                        print(f"{status} - {msg}")
+                    except Exception as e:
+                        logger.error(
+                            f"[send_weekly_group_digest] Failed to send digest to {member.username} ({user.email}): {e}",
+                            exc_info=True
+                        )
+
+            if not return_data:
+                transaction.on_commit(send_emails_and_notify)
+
+    except Exception as e:
+        logger.error(f"[send_weekly_group_digest] Unexpected error: {e}", exc_info=True)
+
+
+@shared_task
+@monitor_task(task_name="delete_old_group_action_logs", expected_interval_minutes=1440)
+def delete_old_group_action_logs():
+    """
+    Deletes GroupActionLog records older than 10 days.
+    """
+    try:
+        cutoff_date = timezone.now() - timedelta(days=10)
+        deleted_count, _ = GroupActionLog.objects.filter(created_at__lt=cutoff_date).delete()
+
+        logger.info(f"Deleted {deleted_count} old group action logs older than 10 days.")
+        return {"status": True, "deleted_count": deleted_count}
+
+    except Exception as e:
+        logger.error(f"Error deleting old group action logs: {str(e)}", exc_info=True)
+        return {"status": False, "error": str(e)}

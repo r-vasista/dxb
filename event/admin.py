@@ -5,9 +5,9 @@ from event.models import (
 
 @admin.register(Event)
 class EventAdmin(admin.ModelAdmin):
-    list_display = ['id', 'host', 'title', 'allow_public_media', 'start_datetime']
-    search_fields = ['id', 'host', 'title', 'start_datetime']
-    list_filter = ['id', 'host', 'title', 'start_datetime']
+    list_display = ['id', 'host', 'title', 'group', 'allow_public_media', 'start_datetime']
+    search_fields = ['id', 'host', 'title', 'group', 'allow_public_media', 'start_datetime']
+    list_filter = ['id', 'host', 'title', 'group', 'allow_public_media', 'start_datetime']
 
 
 @admin.register(EventAttendance)

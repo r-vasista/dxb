@@ -2,7 +2,7 @@ from django.db import models
 
 # Local imports
 from group.choices import (
-    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction
+    RoleChoices, GroupType, PrivacyChoices, JoiningRequestStatus, GroupAction, PostFlagReasonChoices
 )
 from profiles.models import (
     Profile
@@ -10,6 +10,8 @@ from profiles.models import (
 from core.models import (
     HashTag, BaseModel
 )
+from django.utils import timezone
+from datetime import timedelta
 
 class Group(BaseModel):
     name = models.CharField(max_length=100, unique=True)
@@ -39,7 +41,7 @@ class GroupMember(BaseModel):
     assigned_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='assigned_roles', blank=True, null=True)
     is_banned = models.BooleanField(default=False)
     top_contributor = models.BooleanField(default=False)
-    recent_activity_score = models.IntegerField(default=0)
+    activity_score = models.IntegerField(default=0)
 
     class Meta:
         unique_together = ('profile', 'group')
@@ -55,6 +57,7 @@ class GroupPost(BaseModel):
     media_file = models.FileField(upload_to='group_media/', null=True, blank=True)
     tags = models.ManyToManyField(HashTag, blank=True)
     is_pinned = models.BooleanField(default=False)
+    pinned_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
     likes_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
@@ -64,6 +67,18 @@ class GroupPost(BaseModel):
     
     def __str__(self):
         return f'{self.group.name}, {self.id}'
+    
+    def is_pin_expired(self):
+        """Returns True if the pin is older than 10 days."""
+        if self.is_pinned and self.pinned_at:
+            return timezone.now() - self.pinned_at > timedelta(days=10)
+        return False
+    def save(self, *args, **kwargs):
+        if self.is_pinned and not self.pinned_at:
+            self.pinned_at = timezone.now()
+        elif not self.is_pinned:
+            self.pinned_at = None  
+        super().save(*args, **kwargs)
 
 
 class GroupPostComment(BaseModel):
@@ -154,3 +169,17 @@ class GroupActionLog(BaseModel):
     def __str__(self):
         return f"{self.profile} - {self.action} - {self.group}"
     
+
+class GroupPostFlag(models.Model):
+    post = models.ForeignKey(GroupPost, on_delete=models.CASCADE, related_name="flags")
+    reported_by = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="post_flags")
+    reason = models.CharField(max_length=50, choices=PostFlagReasonChoices.choices)
+    description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("post", "reported_by")
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Flag by {self.reported_by} on Post {self.post}"

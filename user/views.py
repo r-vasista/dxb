@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db.models import Q
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -22,7 +22,7 @@ from core.services import success_response, error_response
 from user.models import Role, Permission, UserType, UserLog
 from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer, UserSerializer
 from user.choices import PermissionScope
-from user.utils import get_client_ip
+from user.utils import get_client_ip, generate_registration_token, verify_registration_token
 
 from organization.serializers import RegisterOrganizationSerializer, AddressSerializer
 from organization.utils import (
@@ -40,6 +40,23 @@ from profiles.utils import (
 )
 
 from notification.task import send_welcome_email_task
+
+class VerifyRegisterOTPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+
+        if not email or not otp:
+            return Response(error_response("Email and OTP are required"), status=status.HTTP_400_BAD_REQUEST)
+
+        if verify_otp(email, otp):
+            token = generate_registration_token(email)
+            return Response(success_response({"registration_token": token}), status=status.HTTP_200_OK)
+
+        return Response(error_response("Invalid or expired OTP"), status=status.HTTP_400_BAD_REQUEST)
+
 
 class RegisterAccountAPIView(APIView):
     """
@@ -74,19 +91,22 @@ class RegisterAccountAPIView(APIView):
         otp = data.get("otp", "")
         name = data.get("name", "")
         address_data = data.get("address", {})
+        reg_token = request.data.get("registration_token", "")
 
         # Location data
         timezone_str = data.get("timezone", "UTC")
         latitude = data.get("latitude")
         longitude = data.get("longitude")
         ip_address = get_client_ip(request)
+        
 
         try:
             if not email or not password or not user_type:
                 raise ValueError("Email, password, and user_type are required.")
-
-            if not verify_otp(email, otp):
-                return Response(error_response("Invalid or expired OTP."), status=status.HTTP_400_BAD_REQUEST)
+            
+            verified_email = verify_registration_token(reg_token)
+            if not verified_email or verified_email != email:
+                return Response(error_response("Invalid or expired registration token"), status=status.HTTP_400_BAD_REQUEST)
             
             try:
                 validate_username_format(name)
@@ -129,13 +149,16 @@ class RegisterAccountAPIView(APIView):
                     org_serializer = RegisterOrganizationSerializer(data=organization_data)
                     org_serializer.is_valid(raise_exception=True)
                     organization = org_serializer.save()
-
-                    profile = Profile.objects.create(
-                        organization=organization,
-                        profile_type=ProfileType.ORGANIZATION,
-                        username=name,
-                        phone_number=data.get("phone_number")
-                    )
+                    try:
+                        profile = Profile.objects.create(
+                            organization=organization,
+                            profile_type=ProfileType.ORGANIZATION,
+                            username=name,
+                            phone_number=data.get("phone_number")
+                        )
+                    except IntegrityError:
+                        transaction.set_rollback(True)
+                        return Response(error_response(["Username already taken. Please choose another."]), status=status.HTTP_400_BAD_REQUEST)
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
                     except Exception:
@@ -155,13 +178,17 @@ class RegisterAccountAPIView(APIView):
 
                     role, _ = Role.objects.get_or_create(name='user')
                     user.roles.add(role)
-
-                    profile = Profile.objects.create(
-                        user=user,
-                        profile_type=ProfileType.USER,
-                        username=name,
-                        phone_number=data.get("phone_number")
-                    )
+                    
+                    try:
+                        profile = Profile.objects.create(
+                            user=user,
+                            profile_type=ProfileType.USER,
+                            username=name,
+                            phone_number=data.get("phone_number")
+                        )
+                    except IntegrityError:
+                        transaction.set_rollback(True)
+                        return Response(error_response(["Username already taken. Please choose another."]), status=status.HTTP_400_BAD_REQUEST)
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
                     except Exception:
