@@ -7,7 +7,7 @@ from group.views import (
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView,
-    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView
 )
 
 urlpatterns = [
@@ -57,4 +57,7 @@ urlpatterns = [
     path('groups/posts/likes/<int:pk>/', GroupPostLikeDetailAPIView.as_view(),name='group-post-like-detail'),
     path('groups/post-comments/like-toggle/', GroupPostCommentLikeToggleAPIView.as_view(),name='group-post-comment-like-toggle' ),
     path('groups/post-comments/<int:comment_id>/likes/', GroupPostCommentLikeListAPIView.as_view(),name='group-post-comment-likes'),
+    
+    # Group events
+    path('events-by-group/<int:group_id>/', GroupEventsListAPIView.as_view(), name='group-events-list'),
 ]

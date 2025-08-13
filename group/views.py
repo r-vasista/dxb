@@ -42,6 +42,9 @@ from core.services import (
 from core.models import (
     HashTag
 )
+from event.serializers import (
+    EventListSerializer
+)
 
 from group.task import (notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like,
                          send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
@@ -1048,3 +1051,21 @@ class GroupMemberLeaderboardListAPIView(APIView):
             return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupEventsListAPIView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+        except Group.DoesNotExist:
+            return Response(
+                {"status": False, "message": "Group not found"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        events = group.events.all().order_by('-start_datetime')
+        paginated_qs = self.paginate_queryset(events, request)
+        serializer = EventListSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
