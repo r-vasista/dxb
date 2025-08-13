@@ -12,7 +12,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.shortcuts import get_object_or_404
 from django.http import Http404
 from django.db.models import Q
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.core.exceptions import ObjectDoesNotExist
 from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError as DjangoValidationError
@@ -149,13 +149,16 @@ class RegisterAccountAPIView(APIView):
                     org_serializer = RegisterOrganizationSerializer(data=organization_data)
                     org_serializer.is_valid(raise_exception=True)
                     organization = org_serializer.save()
-
-                    profile = Profile.objects.create(
-                        organization=organization,
-                        profile_type=ProfileType.ORGANIZATION,
-                        username=name,
-                        phone_number=data.get("phone_number")
-                    )
+                    try:
+                        profile = Profile.objects.create(
+                            organization=organization,
+                            profile_type=ProfileType.ORGANIZATION,
+                            username=name,
+                            phone_number=data.get("phone_number")
+                        )
+                    except IntegrityError:
+                        transaction.set_rollback(True)
+                        return Response(error_response(["Username already taken. Please choose another."]), status=status.HTTP_400_BAD_REQUEST)
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
                     except Exception:
@@ -175,13 +178,17 @@ class RegisterAccountAPIView(APIView):
 
                     role, _ = Role.objects.get_or_create(name='user')
                     user.roles.add(role)
-
-                    profile = Profile.objects.create(
-                        user=user,
-                        profile_type=ProfileType.USER,
-                        username=name,
-                        phone_number=data.get("phone_number")
-                    )
+                    
+                    try:
+                        profile = Profile.objects.create(
+                            user=user,
+                            profile_type=ProfileType.USER,
+                            username=name,
+                            phone_number=data.get("phone_number")
+                        )
+                    except IntegrityError:
+                        transaction.set_rollback(True)
+                        return Response(error_response(["Username already taken. Please choose another."]), status=status.HTTP_400_BAD_REQUEST)
                     try:
                         transaction.on_commit(lambda: send_welcome_email_task.delay(profile.id))
                     except Exception:
