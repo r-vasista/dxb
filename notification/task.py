@@ -19,7 +19,7 @@ from notification.choices import NotificationType
 from post.models import PostReaction,Comment ,Post, PostView,SharePost
 from profiles.models import FriendRequest
 from notification.utils import create_notification, send_notification_email
-
+from notification.task_monitor import monitor_task
 # Setup logger
 logger = logging.getLogger(__name__)
 
@@ -43,51 +43,60 @@ def send_welcome_email_task(profile_id):
         template_name = 'welcome-email'
         try:
             send_dynamic_email_using_template(template_name, [user.email], context)
-            logger.info(f"✅ Welcome email sent to {user.email}")
+            logger.info(f" Welcome email sent to {user.email}")
         except Exception as e:
-            logger.error(f"❌ Failed to send email to {user.email}: {e}")
+            logger.error(f" Failed to send email to {user.email}: {e}")
     else:
-        logger.warning(f"❌ No valid user or email found for profile ID {profile_id}")
+        logger.warning(f" No valid user or email found for profile ID {profile_id}")
 
 
 @shared_task
+@monitor_task(task_name="send_daily_muse_to_all_profiles", expected_interval_minutes=1440)
 def send_daily_muse_to_all_profiles():
+    logger.info("Running: send_daily_muse_to_all_profiles")
     profiles = Profile.objects.filter(notify_email=True)
+
+    # If there are literally no quotes in the system, stop early
+    if not DailyQuote.objects.exists():
+        logger.warning(" No quotes available in the system. Task aborted.")
+        return
 
     for profile in profiles:
         try:
             today = timezone.localdate()
-            today_seen = DailyQuoteSeen.objects.filter(profile=profile, created_at__date=today).first()
+
+            # Check if today's quote already sent
+            today_seen = DailyQuoteSeen.objects.filter(
+                profile=profile,
+                created_at__date=today
+            ).first()
 
             if today_seen:
-                if not today_seen.email_sent and profile.notify_email:
+                if not today_seen.email_sent:
                     send_daily_muse_email(profile, today_seen.quote)
                     today_seen.email_sent = True
-                    today_seen.save()
-                    logger.info(f"✅ Sent today's Daily Muse to profile {profile.id}")
+                    today_seen.save(update_fields=["email_sent"])
+                    logger.info(f" Sent today's Daily Muse to profile {profile.id}")
                 else:
-                    logger.info(f"✅ Daily Muse already sent today to profile {profile.id}")
+                    logger.info(f" Already sent today's Daily Muse to profile {profile.id}")
                 continue
 
-            # Get unseen quotes
-            seen_ids = DailyQuoteSeen.objects.filter(profile=profile).values_list('quote_id', flat=True)
+            # Get unseen quotes for this profile
+            seen_ids = DailyQuoteSeen.objects.filter(profile=profile).values_list("quote_id", flat=True)
             unseen_quotes = DailyQuote.objects.exclude(id__in=seen_ids)
 
             if unseen_quotes.exists():
                 quote = random.choice(list(unseen_quotes))
                 seen_record = DailyQuoteSeen.objects.create(profile=profile, quote=quote)
-
-                if profile.notify_email:
-                    send_daily_muse_email(profile, quote)
-                    seen_record.email_sent = True
-                    seen_record.save()
-                    logger.info(f"✅ Sent new Daily Muse to profile {profile.id}")
+                send_daily_muse_email(profile, quote)
+                seen_record.email_sent = True
+                seen_record.save(update_fields=["email_sent"])
+                logger.info(f" Sent new Daily Muse to profile {profile.id}")
             else:
-                logger.warning(f"⚠️ No unseen quotes left for profile {profile.id}")
+                logger.info(f" No unseen quotes left for profile {profile.id}")
 
         except Exception as e:
-            logger.exception(f"❌ Exception while sending Daily Muse to profile {profile.id}")
-
+            logger.exception(f" Exception while sending Daily Muse to profile {profile.id}: {e}")
 
 
 def send_daily_muse_email(profile, quote):
@@ -278,14 +287,15 @@ def send_mention_notification_task(from_profile_id, to_profile_id, post_id):
         if sender != recipient and recipient.allow_mentions:
             message = f"{sender.username} mentioned you in a post"
             create_notification(post, sender, recipient, post, message, notification_type)
-            logger.info(f"✅ Mention notification sent to {recipient.username}")
+            logger.info(f" Mention notification sent to {recipient.username}")
     except ObjectDoesNotExist:
-        logger.warning("❌ Mention task failed — object not found.")
+        logger.warning(" Mention task failed — object not found.")
     except Exception as e:
-        logger.error(f"❌ Mention task error: {e}")
+        logger.error(f" Mention task error: {e}")
 
 
 @shared_task
+@monitor_task(task_name="send_weekly_profile_stats", expected_interval_minutes=10080)
 def send_weekly_profile_stats():
     one_week_ago = timezone.now() - timedelta(days=7)
     now = timezone.now()
@@ -497,7 +507,9 @@ def shared_event_media_comment_notification_task(event_media_id, profile_id, com
 
 
 @shared_task
+@monitor_task(task_name="send_event_reminder_notifications", expected_interval_minutes=60)
 def send_event_reminder_notifications():
+    logger.info("Running: send_event_reminder_notifications")
     try:
         now = timezone.now()
 
@@ -549,7 +561,9 @@ def send_event_reminder_notifications():
 
 
 @shared_task
+@monitor_task(task_name="notify_low_rsvp_events", expected_interval_minutes=60)
 def notify_low_rsvp_events():
+    logger.info("Running: notify_low_rsvp_events")
     now = timezone.now()
     threshold = now + timedelta(hours=72)
 

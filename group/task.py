@@ -8,8 +8,9 @@ from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Max, Q
 
+from notification.task_monitor import monitor_task
 from profiles.models import Profile
-from group.models import Group ,GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike
+from group.models import (Group ,GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupActionLog)
 from group.choices import RoleChoices,JoiningRequestStatus
 from notification.choices import NotificationType
 from notification.models import Notification
@@ -196,7 +197,9 @@ def send_group_join_notifications_task(group_id, profile_id, action='joined',sen
 
 
 @shared_task
+@monitor_task(task_name="send_inactivity_reminders_task", expected_interval_minutes=1440)
 def send_inactivity_reminders_task():
+    logger.info("Running: send_inactivity_reminders_task")
     cutoff_date = timezone.now() - timedelta(days=1)
 
     # Annotate groups with latest post date
@@ -383,7 +386,9 @@ def notify_owner_of_group_comment_like(comment_like_id):
 
 
 @shared_task
+@monitor_task(task_name="send_weekly_group_digest", expected_interval_minutes=10080)
 def send_weekly_group_digest(event_id=None, debug=False, return_data=False):
+    logger.info("Running: send_weekly_group_digest")
     one_week_ago = timezone.now() - timedelta(days=7)
     now = timezone.now()
 
@@ -456,3 +461,21 @@ def send_weekly_group_digest(event_id=None, debug=False, return_data=False):
 
     except Exception as e:
         logger.error(f"[send_weekly_group_digest] Unexpected error: {e}", exc_info=True)
+
+
+@shared_task
+@monitor_task(task_name="delete_old_group_action_logs", expected_interval_minutes=1440)
+def delete_old_group_action_logs():
+    """
+    Deletes GroupActionLog records older than 10 days.
+    """
+    try:
+        cutoff_date = timezone.now() - timedelta(days=10)
+        deleted_count, _ = GroupActionLog.objects.filter(created_at__lt=cutoff_date).delete()
+
+        logger.info(f"Deleted {deleted_count} old group action logs older than 10 days.")
+        return {"status": True, "deleted_count": deleted_count}
+
+    except Exception as e:
+        logger.error(f"Error deleting old group action logs: {str(e)}", exc_info=True)
+        return {"status": False, "error": str(e)}

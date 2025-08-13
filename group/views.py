@@ -12,11 +12,14 @@ from rest_framework.exceptions import PermissionDenied
 from django.db import transaction, IntegrityError
 from django.shortcuts import get_object_or_404
 from django.http import Http404
+from django.utils import timezone
+from datetime import timedelta
+from django.utils.dateparse import parse_date
 from django.db.models import Count, Q, F
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag , GroupActionLog
 )
 from group.choices import (
     RoleChoices, JoiningRequestStatus, GroupAction
@@ -24,7 +27,7 @@ from group.choices import (
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
-    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer
+    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
@@ -115,6 +118,30 @@ class GroupUpdateAPIView(APIView):
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class GroupDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupAdmin]
+
+    def get_object(self, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            self.check_object_permissions(self.request, group)
+            return group
+        except Group.DoesNotExist:
+            return None
+        
+    def delete(self, request, group_id):
+        group = self.get_object(group_id)
+        if not group:
+            return Response(error_response("Group not found."), status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            with transaction.atomic():
+                log_group_action(group, get_user_profile(request.user), GroupAction.DELETE, "Group deleted by user")
+                group.delete()
+            return Response(success_response({"message": "Group deleted successfully."}), status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class GroupDetailAPIView(APIView):
@@ -184,7 +211,7 @@ class GroupListAPIView(APIView, PaginationMixin):
                 posts_qs = posts_qs.filter(is_pinned=is_pinned.lower() == 'true')
 
             # Get pinned posts separately
-            pinned_qs = posts_qs.filter(is_pinned=True).order_by('-created_at')
+            pinned_qs = posts_qs.filter(is_pinned=True).exclude(pinned_at__lt=timezone.now() - timedelta(days=10)).order_by('-created_at')
             pinned_data = GroupPostSerializer(pinned_qs, many=True, context={'request': request}).data
 
             # Paginate ALL posts (pinned + normal)
@@ -271,9 +298,23 @@ class GroupPostDetailAPIView(APIView):
                 updated = True
             handle_grouppost_hashtags(post)  # Define this as shown below.
             if "is_pinned" in data:
-                if is_privileged:  # Only privileged members can pin/unpin
-                    post.is_pinned = str(data["is_pinned"]).lower() in ["true", "1", "yes"]
-                    updated = True
+                if is_privileged:
+                    pin_requested = str(data["is_pinned"]).lower() in ["true", "1", "yes"]
+
+                    if pin_requested:
+                        if not post.is_pinned or post.is_pin_expired():
+                            post.is_pinned = True
+                            post.pinned_at = timezone.now()
+                            updated = True
+                        else:
+                            return Response(
+                                error_response("Post is already pinned and has not expired."),
+                                status=status.HTTP_400_BAD_REQUEST,
+                            )
+                    else:
+                        post.is_pinned = False
+                        post.pinned_at = None
+                        updated = True
                 else:
                     return Response(
                         error_response("Only admins/moderators can pin posts."),
@@ -1069,3 +1110,65 @@ class GroupEventsListAPIView(APIView, PaginationMixin):
         paginated_qs = self.paginate_queryset(events, request)
         serializer = EventListSerializer(paginated_qs, many=True)
         return self.get_paginated_response(serializer.data)
+
+class GroupActionLogListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/groups/logs/
+    Returns a paginated list of group action logs.
+    
+    Query Parameters:
+        - group_id (int): Filter logs by group.
+        - action (str): Filter by action type (choices from GroupAction).
+        - profile_id (int): Filter by profile.
+        - start_date (YYYY-MM-DD): Filter logs created on or after this date.
+        - end_date (YYYY-MM-DD): Filter logs created on or before this date.
+    
+    Permissions:
+        - Requires authentication.
+    
+    Response:
+        Paginated JSON list of logs with group & profile details.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            logs = GroupActionLog.objects.select_related("group", "profile").all()
+
+            # Apply filters
+            group_id = request.query_params.get("group_id")
+            if group_id:
+                logs = logs.filter(group_id=group_id)
+
+            action = request.query_params.get("action")
+            if action:
+                logs = logs.filter(action__iexact=action)
+
+            profile_id = request.query_params.get("profile_id")
+            if profile_id:
+                logs = logs.filter(profile_id=profile_id)
+
+            username = request.query_params.get("username")
+            if username:
+                logs = logs.filter(profile__username__iexact=username)
+
+            start_date = request.query_params.get("start_date")
+            if start_date:
+                parsed_start = parse_date(start_date)
+                if parsed_start:
+                    logs = logs.filter(created_at__date__gte=parsed_start)
+
+            end_date = request.query_params.get("end_date")
+            if end_date:
+                parsed_end = parse_date(end_date)
+                if parsed_end:
+                    logs = logs.filter(created_at__date__lte=parsed_end)
+
+            # Pagination
+            paginated_logs = self.paginate_queryset(logs, request)
+            serializer = GroupActionLogSerializer(paginated_logs, many=True, context={"request": request})
+
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
