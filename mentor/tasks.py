@@ -2,6 +2,7 @@
 from django.db.models import Sum, Count, Q
 from django.utils.timezone import now
 from django.utils import timezone
+import logging
 
 # Python imports
 from dateutil.relativedelta import relativedelta
@@ -16,6 +17,7 @@ from mentor.models import (
 )
 from notification.choices import NotificationType
 from notification.models import Notification
+from notification.task_monitor import monitor_task
 from notification.utils import create_notification
 from profiles.models import (
     Profile
@@ -30,7 +32,7 @@ from post.choices import (
     PostStatus
 )
 
-
+logger = logging.getLogger(__name__)
 def calculate_mentor_metrics_for_profile(profile):
     try:
         criteria = MentorEligibilityCriteria.objects.filter(is_active=True).first()
@@ -100,7 +102,13 @@ def calculate_mentor_metrics_for_profile(profile):
         print(f"[MentorMetricError] for profile {profile.id}: {e}")
 
 @shared_task
+@monitor_task(task_name="run_mentor_eligibility_check", expected_interval_minutes=1440)
 def run_mentor_eligibility_check():
+    logger.info("Running: run_mentor_eligibility_check")
+    """
+    This task checks all profiles for mentor eligibility and updates their metrics.         
+    It runs daily to ensure all profiles are evaluated.
+    """
     profiles = Profile.objects.filter(is_active=True, mentor_blacklisted=False,mentor_mail_sent=False, )
 
     for profile in profiles:

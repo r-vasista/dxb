@@ -6,7 +6,8 @@ from group.views import (
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
-    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView,
+    UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
+    GroupDeleteAPIView , GroupActionLogListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView
 )
 
@@ -15,6 +16,7 @@ urlpatterns = [
     # Group
     path('create-group/', GroupCreateAPIView.as_view(), name='create-group'),
     path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
+    path('delete-group/<int:group_id>/', GroupDeleteAPIView.as_view(), name='delete-group'),
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('group-details/<str:group_name>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
@@ -60,4 +62,7 @@ urlpatterns = [
     
     # Group events
     path('events-by-group/<int:group_id>/', GroupEventsListAPIView.as_view(), name='group-events-list'),
+
+    # Group Action Log
+    path('group-action-log/', GroupActionLogListAPIView.as_view(), name='group-action-log'),
 ]

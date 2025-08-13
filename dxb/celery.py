@@ -59,5 +59,9 @@ app.conf.beat_schedule = {
         'task': 'group.task.send_weekly_group_digest',
         'schedule': crontab(hour=8, minute=0, day_of_week=1),  # Every week at 8:00 AM on Monday
     },
+    "delete-old-group-action-logs-daily": {
+        "task": "groups.task.delete_old_group_action_logs",
+        "schedule": crontab(hour=0, minute=0),  # Runs daily at midnight
+    },
     
 }
