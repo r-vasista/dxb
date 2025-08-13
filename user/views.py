@@ -22,7 +22,7 @@ from core.services import success_response, error_response
 from user.models import Role, Permission, UserType, UserLog
 from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer, UserSerializer
 from user.choices import PermissionScope
-from user.utils import get_client_ip
+from user.utils import get_client_ip, generate_registration_token, verify_registration_token
 
 from organization.serializers import RegisterOrganizationSerializer, AddressSerializer
 from organization.utils import (
@@ -40,6 +40,23 @@ from profiles.utils import (
 )
 
 from notification.task import send_welcome_email_task
+
+class VerifyRegisterOTPIView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        email = request.data.get("email")
+        otp = request.data.get("otp")
+
+        if not email or not otp:
+            return Response(error_response("Email and OTP are required"), status=status.HTTP_400_BAD_REQUEST)
+
+        if verify_otp(email, otp):
+            token = generate_registration_token(email)
+            return Response(success_response({"registration_token": token}), status=status.HTTP_200_OK)
+
+        return Response(error_response("Invalid or expired OTP"), status=status.HTTP_400_BAD_REQUEST)
+
 
 class RegisterAccountAPIView(APIView):
     """
@@ -74,19 +91,22 @@ class RegisterAccountAPIView(APIView):
         otp = data.get("otp", "")
         name = data.get("name", "")
         address_data = data.get("address", {})
+        reg_token = request.data.get("registration_token", "")
 
         # Location data
         timezone_str = data.get("timezone", "UTC")
         latitude = data.get("latitude")
         longitude = data.get("longitude")
         ip_address = get_client_ip(request)
+        
 
         try:
             if not email or not password or not user_type:
                 raise ValueError("Email, password, and user_type are required.")
-
-            if not verify_otp(email, otp):
-                return Response(error_response("Invalid or expired OTP."), status=status.HTTP_400_BAD_REQUEST)
+            
+            verified_email = verify_registration_token(reg_token)
+            if not verified_email or verified_email != email:
+                return Response(error_response("Invalid or expired registration token"), status=status.HTTP_400_BAD_REQUEST)
             
             try:
                 validate_username_format(name)
