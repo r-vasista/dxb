@@ -162,11 +162,12 @@ class GroupMemberSerializer(serializers.ModelSerializer):
 class GroupListSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer(read_only=True)
     my_role = serializers.SerializerMethodField()
+    join_request_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
         fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role',
-                  'privacy'
+                  'privacy', 'join_request_status',
                   ]
     
     def get_my_role(self, obj):
@@ -177,6 +178,17 @@ class GroupListSerializer(serializers.ModelSerializer):
                 member = GroupMember.objects.get(group=obj, profile=request.user.profile)
                 return member.role
             except GroupMember.DoesNotExist:
+                return None
+        return None
+    
+    def get_join_request_status(self, obj):
+        """Return the join request status for the current user if exists."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                join_request = GroupJoinRequest.objects.get(group=obj, profile=request.user.profile)
+                return join_request.status
+            except GroupJoinRequest.DoesNotExist:
                 return None
         return None
 
