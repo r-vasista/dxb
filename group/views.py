@@ -1069,3 +1069,36 @@ class GroupEventsListAPIView(APIView, PaginationMixin):
         paginated_qs = self.paginate_queryset(events, request)
         serializer = EventListSerializer(paginated_qs, many=True)
         return self.get_paginated_response(serializer.data)
+
+
+class MyGroupsListAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+        is_owner = request.query_params.get("is_owner")
+        role = request.query_params.get("role")
+
+        try:
+            # Base queryset: groups where the user is a member
+            memberships = GroupMember.objects.select_related("group").filter(profile=profile)
+
+            # Filter: is_owner (groups created by me)
+            if is_owner and is_owner.lower() == "true":
+                memberships = memberships.filter(group__creator=profile)
+
+            # Filter: role
+            if role:
+                memberships = memberships.filter(role=role)
+
+            # Extract groups from memberships
+            groups_qs = Group.objects.filter(id__in=memberships.values_list("group_id", flat=True))
+            
+            # Paginate groups
+            paginated_groups = self.paginate_queryset(groups_qs, request)
+            serialized_groups = GroupListSerializer(paginated_groups, many=True, context={"request": request}).data
+
+            return self.get_paginated_response(serialized_groups)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

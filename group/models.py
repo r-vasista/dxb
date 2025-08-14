@@ -22,7 +22,7 @@ class Group(BaseModel):
     cover_image = models.ImageField(upload_to='group_covers/', null=True, blank=True)
     member_count = models.PositiveIntegerField(default=1)
     post_count = models.PositiveIntegerField(default=0)
-    avg_engagement = models.FloatField(default=0.0)  # avg reactions + comments per post
+    avg_engagement = models.FloatField(default=0.0)
     trending_score = models.FloatField(default=0.0)
     last_activity_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
