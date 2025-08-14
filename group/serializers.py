@@ -18,13 +18,7 @@ class GroupCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy']
-
-    # def validate_name(self, value):
-    #     if Group.objects.filter(name__iexact=value.strip()).exists():
-    #         raise serializers.ValidationError("A group with this name already exists.")
-    #     return value
-
+        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug']
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
     class Meta:
