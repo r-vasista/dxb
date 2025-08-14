@@ -167,10 +167,22 @@ class GroupMemberSerializer(serializers.ModelSerializer):
         
 class GroupListSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer(read_only=True)
+    my_role = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
-        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at']
+        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role']
+    
+    def get_my_role(self, obj):
+        """Show role if user is authenticated and is a member."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                member = GroupMember.objects.get(group=obj, profile=request.user.profile)
+                return member.role
+            except GroupMember.DoesNotExist:
+                return None
+        return None
 
 
 class GroupMemberUpdateSerializer(serializers.ModelSerializer):

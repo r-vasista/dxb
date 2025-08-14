@@ -8,7 +8,7 @@ from group.views import (
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView,
-    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView
 )
 
 urlpatterns = [
@@ -23,6 +23,7 @@ urlpatterns = [
     path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list'),
     path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
     path('recommended/', RecommendedGroupsAPIView.as_view(), name="recommended-groups"),
+    path('my-groups/', MyGroupsListAPIView.as_view(), name="my-groups"),
     
     
     # Group Members
