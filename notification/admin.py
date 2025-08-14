@@ -2,7 +2,7 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
 from notification.models import (
-    Notification,DailyQuote,DailyQuoteSeen
+    Notification,DailyQuote,DailyQuoteSeen, ScheduledTaskMonitor
 )
 from .resources import DailyQuoteResource
 
@@ -20,3 +20,7 @@ class DailyQuoteAdmin(ImportExportModelAdmin):
 @admin.register(DailyQuoteSeen)
 class DailyQuoteSeenAdmin(admin.ModelAdmin):
     list_display=['profile','quote','email_sent']
+
+@admin.register(ScheduledTaskMonitor)
+class ScheduledTaskMonitorAdmin(admin.ModelAdmin):
+    list_display=['task_name', 'last_run_at', 'expected_interval_minutes']

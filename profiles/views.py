@@ -94,7 +94,10 @@ class ProfileAPIView(APIView):
             serializer.is_valid(raise_exception=True)
             serializer.save()
 
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            return Response(success_response({
+                "message": "Profile updated successfully.",
+                "profile": serializer.data
+            }), status=status.HTTP_200_OK)
 
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)

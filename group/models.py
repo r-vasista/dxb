@@ -10,6 +10,8 @@ from profiles.models import (
 from core.models import (
     HashTag, BaseModel
 )
+from django.utils import timezone
+from datetime import timedelta
 
 class Group(BaseModel):
     name = models.CharField(max_length=100, unique=True)
@@ -55,6 +57,7 @@ class GroupPost(BaseModel):
     media_file = models.FileField(upload_to='group_media/', null=True, blank=True)
     tags = models.ManyToManyField(HashTag, blank=True)
     is_pinned = models.BooleanField(default=False)
+    pinned_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
     likes_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
@@ -64,6 +67,18 @@ class GroupPost(BaseModel):
     
     def __str__(self):
         return f'{self.group.name}, {self.id}'
+    
+    def is_pin_expired(self):
+        """Returns True if the pin is older than 10 days."""
+        if self.is_pinned and self.pinned_at:
+            return timezone.now() - self.pinned_at > timedelta(days=10)
+        return False
+    def save(self, *args, **kwargs):
+        if self.is_pinned and not self.pinned_at:
+            self.pinned_at = timezone.now()
+        elif not self.is_pinned:
+            self.pinned_at = None  
+        super().save(*args, **kwargs)
 
 
 class GroupPostComment(BaseModel):

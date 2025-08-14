@@ -4,7 +4,7 @@ from rest_framework import serializers
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
-    
+     GroupActionLog
 )
 from group.choices import (
     RoleChoices
@@ -75,7 +75,7 @@ class GroupPostSerializer(serializers.ModelSerializer):
         model = GroupPost
         fields = [
             'id', 'group', 'profile', 'content', 'media_file', 'tags',
-            'is_pinned', 'is_announcement', 'likes_count',
+            'is_pinned', 'is_announcement', 'likes_count','pinned_at',
             'comments_count', 'share_count', 'is_flagged', 'flag_count'
         ]
         extra_kwargs = {
@@ -201,6 +201,18 @@ class GroupJoinRequestSerializer(serializers.ModelSerializer):
         fields = ['id', 'group', 'profile', 'status', 'message', 'created_at']
         read_only_fields = ['id', 'group', 'profile', 'status', 'created_at']
 
+
+class GroupActionLogSerializer(serializers.ModelSerializer):
+    group_name = serializers.CharField(source="group.name", read_only=True)
+    profile = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = GroupActionLog
+        fields = [
+            "id", "group", "group_name", "profile",
+            "action", "description", "group_post", "group_member", "member_request",
+            "created_at"
+        ]
 
 class GroupPostFlagSerializer(serializers.ModelSerializer):
     class Meta:

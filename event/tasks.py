@@ -11,6 +11,7 @@ from django.contrib.auth import get_user_model
 from event.choices import AttendanceStatus, EventActivityType
 from event.models import Event, EventActivityLog, EventAttendance, EventComment, EventMedia,EventStatus
 from core.services import get_actual_user, send_dynamic_email_using_template
+from notification.task_monitor import monitor_task
 from profiles . models import Profile
 
 from notification.models import NotificationType
@@ -24,7 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 @shared_task
+@monitor_task(task_name="mark_completed_events_and_notify", expected_interval_minutes=60)
 def mark_completed_events_and_notify():
+    logger.info("Running: mark_completed_events_and_notify")
     now = timezone.now()
     one_hour_ago = now - timezone.timedelta(hours=1)
 
@@ -158,7 +161,13 @@ def send_event_analytics_report_task(event_id):
         logger.error(f"[AnalyticsReport] Unexpected error: {e}", exc_info=True)
 
 @shared_task
+@monitor_task(task_name="trigger_event_analytics_for_all_events", expected_interval_minutes=1440)
 def trigger_event_analytics_for_all_events():
+    logger.info("Running: trigger_event_analytics_for_all_events")
+    """
+    This task triggers analytics for all events by scheduling the send_event_analytics_report_task for each event.
+    It runs daily to ensure all events are processed.
+    """
     try:
         now = timezone.now()
         events = Event.objects.filter(
