@@ -147,12 +147,12 @@ class GroupDeleteAPIView(APIView):
 class GroupDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
                 
             serializer = GroupDetailSerializer(group, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -596,13 +596,13 @@ class GroupMemberDetailAPIView(APIView):
 class GroupMemberListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
 
             # Fetch all active members
             members = GroupMember.objects.select_related('profile').filter(group=group)
@@ -1074,13 +1074,13 @@ class GroupFlaggedPostsAPIView(APIView, PaginationMixin):
 class GroupMemberLeaderboardListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
 
             # Fetch all active members
             members = GroupMember.objects.select_related('profile').filter(group=group).order_by("-activity_score", "profile__username")
