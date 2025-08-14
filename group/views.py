@@ -82,7 +82,7 @@ class GroupCreateAPIView(APIView):
                 except:
                     pass
 
-            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+            return Response(success_response(serializer.data, 'Guild created successfully'), status=status.HTTP_201_CREATED)
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
