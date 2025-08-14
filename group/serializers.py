@@ -165,7 +165,9 @@ class GroupListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role']
+        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role',
+                  'privacy'
+                  ]
     
     def get_my_role(self, obj):
         """Show role if user is authenticated and is a member."""
