@@ -20,10 +20,10 @@ class GroupCreateSerializer(serializers.ModelSerializer):
         model = Group
         fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy']
 
-    def validate_name(self, value):
-        if Group.objects.filter(name__iexact=value.strip()).exists():
-            raise serializers.ValidationError("A group with this name already exists.")
-        return value
+    # def validate_name(self, value):
+    #     if Group.objects.filter(name__iexact=value.strip()).exists():
+    #         raise serializers.ValidationError("A group with this name already exists.")
+    #     return value
 
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
@@ -171,7 +171,7 @@ class GroupListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Group
-        fields = ['id', 'name', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role']
+        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role']
     
     def get_my_role(self, obj):
         """Show role if user is authenticated and is a member."""
