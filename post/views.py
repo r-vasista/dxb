@@ -569,7 +569,7 @@ class CommentReplyListView(APIView, PaginationMixin):
     GET /api/comments/{comment_id}/replies/
     Fetch all replies for a specific comment with pagination.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, comment_id):
         try:

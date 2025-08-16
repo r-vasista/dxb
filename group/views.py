@@ -27,7 +27,8 @@ from group.choices import (
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
-    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer
+    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer, 
+    GroupSearchSerializer,GroupSuggestionSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
@@ -45,6 +46,7 @@ from core.services import (
 from core.models import (
     HashTag
 )
+from profiles.models import Profile
 from event.serializers import (
     EventListSerializer
 )
@@ -401,7 +403,6 @@ class ParentGroupPostCommentsAPIView(APIView, PaginationMixin):
     """
     List all top-level comments for a group post (paginated).
     """
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, post_id):
         try:
@@ -422,7 +423,6 @@ class ChildGroupPostCommentListAPIView(APIView, PaginationMixin):
     """
     List all child comments (replies) for a parent comment on a group post (paginated).
     """
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, post_id, parent_id):
         try:
@@ -800,6 +800,8 @@ class GroupJoinRequestCreateAPIView(APIView):
                     role=RoleChoices.VIEWER,
                     assigned_by=None  # or system user
                 )
+                group.member_count = GroupMember.objects.filter(group=group).count()
+                group.save(update_fields=['member_count'])
                 try:
                     transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
                 except:
@@ -1202,6 +1204,130 @@ class MyGroupsListAPIView(APIView, PaginationMixin):
             serialized_groups = GroupListSerializer(paginated_groups, many=True, context={"request": request}).data
 
             return self.get_paginated_response(serialized_groups)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class GroupSearchAPIView(APIView, PaginationMixin):
+    """
+    Search groups by name or description with pagination.
+    Anyone can see all groups (public or private).
+    """
+    permission_classes = [AllowAny]
+    def get(self, request):
+        query = request.GET.get('name', '').strip()
+        if not query:
+            return Response({"detail": "Query parameter 'name' is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        groups = Group.objects.filter(
+            Q(name__icontains=query) |
+            Q(description__icontains=query)
+        ).order_by('-trending_score', '-last_activity_at')
+        
+        paginated_qs = self.paginate_queryset(groups, request)
+        serializer = GroupSearchSerializer(paginated_qs, many=True, context={'request': request})
+        return self.get_paginated_response(success_response(serializer.data))
+    
+
+class GroupsFeedAPIView(APIView, PaginationMixin):
+    """
+    Single endpoint to fetch groups feed for authenticated users.
+    Params:
+    - type: 'new', 'trending', 'recommended'
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        feed_type = request.GET.get("type", "new").lower()  # default: new
+        try:
+            try:
+                profile = get_user_profile(request.user)
+            except Profile.DoesNotExist:
+                return Response(
+                    error_response("User profile not found"),
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # NEW GROUPS
+            if feed_type == "new":
+                groups = Group.objects.select_related('creator').order_by('-created_at')
+
+            # TRENDING GROUPS
+            elif feed_type == "trending":
+                groups = Group.objects.filter(is_active=True).order_by('-trending_score', '-last_activity_at')
+
+            # RECOMMENDED GROUPS
+            elif feed_type == "recommended":
+                user_groups = Group.objects.filter(members__profile=profile)
+                hashtags = HashTag.objects.filter(groups__in=user_groups).distinct()
+                groups = (
+                    Group.objects.filter(tags__in=hashtags)
+                    .exclude(id__in=user_groups.values_list("id", flat=True))
+                    .distinct()
+                    .order_by('-trending_score', '-last_activity_at')
+                )
+
+            # INVALID TYPE
+            else:
+                return Response(
+                    error_response("Invalid type parameter"),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # PAGINATION
+            paginated_qs = self.paginate_queryset(groups, request)
+
+            # SERIALIZE
+            serializer = GroupListSerializer(paginated_qs, many=True, context={'request': request})
+
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class GroupSuggestionAPIView(APIView):
+    """
+    Suggest groups to a user based on mutual interests (tags),
+    excluding groups the user is already a member of.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            # 1. Get the target profile
+            try:
+                profile = Profile.objects.get(id=profile_id)
+            except Profile.DoesNotExist:
+                return Response(
+                    error_response("Profile not found"),
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 2. Get groups the user is already a member of
+            joined_group_ids = GroupMember.objects.filter(profile=profile).values_list('group_id', flat=True)
+
+
+            # 3. Collect tags from groups the user is associated with
+            profile_tags = HashTag.objects.filter(groups__creator=profile).distinct()
+
+            if not profile_tags.exists():
+                # No tags, return empty list
+                return Response(success_response([]), status=status.HTTP_200_OK)
+
+            # 4. Find other groups with these tags, excluding already joined groups
+            suggested_groups = (
+                Group.objects.filter(tags__in=profile_tags)
+                .exclude(id__in=joined_group_ids)
+                .annotate(common_tags_count=Count('tags'))
+                .distinct()
+                .order_by('-common_tags_count', '-trending_score', '-last_activity_at')  # prioritize mutual interests
+            )
+
+            # 5. Serialize & return
+            serializer = GroupSuggestionSerializer(suggested_groups, many=True, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
