@@ -496,7 +496,7 @@ class ParentEventCommentListAPIView(APIView, PaginationMixin):
     GET /api/events/<event_id>/comments/
     Lists all top-level comments for an event (no nested replies, just `has_replies` flag).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, event_id):
         try:
@@ -523,7 +523,7 @@ class ChildEventCommentListAPIView(APIView, PaginationMixin):
     GET /api/events/<event_id>/comments/
     Lists all top-level comments for an event (no nested replies, just `has_replies` flag).
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
 
     def get(self, request, event_id, parent_id):
         try:

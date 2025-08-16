@@ -235,3 +235,34 @@ class GroupPostFlagListSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupPostFlag
         fields = '__all__'
+
+class GroupSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = [
+            'id', 'name', 'slug', 'type', 'description',
+            'tags', 'creator', 'privacy', 'logo', 'cover_image',
+            'member_count', 'post_count', 'avg_engagement',
+            'trending_score', 'last_activity_at', 'featured'
+        ]
+        read_only_fields = fields
+
+
+class GroupSuggestionSerializer(serializers.ModelSerializer):
+    creator = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = Group
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "logo",
+            "cover_image",
+            "creator",
+            "member_count",
+            "post_count",
+            "trending_score",
+            "featured",
+        ]

@@ -2,13 +2,14 @@ from django.urls import path
 
 from group.views import (
     GroupListAPIView, GroupPostCreateAPIView, GroupPostDetailAPIView, GroupCreateAPIView, GroupDetailAPIView, GroupAddMemberAPIView, 
-    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,
+    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,GroupSearchAPIView,
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView,
-    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
+    GroupsFeedAPIView, GroupSuggestionAPIView
 )
 
 urlpatterns = [
@@ -24,7 +25,9 @@ urlpatterns = [
     path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
     path('recommended/', RecommendedGroupsAPIView.as_view(), name="recommended-groups"),
     path('my-groups/', MyGroupsListAPIView.as_view(), name="my-groups"),
-    
+    path('groups/search/', GroupSearchAPIView.as_view(), name='group-search'),
+    path('groups/feed/', GroupsFeedAPIView.as_view(), name='groups-feed'),
+    path('groups/suggestions/<int:profile_id>/', GroupSuggestionAPIView.as_view(), name='group-suggestions'),    
     
     # Group Members
     path('join-group/<int:group_id>/', GroupJoinRequestCreateAPIView.as_view(), name='join-group'),
