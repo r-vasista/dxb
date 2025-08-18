@@ -12,9 +12,11 @@ from core.models import (
 )
 from django.utils import timezone
 from datetime import timedelta
+from django.utils.text import slugify
 
 class Group(BaseModel):
-    name = models.CharField(max_length=100, unique=True)
+    name = models.CharField(max_length=100)
+    slug = models.SlugField(max_length=200, null=True, blank=True,unique=True)
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
     description = models.TextField(max_length=500)
     tags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
@@ -24,11 +26,25 @@ class Group(BaseModel):
     cover_image = models.ImageField(upload_to='group_covers/', null=True, blank=True)
     member_count = models.PositiveIntegerField(default=1)
     post_count = models.PositiveIntegerField(default=0)
-    avg_engagement = models.FloatField(default=0.0)  # avg reactions + comments per post
+    avg_engagement = models.FloatField(default=0.0)
     trending_score = models.FloatField(default=0.0)
     last_activity_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
+    show_members = models.BooleanField(default=False)
     
+    def save(self, *args, **kwargs):
+            if not self.slug:
+
+
+                # Combine name + created_at date
+                timestamp_str = timezone.now().strftime("%Y%m%d%H%M%S") 
+                base_slug = slugify(f"{self.name}-{timestamp_str}")
+                slug = base_slug
+
+                self.slug = slug
+
+            super().save(*args, **kwargs)
+
     def __str__(self):
         return self.name
     

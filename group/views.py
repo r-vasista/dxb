@@ -27,10 +27,11 @@ from group.choices import (
 from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
-    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer
+    GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer, 
+    GroupSearchSerializer,GroupSuggestionSerializer
 )
 from group.permissions import (
-    can_add_members, IsGroupAdminOrModerator, IsGroupAdmin
+    can_add_members, IsGroupAdminOrModerator, IsGroupAdmin, IsGroupMember
 )
 from group.utils import (
     can_post_to_group, handle_grouppost_hashtags, log_group_action, increment_group_member_activity
@@ -45,6 +46,7 @@ from core.services import (
 from core.models import (
     HashTag
 )
+from profiles.models import Profile
 from event.serializers import (
     EventListSerializer
 )
@@ -82,7 +84,7 @@ class GroupCreateAPIView(APIView):
                 except:
                     pass
 
-            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+            return Response(success_response(serializer.data, 'Guild created successfully'), status=status.HTTP_201_CREATED)
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
@@ -147,12 +149,12 @@ class GroupDeleteAPIView(APIView):
 class GroupDetailAPIView(APIView):
     permission_classes = [AllowAny]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
                 
             serializer = GroupDetailSerializer(group, context={'request': request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
@@ -401,7 +403,6 @@ class ParentGroupPostCommentsAPIView(APIView, PaginationMixin):
     """
     List all top-level comments for a group post (paginated).
     """
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, post_id):
         try:
@@ -422,7 +423,6 @@ class ChildGroupPostCommentListAPIView(APIView, PaginationMixin):
     """
     List all child comments (replies) for a parent comment on a group post (paginated).
     """
-    permission_classes = [IsAuthenticated]
 
     def get(self, request, post_id, parent_id):
         try:
@@ -454,7 +454,6 @@ class ChildGroupPostCommentListAPIView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class GroupAddMemberAPIView(APIView):
     permission_classes = [IsAuthenticated, IsGroupAdminOrModerator]
     
@@ -466,45 +465,64 @@ class GroupAddMemberAPIView(APIView):
         except Group.DoesNotExist:
             return None
 
-
     def post(self, request):
         try:
             data = request.data
             
             # 1. Fetch group
             group = self.get_object(data.get('group'))
-            
             if not group:
                 return Response(error_response("Group not found."), status=status.HTTP_404_NOT_FOUND)
             
             # 2. Get request user's profile
             acting_profile = get_user_profile(request.user)
                 
-            # 4. Save new member
+            # 3. Validate data
             serializer = AddGroupMemberSerializer(data=data, context={'group': group})
             serializer.is_valid(raise_exception=True)
-            group_member= serializer.save(assigned_by=acting_profile)
-            try:
+            group_member = serializer.save(assigned_by=acting_profile)
 
-                transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='joined',sender=acting_profile.id))
-            except:
+            # 4. Send async notifications
+            try:
+                transaction.on_commit(
+                    lambda: send_group_join_notifications_task.delay(
+                        group.id, group_member.profile.id, action='joined', sender=acting_profile.id
+                    )
+                )
+            except Exception:
                 pass
-            # Update group member count
+
+            # 5. Update group member count
             group.member_count = GroupMember.objects.filter(group=group).count()
             group.save(update_fields=['member_count'])
-            log_group_action(group, acting_profile, GroupAction.MEMBER_ADD, "Group member added", group_member=group_member)
 
-            return Response(success_response({"message": "Member added successfully."}),
-                            status=status.HTTP_201_CREATED)
+            # 6. Log action
+            log_group_action(
+                group,
+                acting_profile,
+                GroupAction.MEMBER_ADD,
+                "Group member added",
+                group_member=group_member
+            )
+
+            return Response(
+                success_response({"message": "Member added successfully."}),
+                status=status.HTTP_201_CREATED
+            )
+
         except ValueError as e:
-                return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except IntegrityError:
+                return Response(
+                    error_response("This profile is already a member of the group."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class GroupMemberDetailAPIView(APIView):
     """
@@ -535,6 +553,8 @@ class GroupMemberDetailAPIView(APIView):
 
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
@@ -565,6 +585,8 @@ class GroupMemberDetailAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -589,20 +611,24 @@ class GroupMemberDetailAPIView(APIView):
             return Response(success_response("Member removed successfully"), status=status.HTTP_200_OK)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
         
 
 class GroupMemberListAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsGroupMember]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
+                
+            self.check_object_permissions(self.request, group)
 
             # Fetch all active members
             members = GroupMember.objects.select_related('profile').filter(group=group)
@@ -612,6 +638,8 @@ class GroupMemberListAPIView(APIView):
 
         except Group.DoesNotExist:
             return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
+        except PermissionDenied as e:
+            return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
@@ -800,6 +828,8 @@ class GroupJoinRequestCreateAPIView(APIView):
                     role=RoleChoices.VIEWER,
                     assigned_by=None  # or system user
                 )
+                group.member_count = GroupMember.objects.filter(group=group).count()
+                group.save(update_fields=['member_count'])
                 try:
                     transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
                 except:
@@ -826,7 +856,7 @@ class GroupJoinRequestCreateAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class GroupJoinRequestListAPIView(APIView):
+class GroupJoinRequestListAPIView(APIView, PaginationMixin):
     permission_classes = [IsAuthenticated, IsGroupAdmin]
 
     def get(self, request, group_id):
@@ -835,10 +865,10 @@ class GroupJoinRequestListAPIView(APIView):
             self.check_object_permissions(request, group)
 
             requests_qs = GroupJoinRequest.objects.filter(group=group, status='pending').select_related('profile')
-            serializer = GroupJoinRequestSerializer(requests_qs, many=True)
+            paginated_qs = self.paginate_queryset(requests_qs, request)
+            serializer = GroupJoinRequestSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
 
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
-        
         except PermissionDenied as e:
             return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
@@ -1074,13 +1104,13 @@ class GroupFlaggedPostsAPIView(APIView, PaginationMixin):
 class GroupMemberLeaderboardListAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, group_id=None, group_name=None):
+    def get(self, request, group_id=None, slug=None):
         try:
             
             if group_id:
                 group = Group.objects.get(pk=group_id)
             else:
-                group = Group.objects.get(name__iexact=group_name)
+                group = Group.objects.get(slug=slug)
 
             # Fetch all active members
             members = GroupMember.objects.select_related('profile').filter(group=group).order_by("-activity_score", "profile__username")
@@ -1172,3 +1202,186 @@ class GroupActionLogListAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+class MyGroupsListAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+        is_owner = request.query_params.get("is_owner")
+        role = request.query_params.get("role")
+
+        try:
+            # Base queryset: groups where the user is a member
+            memberships = GroupMember.objects.select_related("group").filter(profile=profile)
+
+            # Filter: is_owner (groups created by me)
+            if is_owner and is_owner.lower() == "true":
+                memberships = memberships.filter(group__creator=profile)
+
+            # Filter: role
+            if role:
+                memberships = memberships.filter(role=role)
+
+            # Extract groups from memberships
+            groups_qs = Group.objects.filter(id__in=memberships.values_list("group_id", flat=True))
+            
+            # Paginate groups
+            paginated_groups = self.paginate_queryset(groups_qs, request)
+            serialized_groups = GroupListSerializer(paginated_groups, many=True, context={"request": request}).data
+
+            return self.get_paginated_response(serialized_groups)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class GroupSearchAPIView(APIView, PaginationMixin):
+    """
+    Search groups by name or description with pagination.
+    Anyone can see all groups (public or private).
+    """
+    permission_classes = [AllowAny]
+    def get(self, request):
+        query = request.GET.get('name', '').strip()
+        if not query:
+            return Response({"detail": "Query parameter 'name' is required."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        groups = Group.objects.filter(
+            Q(name__icontains=query) |
+            Q(description__icontains=query)
+        ).order_by('-trending_score', '-last_activity_at')
+        
+        paginated_qs = self.paginate_queryset(groups, request)
+        serializer = GroupSearchSerializer(paginated_qs, many=True, context={'request': request})
+        return self.get_paginated_response(success_response(serializer.data))
+    
+
+class GroupsFeedAPIView(APIView, PaginationMixin):
+    """
+    Single endpoint to fetch groups feed for authenticated users.
+    Params:
+    - type: 'new', 'trending', 'recommended'
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        feed_type = request.GET.get("type", "new").lower()  # default: new
+        try:
+            try:
+                profile = get_user_profile(request.user)
+            except Profile.DoesNotExist:
+                return Response(
+                    error_response("User profile not found"),
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # NEW GROUPS
+            if feed_type == "new":
+                groups = Group.objects.select_related('creator').order_by('-created_at')
+
+            # TRENDING GROUPS
+            elif feed_type == "trending":
+                groups = Group.objects.filter(is_active=True).order_by('-trending_score', '-last_activity_at')
+
+            # RECOMMENDED GROUPS
+            elif feed_type == "recommended":
+                user_groups = Group.objects.filter(members__profile=profile)
+                hashtags = HashTag.objects.filter(groups__in=user_groups).distinct()
+                groups = (
+                    Group.objects.filter(tags__in=hashtags)
+                    .exclude(id__in=user_groups.values_list("id", flat=True))
+                    .distinct()
+                    .order_by('-trending_score', '-last_activity_at')
+                )
+
+            # INVALID TYPE
+            else:
+                return Response(
+                    error_response("Invalid type parameter"),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # PAGINATION
+            paginated_qs = self.paginate_queryset(groups, request)
+
+            # SERIALIZE
+            serializer = GroupListSerializer(paginated_qs, many=True, context={'request': request})
+
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class GroupSuggestionAPIView(APIView):
+    """
+    Suggest groups to a user based on mutual interests (tags),
+    excluding groups the user is already a member of.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            # 1. Get the target profile
+            try:
+                profile = Profile.objects.get(id=profile_id)
+            except Profile.DoesNotExist:
+                return Response(
+                    error_response("Profile not found"),
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            # 2. Get groups the user is already a member of
+            joined_group_ids = GroupMember.objects.filter(profile=profile).values_list('group_id', flat=True)
+
+
+            # 3. Collect tags from groups the user is associated with
+            profile_tags = HashTag.objects.filter(groups__creator=profile).distinct()
+
+            if not profile_tags.exists():
+                # No tags, return empty list
+                return Response(success_response([]), status=status.HTTP_200_OK)
+
+            # 4. Find other groups with these tags, excluding already joined groups
+            suggested_groups = (
+                Group.objects.filter(tags__in=profile_tags)
+                .exclude(id__in=joined_group_ids)
+                .annotate(common_tags_count=Count('tags'))
+                .distinct()
+                .order_by('-common_tags_count', '-trending_score', '-last_activity_at')  # prioritize mutual interests
+            )
+
+            # 5. Serialize & return
+            serializer = GroupSuggestionSerializer(suggested_groups, many=True, context={'request': request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PublicGroupMemberListAPIView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request, group_id=None, slug=None):
+        try:
+            
+            if group_id:
+                group = Group.objects.get(pk=group_id)
+            else:
+                group = Group.objects.get(slug=slug)
+                
+            if not group.show_members:
+                return Response(error_response('Group members are private'), status=status.HTTP_403_FORBIDDEN)
+
+            # Fetch all active members
+            members = GroupMember.objects.select_related('profile').filter(group=group)
+
+            serializer = GroupMemberSerializer(members, many=True, context={'request':request})
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Group.DoesNotExist:
+            return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
