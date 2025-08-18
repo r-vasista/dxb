@@ -18,12 +18,12 @@ class GroupCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug']
+        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug', 'privacy', 'show_members']
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = ['name', 'description', 'logo', 'cover_image']
+        fields = ['name', 'description', 'logo', 'cover_image', 'privacy', 'show_members']
         
         
 class GroupDetailSerializer(serializers.ModelSerializer):
