@@ -454,7 +454,6 @@ class ChildGroupPostCommentListAPIView(APIView, PaginationMixin):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-
 class GroupAddMemberAPIView(APIView):
     permission_classes = [IsAuthenticated, IsGroupAdminOrModerator]
     
@@ -466,45 +465,64 @@ class GroupAddMemberAPIView(APIView):
         except Group.DoesNotExist:
             return None
 
-
     def post(self, request):
         try:
             data = request.data
             
             # 1. Fetch group
             group = self.get_object(data.get('group'))
-            
             if not group:
                 return Response(error_response("Group not found."), status=status.HTTP_404_NOT_FOUND)
             
             # 2. Get request user's profile
             acting_profile = get_user_profile(request.user)
                 
-            # 4. Save new member
+            # 3. Validate data
             serializer = AddGroupMemberSerializer(data=data, context={'group': group})
             serializer.is_valid(raise_exception=True)
-            group_member= serializer.save(assigned_by=acting_profile)
-            try:
+            group_member = serializer.save(assigned_by=acting_profile)
 
-                transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='joined',sender=acting_profile.id))
-            except:
+            # 4. Send async notifications
+            try:
+                transaction.on_commit(
+                    lambda: send_group_join_notifications_task.delay(
+                        group.id, group_member.profile.id, action='joined', sender=acting_profile.id
+                    )
+                )
+            except Exception:
                 pass
-            # Update group member count
+
+            # 5. Update group member count
             group.member_count = GroupMember.objects.filter(group=group).count()
             group.save(update_fields=['member_count'])
-            log_group_action(group, acting_profile, GroupAction.MEMBER_ADD, "Group member added", group_member=group_member)
 
-            return Response(success_response({"message": "Member added successfully."}),
-                            status=status.HTTP_201_CREATED)
+            # 6. Log action
+            log_group_action(
+                group,
+                acting_profile,
+                GroupAction.MEMBER_ADD,
+                "Group member added",
+                group_member=group_member
+            )
+
+            return Response(
+                success_response({"message": "Member added successfully."}),
+                status=status.HTTP_201_CREATED
+            )
+
         except ValueError as e:
-                return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
+            return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except IntegrityError:
+                return Response(
+                    error_response("This profile is already a member of the group."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
 class GroupMemberDetailAPIView(APIView):
     """

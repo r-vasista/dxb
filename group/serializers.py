@@ -140,6 +140,7 @@ class AddGroupMemberSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'role': {'required': True}
         }
+        validators = []
 
     def validate(self, data):
         group = self.context.get('group')
