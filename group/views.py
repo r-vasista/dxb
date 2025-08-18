@@ -856,7 +856,7 @@ class GroupJoinRequestCreateAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class GroupJoinRequestListAPIView(APIView):
+class GroupJoinRequestListAPIView(APIView, PaginationMixin):
     permission_classes = [IsAuthenticated, IsGroupAdmin]
 
     def get(self, request, group_id):
@@ -865,10 +865,10 @@ class GroupJoinRequestListAPIView(APIView):
             self.check_object_permissions(request, group)
 
             requests_qs = GroupJoinRequest.objects.filter(group=group, status='pending').select_related('profile')
-            serializer = GroupJoinRequestSerializer(requests_qs, many=True)
+            paginated_qs = self.paginate_queryset(requests_qs, request)
+            serializer = GroupJoinRequestSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
 
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
-        
         except PermissionDenied as e:
             return Response(error_response("You do not have permission to perform this action."), status=status.HTTP_403_FORBIDDEN)
         except Http404 as e:
