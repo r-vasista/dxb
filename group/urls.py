@@ -2,13 +2,14 @@ from django.urls import path
 
 from group.views import (
     GroupListAPIView, GroupPostCreateAPIView, GroupPostDetailAPIView, GroupCreateAPIView, GroupDetailAPIView, GroupAddMemberAPIView, 
-    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,
+    GroupMemberListAPIView, NewGroupsListAPIView, GroupUpdateAPIView, GroupMemberDetailAPIView,GroupSearchAPIView,
     CreateGroupPostCommentAPIView, ParentGroupPostCommentsAPIView, ChildGroupPostCommentListAPIView,
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView,
-    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView
+    FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
+    GroupsFeedAPIView, GroupSuggestionAPIView
 )
 
 urlpatterns = [
@@ -18,12 +19,15 @@ urlpatterns = [
     path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
     path('delete-group/<int:group_id>/', GroupDeleteAPIView.as_view(), name='delete-group'),
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
-    path('group-details/<str:group_name>/', GroupDetailAPIView.as_view(), name='group-details'),
+    path('group-details/<slug:slug>/', GroupDetailAPIView.as_view(), name='group-details'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
     path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list'),
     path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
     path('recommended/', RecommendedGroupsAPIView.as_view(), name="recommended-groups"),
-    
+    path('my-groups/', MyGroupsListAPIView.as_view(), name="my-groups"),
+    path('groups/search/', GroupSearchAPIView.as_view(), name='group-search'),
+    path('groups/feed/', GroupsFeedAPIView.as_view(), name='groups-feed'),
+    path('groups/suggestions/<int:profile_id>/', GroupSuggestionAPIView.as_view(), name='group-suggestions'),    
     
     # Group Members
     path('join-group/<int:group_id>/', GroupJoinRequestCreateAPIView.as_view(), name='join-group'),
@@ -34,9 +38,9 @@ urlpatterns = [
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
-    path('group-members-list/<str:group_name>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
+    path('group-members-list/<slug:slug>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-Leaderboard-list/<int:group_id>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
-    path('group-members-Leaderboard-list/<str:group_name>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
+    path('group-members-Leaderboard-list/<slug:slug>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
     
     #Group Post
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),

@@ -18,13 +18,7 @@ class GroupCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy']
-
-    def validate_name(self, value):
-        if Group.objects.filter(name__iexact=value.strip()).exists():
-            raise serializers.ValidationError("A group with this name already exists.")
-        return value
-
+        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug']
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -167,10 +161,36 @@ class GroupMemberSerializer(serializers.ModelSerializer):
         
 class GroupListSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer(read_only=True)
+    my_role = serializers.SerializerMethodField()
+    join_request_status = serializers.SerializerMethodField()
 
     class Meta:
         model = Group
-        fields = ['id', 'name', 'description', 'logo', 'cover_image', 'creator', 'created_at']
+        fields = ['id', 'name','slug', 'description', 'logo', 'cover_image', 'creator', 'created_at', 'my_role',
+                  'privacy', 'join_request_status',
+                  ]
+    
+    def get_my_role(self, obj):
+        """Show role if user is authenticated and is a member."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                member = GroupMember.objects.get(group=obj, profile=request.user.profile)
+                return member.role
+            except GroupMember.DoesNotExist:
+                return None
+        return None
+    
+    def get_join_request_status(self, obj):
+        """Return the join request status for the current user if exists."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                join_request = GroupJoinRequest.objects.get(group=obj, profile=request.user.profile)
+                return join_request.status
+            except GroupJoinRequest.DoesNotExist:
+                return None
+        return None
 
 
 class GroupMemberUpdateSerializer(serializers.ModelSerializer):
@@ -215,3 +235,34 @@ class GroupPostFlagListSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupPostFlag
         fields = '__all__'
+
+class GroupSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = [
+            'id', 'name', 'slug', 'type', 'description',
+            'tags', 'creator', 'privacy', 'logo', 'cover_image',
+            'member_count', 'post_count', 'avg_engagement',
+            'trending_score', 'last_activity_at', 'featured'
+        ]
+        read_only_fields = fields
+
+
+class GroupSuggestionSerializer(serializers.ModelSerializer):
+    creator = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = Group
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "logo",
+            "cover_image",
+            "creator",
+            "member_count",
+            "post_count",
+            "trending_score",
+            "featured",
+        ]
