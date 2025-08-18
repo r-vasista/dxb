@@ -30,6 +30,7 @@ class Group(BaseModel):
     trending_score = models.FloatField(default=0.0)
     last_activity_at = models.DateTimeField(null=True, blank=True)
     featured = models.BooleanField(default=False)
+    show_members = models.BooleanField(default=False)
     
     def save(self, *args, **kwargs):
             if not self.slug:
