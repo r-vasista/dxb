@@ -18,12 +18,12 @@ class GroupCreateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Group
-        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug']
+        fields = ['id', 'name', 'type', 'description', 'logo', 'cover_image', 'privacy', 'slug', 'privacy', 'show_members']
 
 class GroupUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
-        fields = ['name', 'description', 'logo', 'cover_image']
+        fields = ['name', 'description', 'logo', 'cover_image', 'privacy', 'show_members']
         
         
 class GroupDetailSerializer(serializers.ModelSerializer):
@@ -140,6 +140,7 @@ class AddGroupMemberSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'role': {'required': True}
         }
+        validators = []
 
     def validate(self, data):
         group = self.context.get('group')
@@ -235,3 +236,34 @@ class GroupPostFlagListSerializer(serializers.ModelSerializer):
     class Meta:
         model = GroupPostFlag
         fields = '__all__'
+
+class GroupSearchSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = [
+            'id', 'name', 'slug', 'type', 'description',
+            'tags', 'creator', 'privacy', 'logo', 'cover_image',
+            'member_count', 'post_count', 'avg_engagement',
+            'trending_score', 'last_activity_at', 'featured'
+        ]
+        read_only_fields = fields
+
+
+class GroupSuggestionSerializer(serializers.ModelSerializer):
+    creator = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = Group
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "description",
+            "logo",
+            "cover_image",
+            "creator",
+            "member_count",
+            "post_count",
+            "trending_score",
+            "featured",
+        ]
