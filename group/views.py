@@ -186,7 +186,8 @@ class GroupPostCreateAPIView(APIView):
             log_group_action(group, profile, GroupAction.POST_CREATE, "Group post created by user", group_post=post)
             increment_group_member_activity(profile, group, points=5)
             try:
-                transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post.id))
+                post_id = post.id
+                transaction.on_commit(lambda:notify_group_members_of_new_post.delay(post_id))
             except:
                 pass
             return Response(serializer.data, status=status.HTTP_201_CREATED)
@@ -195,7 +196,7 @@ class GroupPostCreateAPIView(APIView):
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)                       
         except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
        
         
 class GroupListAPIView(APIView, PaginationMixin):
