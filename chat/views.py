@@ -3,6 +3,7 @@ from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
 from django.db.models import Q
+from django.http import Http404
 
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -11,7 +12,7 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
 from core.services import success_response, error_response, get_user_profile
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage
+from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
 from chat.serializers import ChatGroupSerializer, ChatMessageSerializer
 from chat.permissions import IsChatMember
 from chat.utils import get_or_create_personal_group, is_group_member
@@ -78,24 +79,30 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
     permission_classes = [IsAuthenticated, IsChatMember]
 
     def get(self, request, group_id):
-        group = get_object_or_404(ChatGroup, id=group_id)
-        self.check_object_permissions(request, group)
+        try:
+            group = get_object_or_404(ChatGroup, id=group_id)
+            self.check_object_permissions(request, group)
 
-        before_id = request.query_params.get("before")
-        after_id = request.query_params.get("after")
+            before_id = request.query_params.get("before")
+            after_id = request.query_params.get("after")
 
-        messages = ChatMessage.objects.filter(group=group, is_deleted=False).select_related(
-            "sender__user"
-        ).order_by("-id")
+            messages = ChatMessage.objects.filter(group=group, is_deleted=False).select_related(
+                "sender__user"
+            ).order_by("-id")
 
-        if before_id:
-            messages = messages.filter(id__lt=before_id)
-        if after_id:
-            messages = messages.filter(id__gt=after_id).order_by("id")
+            if before_id:
+                messages = messages.filter(id__lt=before_id)
+            if after_id:
+                messages = messages.filter(id__gt=after_id).order_by("id")
 
-        page = self.paginate_queryset(messages, request, view=self)
-        serializer = ChatMessageSerializer(page, many=True, context={"request": request})
-        return self.get_paginated_response(serializer.data)
+            page = self.paginate_queryset(messages, request)
+            serializer = ChatMessageSerializer(page, many=True, context={"request": request})
+            return self.get_paginated_response(serializer.data)
+        except Http404 as e:
+            return Response(error_response(str(e)),status=404)
+        except Exception as e:
+            return Response(error_response(str(e)),status=400)
+
 
 
 class SendMessageAPIView(APIView):
@@ -130,26 +137,83 @@ class SendMessageAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-class MarkReadAPIView(APIView):
-    """
-    POST /api/chat/groups/<uuid:group_id>/mark-read/
-    Body: { "last_message_id": 123 }
-    """
-    permission_classes = [IsAuthenticated, IsChatMember]
+class MarkAllMessagesReadAPIView(APIView):
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, group_id):
-        group = get_object_or_404(ChatGroup, id=group_id)
-        self.check_object_permissions(request, group)
-
         profile = get_user_profile(request.user)
-        last_message_id = request.data.get("last_message_id")
+        now = timezone.now()
 
         try:
-            membership = ChatGroupMember.objects.get(group=group, profile=profile)
-            membership.last_read_at = timezone.now()
-            membership.save(update_fields=["last_read_at"])
-            return Response(success_response("Marked as read."), status=status.HTTP_200_OK)
-        except ChatGroupMember.DoesNotExist:
-            return Response(error_response("Not a member."), status=status.HTTP_403_FORBIDDEN)
+            with transaction.atomic():
+                # Get unseen messages in this chat (excluding own)
+                unseen_messages = ChatMessage.objects.filter(
+                    group_id=group_id
+                ).exclude(sender=profile).exclude(
+                    receipts__user=profile
+                )
+
+                receipts = [
+                    MessageReceipt(message=msg, user=profile, is_seen=True, seen_at=now)
+                    for msg in unseen_messages
+                ]
+                MessageReceipt.objects.bulk_create(receipts, ignore_conflicts=True)
+
+                # Update membership last_read_at
+                ChatGroupMember.objects.filter(
+                    group_id=group_id, profile=profile
+                ).update(last_read_at=now)
+
+            return Response(success_response(
+                {"read_count": len(receipts)}, 
+                "All unread messages marked as read"
+            ))
+
+        except ChatGroup.DoesNotExist:
+            return Response(error_response("Chat group not found"), status=404)
         except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(error_response(str(e)), status=500)
+
+
+class MarkMessagesReadByIdAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        profile = get_user_profile(request.user)
+        now = timezone.now()
+        message_ids = request.data.get("message_ids", [])
+
+        if not isinstance(message_ids, list) or not message_ids:
+            return Response(error_response("message_ids must be a non-empty list"), status=400)
+
+        try:
+            with transaction.atomic():
+                # Get only given messages from this group
+                target_messages = ChatMessage.objects.filter(
+                    group_id=group_id, id__in=message_ids
+                ).exclude(sender=profile).exclude(
+                    receipts__user=profile
+                )
+
+                receipts = [
+                    MessageReceipt(message=msg, user=profile, is_seen=True, seen_at=now)
+                    for msg in target_messages
+                ]
+                MessageReceipt.objects.bulk_create(receipts, ignore_conflicts=True)
+
+                # Optional: update last_read_at if the latest marked message is newer
+                latest_msg = target_messages.order_by("-created_at").first()
+                if latest_msg:
+                    ChatGroupMember.objects.filter(
+                        group_id=group_id, profile=profile
+                    ).update(last_read_at=now)
+
+            return Response(success_response(
+                {"read_count": len(receipts)}, 
+                "Selected messages marked as read"
+            ))
+
+        except ChatGroup.DoesNotExist:
+            return Response(error_response("Chat group not found"), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)

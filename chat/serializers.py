@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage
+from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
 from profiles.serializers import BasicProfileSerializer  
 from group.serializers import BasicGroupDetailSerializer
 
@@ -23,12 +23,22 @@ class ChatGroupSerializer(serializers.ModelSerializer):
     # def get_members(self, obj):
     #     qs = obj.memberships.select_related("profile__user")
     #     return ChatGroupMemberSerializer(qs, many=True, context=self.context).data
+    
+    
+class ChatMessageReceiptializer(serializers.ModelSerializer):
+    user = BasicProfileSerializer(read_only=True)
+
+    class Meta:
+        model = MessageReceipt
+        fields = ["user", "is_seen", "seen_at"]
 
 
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender = BasicProfileSerializer(read_only=True)
+    receipts = ChatMessageReceiptializer(many=True, read_only=True)
 
     class Meta:
         model = ChatMessage
-        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted"]
-        read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group"]
+        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted", "receipts"]
+        read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts"]
+
