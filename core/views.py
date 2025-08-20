@@ -1,6 +1,7 @@
 # Django imports
 from django.db.models import Q
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -188,6 +189,11 @@ from event.models import Event, EventAttendance
 from post.models import Post
 from notification.models import Notification
 from django.db.models import Count, Avg, Max, Min,Sum, F
+from rest_framework.views import APIView
+import datetime
+from django.db.models.functions import Coalesce
+from django.utils.dateparse import parse_datetime, parse_date
+
 
 class UserStatsView(APIView):
     def get(self, request):
@@ -323,3 +329,149 @@ class NotificationStatsView(APIView):
         }
         return Response(notifications)  
 
+
+class ProfileFilterOptionsView(APIView):
+    """
+    Returns available filter options for profiles analytics (for frontend dropdowns).
+    """
+
+    def get(self, request):
+        options = {
+            "profile_scope": [
+                {"key": "all", "label": "All Profiles"},
+                {"key": "verified", "label": "Verified Profiles"},
+                {"key": "active", "label": "Active This Week"},
+                {"key": "recent_created", "label": "Created in Last 7 Days"},
+                {"key": "custom_date", "label": "Custom Date Range"},
+            ],
+            "metrics": [
+                {"key": "followers", "label": "Most Followers"},
+                {"key": "friends", "label": "Most Friends"},
+                {"key": "posts", "label": "Most Posts"},
+                {"key": "views", "label": "Most Viewed"},
+                {"key": "likes", "label": "Most Liked"},
+                {"key": "comments", "label": "Most Commented"},
+                {"key": "shares", "label": "Most Shared"},
+                {"key": "recent_created", "label": "Recently Created"},
+            ],
+            "order": [
+                {"key": "asc", "label": "Ascending"},
+                {"key": "desc", "label": "Descending"},
+            ],
+            "date_filters": [
+                {"key": "today", "label": "Today"},
+                {"key": "7d", "label": "Last 7 Days"},
+                {"key": "30d", "label": "Last 30 Days"},
+                {"key": "custom", "label": "Custom Date Range"},
+            ],
+            "fields_in_response": [
+                "id",
+                "username",
+                "city__name",
+                "state__name",
+                "country__name",
+                "created_at",
+                "last_active_at",
+                "metric_val"
+            ]
+        }
+        return Response(options)
+
+   
+            
+class ProfileAnalyticsView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            qs = Profile.objects.all()
+            end_dt = now()
+
+            # --- query params ---
+            profile_scope = request.query_params.get("profile", "all")
+            metric        = request.query_params.get("metric", "followers")
+            order         = request.query_params.get("order", "desc")
+            date_filter   = request.query_params.get("date_filter")  # today|7d|30d|custom
+            start_param   = request.query_params.get("start_date")
+            end_param     = request.query_params.get("end_date")
+
+            # --- scope filters on profiles ---
+            if profile_scope == "verified":
+                qs = qs.filter(is_verified=True)
+            elif profile_scope == "active":
+                start_of_week = end_dt - timedelta(days=end_dt.weekday())
+                qs = qs.filter(last_active_at__gte=start_of_week)
+            elif profile_scope == "recent_created":
+                qs = qs.filter(created_at__gte=end_dt - timedelta(days=7))
+            elif profile_scope == "custom_date" and start_param and end_param:
+                qs = qs.filter(created_at__range=[start_param, end_param])
+
+            # --- compute date window (for post-based metrics) ---
+            win_start = win_end = None
+            if date_filter == "today":
+                win_start = end_dt.replace(hour=0, minute=0, second=0, microsecond=0)
+                win_end   = end_dt
+            elif date_filter == "7d":
+                win_start = end_dt - timedelta(days=7)
+                win_end   = end_dt
+            elif date_filter == "30d":
+                win_start = end_dt - timedelta(days=30)
+                win_end   = end_dt
+            elif date_filter == "custom" and start_param and end_param:
+                # accept YYYY-MM-DD or full ISO datetimes
+                sd = parse_datetime(start_param) or (
+                    parse_date(start_param) and datetime.datetime.combine(parse_date(start_param), datetime.time.min)
+                )
+                ed = parse_datetime(end_param) or (
+                    parse_date(end_param) and datetime.datetime.combine(parse_date(end_param), datetime.time.max)
+                )
+                win_start, win_end = sd, ed
+
+            # filtered Q for posts window (only if window present)
+            post_window_q = Q()
+            if win_start and win_end:
+                post_window_q = Q(posts__created_at__gte=win_start, posts__created_at__lte=win_end)
+
+            # --- metrics ---
+            metric_map = {
+                # M2M follower/friend counts (global — no timestamps on the relation to filter by)
+                "followers": Count("followers", distinct=True),
+                "friends":   Count("friends",   distinct=True),
+
+                # post-based metrics (respect date window if provided)
+                "posts":    Count("posts",              filter=post_window_q, distinct=True),
+                "likes":    Coalesce(Sum("posts__reaction_count", filter=post_window_q), 0),
+                "comments": Coalesce(Sum("posts__comment_count",  filter=post_window_q), 0),
+                "shares":   Coalesce(Sum("posts__share_count",    filter=post_window_q), 0),
+
+                # profile fields
+                "views":           F("view_count"),
+                "recent_created":  F("created_at"),
+            }
+
+            if metric not in metric_map:
+                return Response(error_response(f"Invalid metric '{metric}'"), status=status.HTTP_400_BAD_REQUEST)
+
+            qs = qs.annotate(metric_val=metric_map[metric])
+
+            # --- ordering ---
+            qs = qs.order_by("-metric_val" if order == "desc" else "metric_val")
+            qs = qs.values(
+                    "id",
+                    "username",
+                    "city__name",
+                    "state__name",
+                    "country__name",
+                    "created_at",
+                    "last_active_at",
+                    "metric_val",
+                )
+
+            # --- pagination ---
+            page = self.paginate_queryset(qs, request)
+            data = list(page)
+
+            return self.get_paginated_response(success_response(data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
