@@ -234,9 +234,20 @@ FRONTEND_URL = 'http://127.0.0.1:8000'
 #         'language': 'en',
 #     },
 # }
-
-
-CELERY_BROKER_URL = REDIS_HOST
+def redis_available(url):
+    try:
+        import redis
+        client = redis.Redis.from_url(url)
+        client.ping()
+        return True
+    except Exception:
+        return False
+if REDIS_HOST and redis_available(REDIS_HOST):
+    CELERY_BROKER_URL = REDIS_HOST
+    CELERY_RESULT_BACKEND = "django-db"
+else:
+    CELERY_BROKER_URL = "memory://"
+    CELERY_RESULT_BACKEND = "django-db"
 
 
 CELERY_ACCEPT_CONTENT = ['application/json']
