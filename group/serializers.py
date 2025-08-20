@@ -267,3 +267,9 @@ class GroupSuggestionSerializer(serializers.ModelSerializer):
             "trending_score",
             "featured",
         ]
+        
+
+class BasicGroupDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'slug', 'cover_image', 'logo']

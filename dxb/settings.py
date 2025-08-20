@@ -40,6 +40,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -66,7 +67,9 @@ INSTALLED_APPS = [
     "import_export",
     "ai",
     "mentor",
-    "group"
+    "group",
+    "chat",
+    
 ]
 
 MIDDLEWARE = [
@@ -110,7 +113,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'dxb.wsgi.application'
+# WSGI_APPLICATION = 'dxb.wsgi.application'
+ASGI_APPLICATION = 'dxb.asgi.application'
 
 
 # Database
@@ -314,4 +318,15 @@ LOGGING = {
             'propagate': True,
         },
     }
+}
+
+
+# REDIS CHANNEL LAYER
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
 }
