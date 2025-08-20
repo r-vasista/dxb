@@ -50,10 +50,16 @@ from profiles.models import Profile
 from event.serializers import (
     EventListSerializer
 )
-
+from chat.models import (
+    ChatGroup, ChatGroupMember
+)
+from chat.choices import (
+    ChatType
+)
 from group.task import (notify_owner_of_group_comment_like, notify_owner_of_group_post_comment, notify_owner_of_group_post_like,
                          send_group_creation_notifications_task ,send_group_join_notifications_task,notify_group_members_of_new_post
 )
+
         
 class GroupCreateAPIView(APIView):
     permission_classes = [IsAuthenticated]
@@ -76,22 +82,44 @@ class GroupCreateAPIView(APIView):
                     role=RoleChoices.ADMIN,
                     assigned_by=profile,
                 )
+
+                # 3. Extract & assign hashtags
                 extract_and_assign_hashtags(group.description, group)
                 
+                # 4. Log the group creation
                 log_group_action(group, profile, GroupAction.CREATE, "Group created by user")
+
+                # 5. --- Create ChatGroup for this group ---
+                chat_group = ChatGroup.objects.create(
+                    type=ChatType.GROUP,
+                    group=group
+                )
+
+                # 6. Add creator as a chat group member
+                ChatGroupMember.objects.create(
+                    group=chat_group,
+                    profile=profile,
+                )
+
+                # 7. Trigger async notifications (outside transaction)
                 try:
-                    transaction.on_commit(lambda: send_group_creation_notifications_task.delay(group.id, profile.id))
+                    transaction.on_commit(
+                        lambda: send_group_creation_notifications_task.delay(group.id, profile.id)
+                    )
                 except:
                     pass
 
-            return Response(success_response(serializer.data, 'Guild created successfully'), status=status.HTTP_201_CREATED)
+            return Response(
+                success_response(serializer.data, 'Guild created successfully'),
+                status=status.HTTP_201_CREATED
+            )
         
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
-
+        
+        
 class GroupUpdateAPIView(APIView):
     permission_classes = [IsAuthenticated, IsGroupAdmin]
 
@@ -476,34 +504,44 @@ class GroupAddMemberAPIView(APIView):
             
             # 2. Get request user's profile
             acting_profile = get_user_profile(request.user)
-                
-            # 3. Validate data
-            serializer = AddGroupMemberSerializer(data=data, context={'group': group})
-            serializer.is_valid(raise_exception=True)
-            group_member = serializer.save(assigned_by=acting_profile)
+            
+            with transaction.atomic():                
+                # 3. Validate data
+                serializer = AddGroupMemberSerializer(data=data, context={'group': group})
+                serializer.is_valid(raise_exception=True)
+                group_member = serializer.save(assigned_by=acting_profile)
 
-            # 4. Send async notifications
-            try:
-                transaction.on_commit(
-                    lambda: send_group_join_notifications_task.delay(
-                        group.id, group_member.profile.id, action='joined', sender=acting_profile.id
+                # 4. Add to chat group
+                if hasattr(group, "chat_group"):
+                    ChatGroupMember.objects.get_or_create(
+                        group=group.chat_group,
+                        profile=group_member.profile
                     )
+                else:
+                    raise ValidationError('chat group not found')
+
+                # 5. Send async notifications
+                try:
+                    transaction.on_commit(
+                        lambda: send_group_join_notifications_task.delay(
+                            group.id, group_member.profile.id, action='joined', sender_id=acting_profile.id
+                        )
+                    )
+                except Exception:
+                    pass
+
+                # 6. Update group member count
+                group.member_count = GroupMember.objects.filter(group=group).count()
+                group.save(update_fields=['member_count'])
+
+                # 7. Log action
+                log_group_action(
+                    group,
+                    acting_profile,
+                    GroupAction.MEMBER_ADD,
+                    "Group member added",
+                    group_member=group_member
                 )
-            except Exception:
-                pass
-
-            # 5. Update group member count
-            group.member_count = GroupMember.objects.filter(group=group).count()
-            group.save(update_fields=['member_count'])
-
-            # 6. Log action
-            log_group_action(
-                group,
-                acting_profile,
-                GroupAction.MEMBER_ADD,
-                "Group member added",
-                group_member=group_member
-            )
 
             return Response(
                 success_response({"message": "Member added successfully."}),
@@ -515,14 +553,12 @@ class GroupAddMemberAPIView(APIView):
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except IntegrityError:
-                return Response(
-                    error_response("This profile is already a member of the group."),
-                    status=status.HTTP_400_BAD_REQUEST
-                )
+            return Response(error_response("This profile is already a member of the group."),status=status.HTTP_400_BAD_REQUEST)
         except ValidationError as e:
             return Response(error_response(e.detail), status=status.HTTP_400_BAD_REQUEST)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 class GroupMemberDetailAPIView(APIView):
     """
@@ -609,6 +645,7 @@ class GroupMemberDetailAPIView(APIView):
                 pass
 
             return Response(success_response("Member removed successfully"), status=status.HTTP_200_OK)
+        
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except PermissionDenied as e:
@@ -821,21 +858,28 @@ class GroupJoinRequestCreateAPIView(APIView):
                 return Response(error_response("You are already a member of this group."), status=status.HTTP_400_BAD_REQUEST)
 
             if group.privacy == 'public':
-                # Auto add as viewer without any request
-                group_member = GroupMember.objects.create(
-                    group=group,
-                    profile=profile,
-                    role=RoleChoices.VIEWER,
-                    assigned_by=None  # or system user
-                )
-                group.member_count = GroupMember.objects.filter(group=group).count()
-                group.save(update_fields=['member_count'])
-                try:
-                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
-                except:
-                    pass
-                
-                log_group_action(group, profile, GroupAction.PUBLIC_JOIN, "Group member has joined group as it is public", group_member=group_member)
+                with transaction.atomic():
+                    # Auto add as viewer without any request
+                    group_member = GroupMember.objects.create(
+                        group=group,
+                        profile=profile,
+                        role=RoleChoices.VIEWER,
+                        assigned_by=None  # or system user
+                    )
+                    group.member_count = GroupMember.objects.filter(group=group).count()
+                    group.save(update_fields=['member_count'])
+                    
+                    # Add to ChatGroupMember
+                    ChatGroupMember.objects.create(
+                        group=group.chat_group,
+                        profile=profile
+                    )
+                    try:
+                        transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, profile.id, action='joined',sender_id=profile.id))
+                    except:
+                        pass
+                    
+                    log_group_action(group, profile, GroupAction.PUBLIC_JOIN, "Group member has joined group as it is public", group_member=group_member)
                 return Response(success_response({"message": "You have successfully joined the group as a viewer."}), status=status.HTTP_201_CREATED)
 
             # PRIVATE: Check if request already exists
@@ -895,28 +939,43 @@ class GroupJoinRequestActionAPIView(APIView):
             if action not in ['accept', 'reject']:
                 return Response(error_response("Invalid action. Use 'accept' or 'reject'."), status=status.HTTP_400_BAD_REQUEST)
 
-            if action == 'accept':
-                join_request.status = 'accepted'
-                join_request.save()
+            with transaction.atomic():
+                if action == 'accept':
+                    join_request.status = JoiningRequestStatus.ACCEPTED
+                    join_request.save()
 
-                # Add user as a member
-                GroupMember.objects.create(
-                    group=group,
-                    profile=join_request.profile,
-                    role=role if role else RoleChoices.VIEWER,
-                    assigned_by=get_user_profile(request.user)
-                )
-                try:
-                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, join_request.profile.id, action='accepted',sender_id=get_user_profile(request.user)))
-                except:
-                    pass
-            elif action == 'reject':
-                join_request.status = 'rejected'
-                join_request.save()
-                try :
-                    transaction.on_commit(lambda:send_group_join_notifications_task.delay(group.id, join_request.profile.id, action='rejected',sender_id=get_user_profile(request.user)))
-                except:
-                    pass
+                    # Add user as a group member
+                    group_member = GroupMember.objects.create(
+                        group=group,
+                        profile=join_request.profile,
+                        role=role if role else RoleChoices.VIEWER,
+                        assigned_by=get_user_profile(request.user)
+                    )
+
+                    # Also add them to chat group
+                    ChatGroupMember.objects.create(
+                        group=group.chat_group,
+                        profile=join_request.profile
+                    )
+
+                    # async notification
+                    transaction.on_commit(
+                        lambda: send_group_join_notifications_task.delay(
+                            group.id, join_request.profile.id, action='accepted',
+                            sender_id=get_user_profile(request.user).id
+                        )
+                    )
+
+                elif action == 'reject':
+                    join_request.status = JoiningRequestStatus.REJECTED
+                    join_request.save()
+
+                    transaction.on_commit(
+                        lambda: send_group_join_notifications_task.delay(
+                            group.id, join_request.profile.id, action='rejected',
+                            sender_id=get_user_profile(request.user).id
+                        )
+                    )
             return Response(success_response({"message": f"Request {action}ed successfully."}), status=status.HTTP_200_OK)
         
         except PermissionDenied as e:
