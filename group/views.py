@@ -264,13 +264,18 @@ class GroupListAPIView(APIView, PaginationMixin):
 
       
 
-class GroupPostDetailAPIView(APIView):
+class  GroupPostDetailAPIView(APIView):
 
     permission_classes =  [IsAuthenticated]
-    def get(self,request,post_id):
+    def get(self, request, post_id = None, slug = None):
 
         try:
-            post = GroupPost.objects.get(id=post_id)
+            if post_id:
+                post = GroupPost.objects.get(id=post_id)
+            elif slug:
+                post = GroupPost.objects.get(slug=slug)
+            else:
+                return Response(error_response('post id or slug must be provided', status=status.HTTP_400_BAD_REQUEST))
             serializer =  GroupPostSerializer(post)
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:

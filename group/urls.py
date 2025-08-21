@@ -48,6 +48,7 @@ urlpatterns = [
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),
     path('group-post-all/<int:group_id>/',GroupListAPIView.as_view(),name='list-group-posts'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
+    path('group-post/<str:slug>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     
     # Flag Group POst
     path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),

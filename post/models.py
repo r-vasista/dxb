@@ -82,7 +82,7 @@ class Post(BaseModel):
     custom_art_types = models.ManyToManyField(CustomArtType, related_name='custom_art_type_posts', blank=True)
 
     # Slug & Status
-    slug = models.SlugField(max_length=150, blank=True)
+    slug = models.SlugField(max_length=150, blank=True, unique=True)
     status = models.CharField(max_length=20, choices=PostStatus.choices, default=PostStatus.PUBLISHED)
     visibility = models.CharField(max_length=20, choices=PostVisibility.choices, default=PostVisibility.PUBLIC)
 
