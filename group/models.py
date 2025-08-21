@@ -65,7 +65,7 @@ class GroupMember(BaseModel):
     def __str__(self):
         return f'{self.group.name}, {self.profile}'
 
-
+MAX_SLUG_BASE_LENGTH = 10
 class GroupPost(BaseModel):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='posts')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
@@ -80,6 +80,7 @@ class GroupPost(BaseModel):
     share_count = models.PositiveIntegerField(default=0)
     is_flagged = models.BooleanField(default=False)
     flag_count = models.PositiveIntegerField(default=0)
+    slug = models.SlugField(max_length=150, blank=True)
     
     def __str__(self):
         return f'{self.group.name}, {self.id}'
@@ -94,6 +95,16 @@ class GroupPost(BaseModel):
             self.pinned_at = timezone.now()
         elif not self.is_pinned:
             self.pinned_at = None  
+            
+        # Auto-generate slug per post
+        if not self.slug and self.content:
+            base_title = self.content.strip()[:MAX_SLUG_BASE_LENGTH]
+            base_slug = slugify(base_title)
+
+            username = self.profile.username if self.profile and self.profile.username else "user"
+            timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+
+            self.slug = f"{base_slug}-{username}-{timestamp}-grp".lower()
         super().save(*args, **kwargs)
 
 

@@ -70,8 +70,10 @@ class GroupPostSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'group', 'profile', 'content', 'media_file', 'tags',
             'is_pinned', 'is_announcement', 'likes_count','pinned_at',
-            'comments_count', 'share_count', 'is_flagged', 'flag_count'
+            'comments_count', 'share_count', 'is_flagged', 'flag_count',
+            'slug'
         ]
+        read_only_fields =['slug']
         extra_kwargs = {
             'is_pinned': {'default': False}  # Ensures default False
         }
