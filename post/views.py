@@ -44,6 +44,9 @@ from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
     HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
 )
+from post.tasks import (
+    publish_scheduled_post
+)
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
 )
@@ -102,17 +105,37 @@ class PostAPIView(APIView):
 
             if not is_allowed:
                 return Response(error_response("You are not allowed to post for this profile."), status=status.HTTP_403_FORBIDDEN)
-
-            # Use request.data as-is — DO NOT copy!
+            
             serializer = PostSerializer(data=request.data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
             handle_hashtags(post)
             handle_art_styles(post, request.data.get("art_types"))
-            try:
-                transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
-            except:
-                pass
+           # --- Scheduled Publishing Logic ---
+            if post.status == PostStatus.SCHEDULED:
+                scheduled_at = request.data.get("scheduled_at")
+                if not scheduled_at:
+                    post.delete()
+                    return Response(error_response("scheduled_at is required when status is 'scheduled'"), status=400)
+
+                scheduled_dt = parse_datetime(scheduled_at)
+                if not scheduled_dt:
+                    post.delete()
+                    return Response(error_response("Invalid datetime format for scheduled_at"), status=400)
+
+                if scheduled_dt <= timezone.now():
+                    post.delete()
+                    return Response(error_response("scheduled_at must be in the future"), status=400)
+
+                # Schedule the publish task
+                publish_scheduled_post.apply_async(args=[post.id], eta=scheduled_dt)
+
+            else:
+                # Immediate post → notify
+                try:
+                    transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
+                except:
+                    pass
             
             mentions = extract_mentions(" ".join(filter(None, [post.caption, post.title, post.content])))
 
