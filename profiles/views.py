@@ -38,7 +38,8 @@ from profiles.models import (
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
-    StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer
+    StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer, 
+    BasicProfileSerializer
 )
 from profiles.choices import (
     StaticFieldType, VisibilityStatus
@@ -1218,3 +1219,22 @@ class SuggestedProfilesAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ReferredUsersAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Get the current user's profile
+            profile = get_user_profile(request.user)
+            
+            # Fetch all profiles referred by this user
+            referred_profiles = Profile.objects.filter(referred_by=profile)
+            
+            paginated_qs = self.paginate_queryset(referred_profiles, request)
+            serializer = BasicProfileSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        except Profile.DoesNotExist:
+            return Response(error_response('Profile not found'), status=status.HTTP_404_NOT_FOUND)

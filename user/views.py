@@ -92,6 +92,7 @@ class RegisterAccountAPIView(APIView):
         name = data.get("name", "")
         address_data = data.get("address", {})
         reg_token = request.data.get("registration_token", "")
+        referral_code = data.get("referral_code", "")
 
         # Location data
         timezone_str = data.get("timezone", "UTC")
@@ -195,6 +196,15 @@ class RegisterAccountAPIView(APIView):
                         pass
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
+                
+                if referral_code:
+                    referrer_profile = get_object_or_404(Profile, referral_code=referral_code)
+                    profile.referred_by = referrer_profile
+                    profile.save(update_fields=["referred_by"])
+
+                    # Award points (example: 50 each)
+                    referrer_profile.add_points(50)
+                    profile.add_points(50)        
 
                 # Log user registration as login
                 UserLog.objects.create(
