@@ -193,6 +193,7 @@ from rest_framework.views import APIView
 import datetime
 from django.db.models.functions import Coalesce
 from django.utils.dateparse import parse_datetime, parse_date
+from event.choices import EventStatus, AttendanceStatus
 
 
 class UserStatsView(APIView):
@@ -344,7 +345,7 @@ class ProfileFilterOptionsView(APIView):
                 {"key": "recent_created", "label": "Created in Last 7 Days"},
                 {"key": "custom_date", "label": "Custom Date Range"},
             ],
-            "metrics": [
+            "metric": [
                 {"key": "followers", "label": "Most Followers"},
                 {"key": "friends", "label": "Most Friends"},
                 {"key": "posts", "label": "Most Posts"},
@@ -358,7 +359,7 @@ class ProfileFilterOptionsView(APIView):
                 {"key": "asc", "label": "Ascending"},
                 {"key": "desc", "label": "Descending"},
             ],
-            "date_filters": [
+            "date_filter": [
                 {"key": "today", "label": "Today"},
                 {"key": "7d", "label": "Last 7 Days"},
                 {"key": "30d", "label": "Last 30 Days"},
@@ -371,6 +372,7 @@ class ProfileFilterOptionsView(APIView):
                 "state__name",
                 "country__name",
                 "created_at",
+                'profile_picture',
                 "last_active_at",
                 "metric_val"
             ]
@@ -388,7 +390,7 @@ class ProfileAnalyticsView(APIView, PaginationMixin):
             end_dt = now()
 
             # --- query params ---
-            profile_scope = request.query_params.get("profile", "all")
+            profile_scope = request.query_params.get("profile_scope", "all")
             metric        = request.query_params.get("metric", "followers")
             order         = request.query_params.get("order", "desc")
             date_filter   = request.query_params.get("date_filter")  # today|7d|30d|custom
@@ -463,6 +465,7 @@ class ProfileAnalyticsView(APIView, PaginationMixin):
                     "state__name",
                     "country__name",
                     "created_at",
+                    'profile_picture',
                     "last_active_at",
                     "metric_val",
                 )
@@ -475,3 +478,397 @@ class ProfileAnalyticsView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class PostFilterOptionsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        data = {
+            "post_scope": [
+                {"key": "all", "label": "All Posts"},
+                {"key": "published", "label": "Published Posts"},
+                {"key": "drafts", "label": "Drafts"},
+                {"key": "pinned", "label": "Pinned Posts"},
+                {"key": "featured", "label": "Featured Posts"},
+                {"key": "custom_date", "label": "Custom Date Range"},
+            ],
+            "metric": [
+                {"key": "views", "label": "Most Viewed"},
+                {"key": "likes", "label": "Most Liked"},
+                {"key": "comments", "label": "Most Commented"},
+                {"key": "shares", "label": "Most Shared"},
+                {"key": "recent_created", "label": "Recently Created"},
+                {"key": "saved", "label": "Most Saved"},
+                {"key": "mentions", "label": "Most Mentioned"},
+            ],
+            "order": [
+                {"key": "asc", "label": "Ascending"},
+                {"key": "desc", "label": "Descending"},
+            ],
+            "date_filter": [
+                {"key": "today", "label": "Today"},
+                {"key": "7d", "label": "Last 7 Days"},
+                {"key": "30d", "label": "Last 30 Days"},
+                {"key": "custom", "label": "Custom Date Range"},
+            ],
+            "fields_in_response": [
+                "id",
+                "title",
+                "profile__username",
+                "city__name",
+                "state__name",
+                "country__name",
+                "created_at",
+                "updated_at",
+                "metric_val"
+            ]
+        }
+        return Response(data)
+
+
+from post.models import Post, PostStatus, PostVisibility
+
+class PostAnalyticsView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # --- Params ---
+            post_scope = request.query_params.get("post", "all")
+            metric = request.query_params.get("metric", "views")
+            order = request.query_params.get("order", "desc")
+            date_filter = request.query_params.get("date_filter")
+            start_date = request.query_params.get("start_date")
+            end_date_param = request.query_params.get("end_date")
+            limit = int(request.query_params.get("limit", 10))
+
+            qs = Post.objects.all()
+
+            # --- Scope filters ---
+            if post_scope == "published":
+                qs = qs.filter(status=PostStatus.PUBLISHED)
+            elif post_scope == "drafts":
+                qs = qs.filter(status=PostStatus.DRAFT)
+            elif post_scope == "pinned":
+                qs = qs.filter(is_pinned=True)
+            elif post_scope == "featured":
+                qs = qs.filter(is_featured=True)
+
+            # --- Date filters ---
+            end_date = timezone.now()
+            if date_filter == "today":
+                qs = qs.filter(created_at__date=end_date.date())
+            elif date_filter == "7d":
+                qs = qs.filter(created_at__gte=end_date - timedelta(days=7))
+            elif date_filter == "30d":
+                qs = qs.filter(created_at__gte=end_date - timedelta(days=30))
+            elif date_filter == "custom" and start_date and end_date_param:
+                qs = qs.filter(created_at__range=[start_date, end_date_param])
+
+            # --- Metric annotation ---
+            metric_map = {
+                "views": F("view_count"),
+                "likes": F("reaction_count"),
+                "comments": F("comment_count"),
+                "shares": F("share_count"),
+                "saved": Count("saved_by"),
+                "mentions": Count("mentions"),
+                "recent_created": F("created_at"),
+            }
+
+            if metric not in metric_map:
+                return Response(error_response("Invalid metric"), status=400)
+
+            qs = qs.annotate(metric_val=metric_map[metric])
+
+            # --- Order ---
+            order_field = "metric_val" if order == "desc" else "metric_val"
+            qs = qs.order_by(f"-{order_field}" if order == "desc" else order_field)
+
+            # --- Response fields ---
+            qs = qs.values(
+                "id",
+                "title",
+                "profile__username",
+                "city__name",
+                "state__name",
+                "country__name",
+                "created_at",
+                "updated_at",
+                "metric_val",
+            )
+
+            # --- Pagination ---
+            page = self.paginate_queryset(qs, request)
+            data = list(page)
+
+            return self.get_paginated_response(success_response(data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+
+
+class EventFilterOptionsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        data = {
+            "event_scope": [
+                {"key": "all", "label": "All Events"},
+                {"key": "upcoming", "label": "Upcoming Events"},
+                {"key": "past", "label": "Past Events"},
+                {"key": "published", "label": "Published Events"},
+                {"key": "draft", "label": "Draft Events"},
+                {"key": "custom_date", "label": "Custom Date Range"},
+            ],
+            "metric": [
+                {"key": "views", "label": "Most Viewed"},
+                {"key": "comments", "label": "Most Commented"},
+                {"key": "shares", "label": "Most Shared"},
+                {"key": "attendees", "label": "Most Attended"},
+                {"key": "interested", "label": "Most Interested"},
+                {"key": "not_interested", "label": "Most Not Interested"},
+                {"key": "pending", "label": "Most Pending"},
+                {"key": "recent_created", "label": "Recently Created"},
+            ],
+            "order": [
+                {"key": "asc", "label": "Ascending"},
+                {"key": "desc", "label": "Descending"},
+            ],
+            "date_filter": [
+                {"key": "today", "label": "Today"},
+                {"key": "7d", "label": "Last 7 Days"},
+                {"key": "30d", "label": "Last 30 Days"},
+                {"key": "custom", "label": "Custom Date Range"},
+            ],
+            "fields_in_response": [
+                "id",
+                "title",
+                "host__username",
+                "city__name",
+                "state__name",
+                "country__name",
+                "start_datetime",
+                "end_datetime",
+                "created_at",
+                "metric_val",
+            ]
+        }
+        return Response(data)
+
+
+class EventAnalyticsView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # --- Params ---
+            event_scope = request.query_params.get("event_scope", "all")
+            metric = request.query_params.get("metric", "views")
+            order = request.query_params.get("order", "desc")
+            date_filter = request.query_params.get("date_filter")
+            start_date = request.query_params.get("start_date")
+            end_date_param = request.query_params.get("end_date")
+            limit = int(request.query_params.get("limit", 10))
+
+            qs = Event.objects.all()
+            now = timezone.now()
+
+            # --- Scope filters ---
+            if event_scope == "upcoming":
+                qs = qs.filter(start_datetime__gte=now)
+            elif event_scope == "past":
+                qs = qs.filter(end_datetime__lt=now)
+            elif event_scope == "published":
+                qs = qs.filter(status=EventStatus.PUBLISHED)
+            elif event_scope == "draft":
+                qs = qs.filter(status=EventStatus.DRAFT)
+
+            # --- Date filters ---
+            end_date = timezone.now()
+            if date_filter == "today":
+                qs = qs.filter(created_at__date=end_date.date())
+            elif date_filter == "7d":
+                qs = qs.filter(created_at__gte=end_date - timedelta(days=7))
+            elif date_filter == "30d":
+                qs = qs.filter(created_at__gte=end_date - timedelta(days=30))
+            elif date_filter == "custom" and start_date and end_date_param:
+                qs = qs.filter(created_at__range=[start_date, end_date_param])
+
+            # --- Metric annotation ---
+            metric_map = {
+                "views": F("view_count"),
+                "comments": F("comment_count"),
+                "shares": F("share_count"),
+                "attendees": Count("attendees", distinct=True),
+                "interested": Count("eventattendance", filter=Q(eventattendance__status=AttendanceStatus.INTERESTED)),
+                "not_interested": Count("eventattendance", filter=Q(eventattendance__status=AttendanceStatus.NOT_INTERESTED)),
+                "pending": Count("eventattendance", filter=Q(eventattendance__status=AttendanceStatus.PENDING)),
+                "recent_created": F("created_at"),
+            }
+
+            if metric not in metric_map:
+                return Response(error_response("Invalid metric"), status=400)
+
+            qs = qs.annotate(metric_val=metric_map[metric])
+
+            # --- Ordering ---
+            order_field = "metric_val"
+            qs = qs.order_by(f"-{order_field}" if order == "desc" else order_field)
+
+            # --- Values for response ---
+            qs = qs.values(
+                "id",
+                "title",
+                "host__username",
+                "city__name",
+                "state__name",
+                "country__name",
+                "start_datetime",
+                "end_datetime",
+                "created_at",
+                "metric_val",
+            )[:limit]
+
+            # --- Pagination ---
+            page = self.paginate_queryset(qs, request)
+            data = list(page)
+
+            return self.get_paginated_response(success_response(data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+        
+
+class GroupFilterOptionsView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        data = {
+            "group_scope": [
+                {"key": "all", "label": "All Groups"},
+                {"key": "public", "label": "Public Groups"},
+                {"key": "private", "label": "Private Groups"},
+                {"key": "featured", "label": "Featured Groups"},
+                {"key": "recent_created", "label": "Recently Created"},
+                {"key": "custom_date", "label": "Custom Date Range"},
+            ],
+            "metric": [
+                {"key": "members", "label": "Most Members"},
+                {"key": "posts", "label": "Most Posts"},
+                {"key": "avg_engagement", "label": "Highest Avg Engagement"},
+                {"key": "trending_score", "label": "Trending Score"},
+                {"key": "last_activity", "label": "Most Recently Active"},
+                {"key": "recent_created", "label": "Recently Created"},
+            ],
+            "order": [
+                {"key": "asc", "label": "Ascending"},
+                {"key": "desc", "label": "Descending"},
+            ],
+            "date_filter": [
+                {"key": "today", "label": "Today"},
+                {"key": "7d", "label": "Last 7 Days"},
+                {"key": "30d", "label": "Last 30 Days"},
+                {"key": "custom", "label": "Custom Date Range"},
+            ],
+            "fields_in_response": [
+                "id",
+                "name",
+                "slug",
+                "type",
+                "privacy",
+                "member_count",
+                "post_count",
+                "avg_engagement",
+                "trending_score",
+                "last_activity_at",
+                "created_at",
+                "metric_val"
+            ]
+        }
+        return Response(data)
+
+
+class GroupAnalyticsView(APIView, PaginationMixin):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        try:
+            # --- Params ---
+            group_scope = request.query_params.get("group_scope", "all")  # ✅ consistent with filter options
+            metric = request.query_params.get("metric", "members")
+            order = request.query_params.get("order", "desc")
+            date_filter = request.query_params.get("date_filter")
+            start_date = request.query_params.get("start_date")
+            end_date_param = request.query_params.get("end_date")
+            limit = int(request.query_params.get("limit", 10))
+
+            qs = Group.objects.all()
+            now = timezone.now()
+
+            # --- Scope filters ---
+            if group_scope == "public":
+                qs = qs.filter(privacy="PUBLIC")
+            elif group_scope == "private":
+                qs = qs.filter(privacy="PRIVATE")
+            elif group_scope == "featured":
+                qs = qs.filter(featured=True)
+            elif group_scope == "recent_created":
+                qs = qs.filter(created_at__gte=now - timedelta(days=7))
+            elif group_scope == "custom_date" and start_date and end_date_param:
+                qs = qs.filter(created_at__range=[start_date, end_date_param])
+
+            # --- Date filters ---
+            if date_filter == "today":
+                qs = qs.filter(created_at__date=now.date())
+            elif date_filter == "7d":
+                qs = qs.filter(created_at__gte=now - timedelta(days=7))
+            elif date_filter == "30d":
+                qs = qs.filter(created_at__gte=now - timedelta(days=30))
+            elif date_filter == "custom" and start_date and end_date_param:
+                qs = qs.filter(created_at__range=[start_date, end_date_param])
+
+            # --- Metric mapping ---
+            metric_map = {
+                "members": F("member_count"),
+                "posts": F("post_count"),
+                "avg_engagement": F("avg_engagement"),
+                "trending_score": F("trending_score"),
+                "last_activity": F("last_activity_at"),
+                "recent_created": F("created_at"),
+            }
+
+            if metric not in metric_map:
+                return Response(error_response("Invalid metric"), status=400)
+
+            qs = qs.annotate(metric_val=metric_map[metric])
+
+            # --- Ordering ---
+            order_field = "metric_val"
+            qs = qs.order_by(f"-{order_field}" if order == "desc" else order_field)
+
+            # --- Values ---
+            qs = qs.values(
+                "id",
+                "name",
+                "slug",
+                "type",
+                "privacy",
+                "member_count",
+                "post_count",
+                "avg_engagement",
+                "trending_score",
+                "last_activity_at",
+                "created_at",
+                "metric_val"
+            )
+
+            # --- Pagination ---
+            page = self.paginate_queryset(qs, request)
+            data = list(page)
+
+            return self.get_paginated_response(success_response(data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)

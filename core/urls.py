@@ -2,7 +2,8 @@ from django.urls import path
 from core.views import (
     LocationHierarchyAPIView, CountrySearchView, StateSearchView, CitySearchView, UpcomingFeatureAPIView, WeeklyChallengeAPIView,
     HashTagSearchAPIView ,UserStatsView, GroupStatsView, EventStatsView, PostStatsView, ProfileStatsView, NotificationStatsView,
-    ProfileAnalyticsView,ProfileFilterOptionsView
+    ProfileAnalyticsView,ProfileFilterOptionsView , PostAnalyticsView, PostFilterOptionsView, GroupAnalyticsView, GroupFilterOptionsView,
+    EventAnalyticsView, EventFilterOptionsView
 )
 
 urlpatterns = [
@@ -26,5 +27,17 @@ urlpatterns = [
 
     path("admin-dashboard/profiles/analytics/",ProfileAnalyticsView.as_view(), name="profile-analytics"),
     path("admin-dashboard/profiles/filter-options/", ProfileFilterOptionsView.as_view(), name="profile-filter-options"),
+
+    path("admin-dashboard/posts/analytics/", PostAnalyticsView.as_view(), name="post-analytics"),
+    path("admin-dashboard/posts/filter-options/", PostFilterOptionsView.as_view(), name="post-filter-options"),
+
+    path("admin-dashboard/groups/analytics/", GroupAnalyticsView.as_view(), name="group-analytics"),
+    path("admin-dashboard/groups/filter-options/", GroupFilterOptionsView.as_view(), name="group-filter-options"),
+
+    path("admin-dashboard/events/analytics/", EventAnalyticsView.as_view(), name="event-analytics"),
+    path("admin-dashboard/events/filter-options/", EventFilterOptionsView.as_view(), name="event-filter-options"),
+
+    
+
 ]
     
