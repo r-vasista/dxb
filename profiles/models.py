@@ -14,7 +14,7 @@ from organization.models import (
     Organization
 )
 from profiles.choices import (
-    VisibilityStatus, FieldType, ProfileType, StaticFieldType
+    VisibilityStatus, FieldType, ProfileType, StaticFieldType, DocumentType, VerificationStatus
 )
 from profiles.utils import (
     validate_username_format
@@ -521,3 +521,53 @@ class ArtServiceInquiry(models.Model):
 
     def __str__(self):
         return f"{self.inquirer_profile.username} -> {self.artist_profile.username}"
+    
+
+class VerificationRequest(BaseModel):
+    """
+    A verification request raised by a user.
+    Admins approve/reject this request after reviewing linked documents.
+    """
+
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name="verification_requests"
+    )
+    status = models.CharField(
+        max_length=20, choices=Status.choices, default=Status.PENDING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        Profile, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_verification_requests"
+    )
+    rejection_reason = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"VerificationRequest({self.profile.username}) - {self.status}"
+
+
+class UserDocument(BaseModel):
+    """
+    Stores documents uploaded as part of a verification request.
+    """
+
+    request = models.ForeignKey(
+        VerificationRequest, on_delete=models.CASCADE, related_name="documents"
+    )
+    document_type = models.CharField(
+        max_length=50, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
+    file = models.FileField(upload_to="user_documents/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.request.profile.username} - {self.document_type}"
+    

@@ -12,7 +12,7 @@ from decimal import Decimal, InvalidOperation
 # Local imports
 from profiles.models import (
     ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection,
-    ArtService, ArtServiceInquiry
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -514,3 +514,37 @@ class BasicProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'username','profile_picture']
+        
+        
+class UserDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDocument
+        fields = ["id", "document_type", "file", "uploaded_at"]
+
+
+class VerificationRequestSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id", "status", "created_at", "updated_at",
+            "reviewed_at", "reviewed_by", "rejection_reason",
+            "documents"
+        ]
+
+class VerificationRequestDetailSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "documents",
+        ]

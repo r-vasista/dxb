@@ -7,7 +7,8 @@ from profiles.views import (
     RespondFriendRequestView, RemoveFriendView, PendingFriendRequestsView, FollowProfileView, ListFollowersView, ListFriendsView,
     ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
     CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView, EnableOrUpdateArtServiceAPIView, GetArtServiceAPIView,
-    SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView, SuggestedProfilesAPIView, ReferredUsersAPIView
+    SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView, SuggestedProfilesAPIView, ReferredUsersAPIView, CreateVerificationRequestAPIView,
+    VerificationRequestDetailAPIView, ListVerificationRequestsAPIView, UploadUserDocumentAPIView
 )
 
 urlpatterns = [
@@ -47,5 +48,11 @@ urlpatterns = [
 
     path('onboarding/suggested-profiles/', SuggestedProfilesAPIView.as_view(), name='suggested-profiles'),
     path('referred-profiles/', ReferredUsersAPIView.as_view(), name='referred-profiles'),
+    
+    # Verification flow
+    path("verification-requests/create/", CreateVerificationRequestAPIView.as_view(), name="verification-request-create"),
+    path("verification-requests/", ListVerificationRequestsAPIView.as_view(), name="verification-request-list"),
+    path("verification-requests/<int:request_id>/", VerificationRequestDetailAPIView.as_view(), name="verification-request-detail"),
+    path("upload-verification-documentsrequests/<int:request_id>/", UploadUserDocumentAPIView.as_view(), name="verification-document-upload"),
 
 ]

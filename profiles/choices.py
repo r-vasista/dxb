@@ -35,3 +35,15 @@ class StaticFieldType(models.TextChoices):
     URL = 'url', 'URL'
     BOOLEAN = 'boolean', 'Boolean'
     TEXTAREA = 'textarea', 'Textarea'
+
+
+class DocumentType(models.TextChoices):
+        ID_PROOF = "id_proof", "ID Proof"
+        ADDRESS_PROOF = "address_proof", "Address Proof"
+        PHOTO = "photo", "Photo"
+        OTHER = "other", "Other"
+
+class VerificationStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    APPROVED = "approved", "Approved"
+    REJECTED = "rejected", "Rejected"
