@@ -18,7 +18,7 @@ class Group(BaseModel):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=200, null=True, blank=True,unique=True)
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
-    description = models.TextField(max_length=500)
+    description = models.TextField()
     tags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
     privacy = models.CharField(max_length=20, choices=PrivacyChoices.choices, default=PrivacyChoices.PUBLIC)
