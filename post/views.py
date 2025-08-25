@@ -268,7 +268,7 @@ class AllPostsAPIView(APIView, PaginationMixin):
         try:
             visibility_filter = get_post_visibility_filter(request.user)
 
-            posts = Post.objects.filter(visibility_filter).order_by('-created_at')
+            posts = Post.objects.filter(status=PostStatus.PUBLISHED).filter(visibility_filter).order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})

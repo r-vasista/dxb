@@ -327,7 +327,7 @@ def notify_owner_of_group_post_comment(comment_id):
 
 
 @shared_task
-def notify_owner_of_group_post_like(like_id):
+def notify_owner_of_group_post_like(self, like_id):
     """
     Notify the owner of a group post when someone likes it.
     """
