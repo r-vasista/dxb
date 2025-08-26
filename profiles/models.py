@@ -529,16 +529,11 @@ class VerificationRequest(BaseModel):
     Admins approve/reject this request after reviewing linked documents.
     """
 
-    class Status(models.TextChoices):
-        PENDING = "pending", "Pending"
-        APPROVED = "approved", "Approved"
-        REJECTED = "rejected", "Rejected"
-
     profile = models.ForeignKey(
         Profile, on_delete=models.CASCADE, related_name="verification_requests"
     )
     status = models.CharField(
-        max_length=20, choices=Status.choices, default=Status.PENDING
+        max_length=20, choices=VerificationStatus.choices, default=VerificationStatus.PENDING
     )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

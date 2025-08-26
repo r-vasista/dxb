@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q, F, Sum
 from django.db import IntegrityError
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -39,7 +40,8 @@ from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
     StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer, 
-    BasicProfileSerializer, VerificationRequestSerializer, UserDocumentSerializer, VerificationRequestDetailSerializer
+    BasicProfileSerializer, VerificationRequestSerializer, UserDocumentSerializer, VerificationRequestDetailSerializer,
+    VerificationRequestAdminSerializer, VerificationRequestAdminUpdateSerializer
 )
 from profiles.choices import (
     StaticFieldType, VisibilityStatus
@@ -1330,4 +1332,40 @@ class VerificationRequestDetailAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
         
-        
+
+class AdminVerificationRequestListAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = VerificationRequest.objects.all().order_by("-created_at")
+        paginated_qs = self.paginate_queryset(qs, request)
+        serializer = VerificationRequestAdminSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
+
+
+class AdminVerificationRequestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminSerializer(vr)
+            return Response(success_response(serializer.data))
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminVerificationRequestUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminUpdateSerializer(vr, data=request.data, context={"request": request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(serializer.data, "Verification request updated successfully"))
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+   

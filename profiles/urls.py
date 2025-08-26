@@ -8,7 +8,8 @@ from profiles.views import (
     ProfileCanvasView, UnfollowProfileView, ListFollowingView, StaticFieldValueView,SearchProfilesAPIView, InspiredByFromProfileView,
     CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView, EnableOrUpdateArtServiceAPIView, GetArtServiceAPIView,
     SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView, SuggestedProfilesAPIView, ReferredUsersAPIView, CreateVerificationRequestAPIView,
-    VerificationRequestDetailAPIView, ListVerificationRequestsAPIView, UploadUserDocumentAPIView
+    VerificationRequestDetailAPIView, ListVerificationRequestsAPIView, UploadUserDocumentAPIView, AdminVerificationRequestListAPIView,
+    AdminVerificationRequestDetailAPIView, AdminVerificationRequestUpdateAPIView,
 )
 
 urlpatterns = [
@@ -51,8 +52,11 @@ urlpatterns = [
     
     # Verification flow
     path("verification-requests/create/", CreateVerificationRequestAPIView.as_view(), name="verification-request-create"),
-    path("verification-requests/", ListVerificationRequestsAPIView.as_view(), name="verification-request-list"),
-    path("verification-requests/<int:request_id>/", VerificationRequestDetailAPIView.as_view(), name="verification-request-detail"),
+    path("my-verification-requests-list/", ListVerificationRequestsAPIView.as_view(), name="my-verification-request-list"),
+    path("verification-request/<int:request_id>/", VerificationRequestDetailAPIView.as_view(), name="verification-request-detail"),
     path("upload-verification-documentsrequests/<int:request_id>/", UploadUserDocumentAPIView.as_view(), name="verification-document-upload"),
+    path("verification-requests/", AdminVerificationRequestListAPIView.as_view(), name="admin-verification-request-list"),
+    path("verification-request-detail/<int:pk>/", AdminVerificationRequestDetailAPIView.as_view(), name="admin-verification-request-detail"),
+    path("verification-request-update/<int:pk>/", AdminVerificationRequestUpdateAPIView.as_view(), name="admin-verification-request-update"),
 
 ]
