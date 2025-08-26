@@ -184,7 +184,7 @@ from datetime import timedelta
 from django.utils.timezone import now
 
 from user.models import CustomUser
-from group.models import Group
+from group.models import Group,GroupMember,GroupActionLog,GroupPost,GroupPostComment,GroupJoinRequest
 from event.models import Event, EventAttendance
 from post.models import Post
 from notification.models import Notification
@@ -872,3 +872,116 @@ class GroupAnalyticsView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+class SuperAdminBanMemberView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, member_id):
+        try:
+            member = GroupMember.objects.get(id=member_id)
+            member.is_banned = not member.is_banned
+            member.save()
+
+            # log action
+            GroupActionLog.objects.create(
+                group=member.group, profile=request.user.profile,
+                group_member=member,
+                action="ban_member" if member.is_banned else "unban_member",
+                description=f"{'Banned' if member.is_banned else 'Unbanned'} {member.profile.username}"
+            )
+            return Response(success_response({"banned": member.is_banned}))
+        except GroupMember.DoesNotExist:
+            return Response(error_response("Member not found"), status=404)
+
+class SuperAdminChangeRoleView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, member_id):
+        try:
+            new_role = request.data.get("role")
+            member = GroupMember.objects.get(id=member_id)
+            member.role = new_role
+            member.save()
+
+            GroupActionLog.objects.create(
+                group=member.group, profile=request.user.profile,
+                group_member=member, action="change_role",
+                description=f"Changed {member.profile.username} to {new_role}"
+            )
+            return Response(success_response({"role": new_role}))
+        except GroupMember.DoesNotExist:
+            return Response(error_response("Member not found"), status=404)
+
+class SuperAdminDeletePostView(APIView):
+    permission_classes = [AllowAny]
+
+    def delete(self, request, post_id):
+        try:
+            post = GroupPost.objects.get(id=post_id)
+            post.delete()
+
+            GroupActionLog.objects.create(
+                group=post.group, profile=request.user.profile,
+                action="delete_post", description=f"Deleted post {post.id}"
+            )
+            return Response(success_response("Post deleted"))
+        except GroupPost.DoesNotExist:
+            return Response(error_response("Post not found"), status=404)
+
+
+class SuperAdminDeleteCommentView(APIView):
+    permission_classes = [AllowAny]
+
+    def delete(self, request, comment_id):
+        try:
+            comment = GroupPostComment.objects.get(id=comment_id)
+            comment.delete()
+
+            GroupActionLog.objects.create(
+                group=comment.group_post.group, profile=request.user.profile,
+                action="delete_comment", description=f"Deleted comment {comment.id}"
+            )
+            return Response(success_response("Comment deleted"))
+        except GroupPostComment.DoesNotExist:
+            return Response(error_response("Comment not found"), status=404)
+        
+class SuperAdminJoinRequestView(APIView):
+    permission_classes = [AllowAny]
+
+    def post(self, request, request_id):
+        try:
+            action = request.data.get("action")  # approve/reject
+            join_req = GroupJoinRequest.objects.get(id=request_id)
+
+            join_req.status = "APPROVED" if action == "approve" else "REJECTED"
+            join_req.save()
+
+            GroupActionLog.objects.create(
+                group=join_req.group, profile=request.user.profile,
+                member_request=join_req,
+                action=f"{action}_join_request",
+                description=f"{action.title()} join request of {join_req.profile.username}"
+            )
+            return Response(success_response({"status": join_req.status}))
+        except GroupJoinRequest.DoesNotExist:
+            return Response(error_response("Request not found"), status=404)
+
+
+class SuperAdminJoinRequestApiview(APIView):
+    permission_classes =[AllowAny]
+    def post(self,request,request_id):
+        try:
+            action =request.data.get("action")
+            join_req=GroupJoinRequest.objects.get(id=request_id)
+            join_req.status = "Approved" if action =="approve" else "REJECTED"
+            join_req.save()
+
+            GroupActionLog.objects.create(
+                group=join_req.group,profile=request.user.profile,
+                member_request=join_req,
+                action= f"{action}_join_request",
+                description=f"{action.title()} join request of {join_req.profile.username}"
+            )
+            return Response(success_response({"status":join_req.status}))
+        except GroupJoinRequest.DoesNotExist:
+            return Response(error_response("Request Not Found",status.HTTP_400_BAD_REQUEST))

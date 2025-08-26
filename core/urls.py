@@ -3,7 +3,8 @@ from core.views import (
     LocationHierarchyAPIView, CountrySearchView, StateSearchView, CitySearchView, UpcomingFeatureAPIView, WeeklyChallengeAPIView,
     HashTagSearchAPIView ,UserStatsView, GroupStatsView, EventStatsView, PostStatsView, ProfileStatsView, NotificationStatsView,
     ProfileAnalyticsView,ProfileFilterOptionsView , PostAnalyticsView, PostFilterOptionsView, GroupAnalyticsView, GroupFilterOptionsView,
-    EventAnalyticsView, EventFilterOptionsView
+    EventAnalyticsView, EventFilterOptionsView, SuperAdminBanMemberView, SuperAdminChangeRoleView, SuperAdminDeletePostView,
+    SuperAdminDeleteCommentView, SuperAdminJoinRequestApiview
 )
 
 urlpatterns = [
@@ -38,6 +39,13 @@ urlpatterns = [
     path("admin-dashboard/events/filter-options/", EventFilterOptionsView.as_view(), name="event-filter-options"),
 
     
-
+    #admin Group Actions
+    path("admin-dashboard/groups/members/<int:id>/ban",SuperAdminBanMemberView.as_view(),name="ban-group-member"),
+    path("admin-dashboard/groups/members/<int:id>/role/",SuperAdminChangeRoleView.as_view(),name="ban-group-member"),
+    path("admin-dashboard/groups/posts/<int:id>/delete/",SuperAdminDeletePostView.as_view(),name="admin-group-post-delete"),
+    path("admin-dashboard/groups/comments/<int:id>/delete/",SuperAdminDeleteCommentView.as_view(),name="admin-group-comment-delete"),
+    path("admin-dashboard/groups/join-requests/<int:id>/",SuperAdminJoinRequestApiview.as_view(),name="admin-group-join-request"),
+    
 ]
+    
     
