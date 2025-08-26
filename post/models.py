@@ -189,9 +189,9 @@ class Comment(BaseModel):
     class Meta:
         ordering = ['created_at']
         indexes = [
-            models.Index(fields=['post', '-created_at']),
-            models.Index(fields=['parent', 'created_at']),
-            models.Index(fields=['profile', '-created_at']),
+            models.Index(fields=['post']),
+            models.Index(fields=['parent']),
+            models.Index(fields=['profile']),
         ]
 
     def __str__(self):

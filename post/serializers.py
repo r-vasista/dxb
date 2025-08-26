@@ -235,4 +235,9 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
         read_only_fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
 
-        
+
+
+class CommentUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["content"]

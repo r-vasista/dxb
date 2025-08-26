@@ -42,7 +42,8 @@ from post.choices import (
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
-    HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
+    HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer,
+    CommentUpdateSerializer
 )
 from post.tasks import (
     publish_scheduled_post
@@ -1204,3 +1205,34 @@ class UpdateCommentVisibilityAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CommentUpdateAPIView(APIView):
+    """
+    PUT /api/comments/<id>/update/
+    Allows updating a comment only within 1 minute of creation.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            comment = Comment.objects.get(pk=pk, profile=profile)
+
+            # Check time condition: created_at within 1 min
+            if timezone.now() - comment.created_at > timedelta(minutes=1):
+                return Response(
+                    error_response("You can only edit a comment within 1 minute of posting."),
+                    status=400
+                )
+
+            serializer = CommentUpdateSerializer(comment, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(serializer.data), status=200)
+            return Response(error_response(serializer.errors), status=400)
+
+        except Comment.DoesNotExist:
+            return Response(error_response("Comment not found or not owned by you."), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=400)

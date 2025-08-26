@@ -4,7 +4,7 @@ from post.views import (
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView,
     TrendingPostsAPIView, HashtagPostsView, HashtagsListView, PostShareView, ProfileGalleryView, UpdateGalleryOrderView,
     ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView,SavedPostsListAPIView, SavePostAPIView,GlobalSearchAPIView, SearchProfilesView,
-    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView
+    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView, CommentUpdateAPIView
     )
 
 
@@ -31,6 +31,7 @@ urlpatterns = [
     path('comment/reply/<int:comment_id>/', CommentReplyView.as_view(), name='comment-reply'),
     path('hidden-comments/', MyHiddenCommentsAPIView.as_view(), name='hidden-comments'),
     path('update-comment-visibility/<int:comment_id>/', UpdateCommentVisibilityAPIView.as_view(), name='update-comment-visibility'),
+    path('comments/<int:pk>/update/', CommentUpdateAPIView.as_view(), name="comment-update"),
 
 
     path('posts/latest/', LatestPostsAPIView.as_view(), name='latest-posts'),
