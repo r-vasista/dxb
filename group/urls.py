@@ -9,7 +9,7 @@ from group.views import (
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView, PublicGroupMemberListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
-    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView
+    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView
 )
 
 urlpatterns = [
@@ -35,6 +35,7 @@ urlpatterns = [
     path('group-requests/<int:group_id>/', GroupJoinRequestListAPIView.as_view(), name='group-requests'),
     path('respond-request/<int:group_id>/<int:request_id>/', GroupJoinRequestActionAPIView.as_view(), name='respond-requests'),
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
+    path('leave-group/<int:group_id>/', LeaveGroupAPIView.as_view(), name="leave-group"),
     path('group-member-detail/<int:id>/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),

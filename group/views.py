@@ -1477,3 +1477,46 @@ class CreatedGroupsAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=400)
+
+
+class LeaveGroupAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        try:
+            profile = request.user.profile
+            group = Group.objects.get(id=group_id)
+
+            # Check if member exists
+            try:
+                membership = GroupMember.objects.get(profile=profile, group=group)
+            except GroupMember.DoesNotExist:
+                return Response(
+                    error_response("You are not a member of this group."),
+                    status=400
+                )
+
+            # Prevent group creator from leaving
+            if group.creator == profile:
+                return Response(
+                    error_response("Group creator cannot leave the group."),
+                    status=400
+                )
+
+            # Delete membership
+            membership.delete()
+
+            # Decrement member count safely
+            if group.member_count > 0:
+                group.member_count -= 1
+                group.save(update_fields=["member_count"])
+
+            return Response(
+                success_response({"message": f"You have left the group '{group.name}'."}),
+                status=200
+            )
+
+        except Group.DoesNotExist:
+            return Response(error_response("Group not found."), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=400)
