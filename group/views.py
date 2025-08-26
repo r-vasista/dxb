@@ -28,7 +28,7 @@ from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
     GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer, 
-    GroupSearchSerializer,GroupSuggestionSerializer
+    GroupSearchSerializer,GroupSuggestionSerializer, BasicGroupDetailSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin, IsGroupMember
@@ -1451,3 +1451,25 @@ class PublicGroupMemberListAPIView(APIView):
             return Response(error_response("Group not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CreatedGroupsAPIView(APIView, PaginationMixin):
+    """
+    GET /api/groups/my-created/
+    Returns list of groups created by the logged-in profile
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, profile_id):
+        try:
+            profile = get_object_or_404(Profile, id=profile_id)
+            groups = Group.objects.filter(creator=profile).prefetch_related("tags")
+            
+            paginated_qs = self.paginate_queryset(groups, request)
+            serializer = BasicGroupDetailSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=400)

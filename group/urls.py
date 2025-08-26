@@ -9,7 +9,7 @@ from group.views import (
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView, PublicGroupMemberListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
-    GroupsFeedAPIView, GroupSuggestionAPIView
+    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView
 )
 
 urlpatterns = [
@@ -19,7 +19,8 @@ urlpatterns = [
     path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
     path('delete-group/<int:group_id>/', GroupDeleteAPIView.as_view(), name='delete-group'),
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
-    path('group-details/<slug:slug>/', GroupDetailAPIView.as_view(), name='group-details'),
+    path('group-details/<slug:slug>/', GroupDetailAPIView.as_view(), name='created-groups'),
+    path('created-groups/<int:profile_id>/', CreatedGroupsAPIView.as_view(), name='new-groups-list/'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
     path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list'),
     path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
