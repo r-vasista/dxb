@@ -645,6 +645,7 @@ class GroupMemberDetailAPIView(APIView):
             group_member.delete()
             log_group_action(group, member, GroupAction.MEMBER_REMOVE, "Group member role updated")
             group.member_count = GroupMember.objects.filter(group=group).count()
+            group.save(update_fields=['member_count'])
             try:
             
                 transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='removed',sender_id=member))
@@ -964,6 +965,9 @@ class GroupJoinRequestActionAPIView(APIView):
                         group=group.chat_group,
                         profile=join_request.profile
                     )
+                    
+                    group.member_count = GroupMember.objects.filter(group=group).count()
+                    group.save(update_fields=['member_count'])
 
                     # async notification
                     transaction.on_commit(
@@ -1471,5 +1475,48 @@ class CreatedGroupsAPIView(APIView, PaginationMixin):
         
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=400)
+
+
+class LeaveGroupAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        try:
+            profile = request.user.profile
+            group = Group.objects.get(id=group_id)
+
+            # Check if member exists
+            try:
+                membership = GroupMember.objects.get(profile=profile, group=group)
+            except GroupMember.DoesNotExist:
+                return Response(
+                    error_response("You are not a member of this group."),
+                    status=400
+                )
+
+            # Prevent group creator from leaving
+            if group.creator == profile:
+                return Response(
+                    error_response("Group creator cannot leave the group."),
+                    status=400
+                )
+
+            # Delete membership
+            membership.delete()
+
+            # Decrement member count safely
+            if group.member_count > 0:
+                group.member_count -= 1
+                group.save(update_fields=["member_count"])
+
+            return Response(
+                success_response({"message": f"You have left the group '{group.name}'."}),
+                status=200
+            )
+
+        except Group.DoesNotExist:
+            return Response(error_response("Group not found."), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=400)
