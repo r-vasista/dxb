@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q, F, Sum
 from django.db import IntegrityError
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -33,13 +34,14 @@ from core.services import (
 )
 from profiles.models import (
     Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView,
-    ArtService, ArtServiceInquiry
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
     StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer, 
-    BasicProfileSerializer
+    BasicProfileSerializer, VerificationRequestSerializer, UserDocumentSerializer, VerificationRequestDetailSerializer,
+    VerificationRequestAdminSerializer, VerificationRequestAdminUpdateSerializer
 )
 from profiles.choices import (
     StaticFieldType, VisibilityStatus
@@ -1238,3 +1240,132 @@ class ReferredUsersAPIView(APIView, PaginationMixin):
         
         except Profile.DoesNotExist:
             return Response(error_response('Profile not found'), status=status.HTTP_404_NOT_FOUND)
+
+
+class CreateVerificationRequestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Ensure user doesn't already have a pending request
+            if VerificationRequest.objects.filter(profile=profile, status=VerificationRequest.Status.PENDING).exists():
+                return Response(error_response("You already have a pending request."),
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            verification_request = VerificationRequest.objects.create(profile=profile)
+            serializer = VerificationRequestSerializer(verification_request)
+            return Response(success_response(serializer.data, "Verification request created successfully"),
+                            status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class UploadUserDocumentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Ensure request belongs to user
+            try:
+                verification_request = VerificationRequest.objects.get(id=request_id, profile=profile)
+            except VerificationRequest.DoesNotExist:
+                return Response(error_response("Verification request not found."),
+                                status=status.HTTP_404_NOT_FOUND)
+
+            if verification_request.status != VerificationRequest.Status.PENDING:
+                return Response(error_response("Cannot upload documents to a non-pending request."),
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = UserDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(request=verification_request)
+                return Response(success_response(serializer.data, "Document uploaded successfully"),
+                                status=status.HTTP_201_CREATED)
+
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class ListVerificationRequestsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            qs = VerificationRequest.objects.filter(profile=profile).order_by("-created_at")
+
+            paginated_qs = self.paginate_queryset(qs, request)
+            serializer = VerificationRequestSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerificationRequestDetailAPIView(APIView):
+    """
+    Get details of a specific verification request along with linked documents.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id):
+        try:
+            profile = get_user_profile(request.user)
+            if not profile:
+                return Response(error_response("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch request only if it belongs to the user
+            verification_request = get_object_or_404(
+                VerificationRequest, id=request_id, profile=profile
+            )
+
+            serializer = VerificationRequestDetailSerializer(verification_request)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        
+
+class AdminVerificationRequestListAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = VerificationRequest.objects.all().order_by("-created_at")
+        paginated_qs = self.paginate_queryset(qs, request)
+        serializer = VerificationRequestAdminSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
+
+
+class AdminVerificationRequestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminSerializer(vr)
+            return Response(success_response(serializer.data))
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminVerificationRequestUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminUpdateSerializer(vr, data=request.data, context={"request": request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(serializer.data, "Verification request updated successfully"))
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+   

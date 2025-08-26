@@ -1,6 +1,7 @@
 # Django imports
 from django.db import models
 from django.db.models import Prefetch
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework import serializers
@@ -12,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 # Local imports
 from profiles.models import (
     ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection,
-    ArtService, ArtServiceInquiry
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -514,3 +515,71 @@ class BasicProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = Profile
         fields = ['id', 'username','profile_picture']
+        
+        
+class UserDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDocument
+        fields = ["id", "document_type", "file", "uploaded_at"]
+
+
+class VerificationRequestSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id", "status", "created_at", "updated_at",
+            "reviewed_at", "reviewed_by", "rejection_reason",
+            "documents"
+        ]
+
+class VerificationRequestDetailSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "documents",
+        ]
+        
+
+class VerificationRequestAdminUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VerificationRequest
+        fields = ["status", "rejection_reason"]
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        instance.status = validated_data.get("status", instance.status)
+        instance.rejection_reason = validated_data.get("rejection_reason", "")
+        instance.reviewed_by = get_user_profile(request.user)
+        instance.reviewed_at = timezone.now()
+        instance.save()
+        return instance
+
+
+class VerificationRequestAdminSerializer(serializers.ModelSerializer):
+    profile = serializers.StringRelatedField()
+    documents = serializers.StringRelatedField(many=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id",
+            "profile",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "documents",
+        ]

@@ -644,6 +644,7 @@ class GroupMemberDetailAPIView(APIView):
 
             group_member.delete()
             log_group_action(group, member, GroupAction.MEMBER_REMOVE, "Group member role updated")
+            group.member_count = GroupMember.objects.filter(group=group).count()
             try:
             
                 transaction.on_commit(lambda: send_group_join_notifications_task.delay(group.id, group_member.profile.id, action='removed',sender_id=member))
