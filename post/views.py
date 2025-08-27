@@ -43,7 +43,7 @@ from post.choices import (
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
     HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer,
-    CommentUpdateSerializer
+    CommentUpdateSerializer, PostCommentListSerializer
 )
 from post.tasks import (
     publish_scheduled_post
@@ -1236,3 +1236,53 @@ class CommentUpdateAPIView(APIView):
             return Response(error_response("Comment not found or not owned by you."), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=400)
+
+
+class ParentPostCommentListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/posts/<post_id>/comments/
+    Lists all top-level comments for a post (no nested replies, just `has_replies` flag).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+
+            comments = Comment.objects.select_related('profile').filter(
+                post=post, parent__isnull=True, is_approved=True
+            ).order_by('-created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = PostCommentListSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChildPostCommentListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/posts/<post_id>/comments/<parent_id>/replies/
+    Lists all child comments (replies) for a given parent comment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id, parent_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+
+            comments = Comment.objects.select_related('profile', 'parent').filter(
+                post=post, parent_id=parent_id, is_approved=True
+            ).order_by('created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = PostCommentListSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
