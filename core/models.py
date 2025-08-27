@@ -2,7 +2,13 @@
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
+
+from core.choices import ReportReason
+
 from ckeditor.fields import RichTextField
+
 
 class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -154,3 +160,37 @@ class FeatureStep(models.Model):
 
 class HashTag(models.Model):
     name = models.CharField(max_length=255, unique=True)
+    
+
+class Report(BaseModel):
+    from profiles.models import Profile
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    reporter = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="reports_filed",
+    )
+    reason = models.CharField(max_length=20, choices=ReportReason.choices)
+    details = models.TextField(blank=True)
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["reporter", "created_at"]),
+            models.Index(fields=["reason"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["content_type", "object_id", "reporter", "reason"],
+                name="one_report_per_reason_per_target_per_reporter",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Report({self.id}) → {self.content_type.model}#{self.object_id}"
