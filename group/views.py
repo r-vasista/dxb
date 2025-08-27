@@ -641,6 +641,9 @@ class GroupMemberDetailAPIView(APIView):
             member = request.data.get('profile')
 
             group_member = get_object_or_404(GroupMember, profile=member, group=group)
+            
+            if group_member.profile == group.creator:
+                return Response(error_response('Can not remove the group owner'), status=status.HTTP_403_FORBIDDEN)
 
             group_member.delete()
             log_group_action(group, member, GroupAction.MEMBER_REMOVE, "Group member role updated")
