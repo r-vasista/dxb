@@ -2,7 +2,7 @@ from django.contrib import admin
 from import_export.admin import ImportExportModelAdmin
 
 from core.models import (
-    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge,UpcomingFeature, FeatureStep, HashTag
+    EmailConfiguration, EmailTemplate, City, Country, State, WeeklyChallenge,UpcomingFeature, FeatureStep, HashTag, Report
 )
 from core.resource import (
     WeeklyChallengeResource
@@ -61,3 +61,10 @@ class HashTagAdmin(admin.ModelAdmin):
     list_display = ['id', 'name',]
     search_fields = ['id', 'name',]
     list_filter = ['id', 'name',]
+
+
+@admin.register(Report)
+class ReportAdmin(admin.ModelAdmin):
+    list_display = ['id', 'content_type','object_id', 'reporter', 'reason']
+    search_fields = ['id', 'content_type','object_id', 'reporter', 'reason']
+    list_filter = ['id', 'content_type','object_id', 'reporter', 'reason']
