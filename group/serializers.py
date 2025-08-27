@@ -30,6 +30,7 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()
     join_request_status = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -58,6 +59,16 @@ class GroupDetailSerializer(serializers.ModelSerializer):
                     }
             except GroupJoinRequest.DoesNotExist:
                 pass
+        return None
+    
+    def get_is_owner(self, obj):
+        """Show role if user is authenticated and is a member."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                return obj.creator == request.user.profile
+            except:
+                return None
         return None
 
     
