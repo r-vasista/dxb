@@ -241,3 +241,26 @@ class CommentUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Comment
         fields = ["content"]
+        
+
+class PostCommentListSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    has_replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = [
+            'id', 'post', 'profile', 'content', 'parent',
+            'created_at', 'has_replies'
+        ]
+        read_only_fields = fields
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_has_replies(self, obj):
+        return obj.replies.filter(is_approved=True).exists()

@@ -4,7 +4,7 @@ from post.views import (
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView,
     TrendingPostsAPIView, HashtagPostsView, HashtagsListView, PostShareView, ProfileGalleryView, UpdateGalleryOrderView,
     ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView,SavedPostsListAPIView, SavePostAPIView,GlobalSearchAPIView, SearchProfilesView,
-    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView, CommentUpdateAPIView
+    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView, CommentUpdateAPIView, ParentPostCommentListAPIView, ChildPostCommentListAPIView
     )
 
 
@@ -27,6 +27,8 @@ urlpatterns = [
     path('posts-comments/<int:post_id>/', CommentView.as_view(), name='post-comments'),
     path('comments-like/<int:comment_id>/', CommentLikeToggleView.as_view(), name='comment-like-toggle'),
     path('comment/<int:comment_id>/', CommentDetailView.as_view(), name='comment-detail'),
+    path('parent-comments/<int:post_id>/', ParentPostCommentListAPIView.as_view(), name='post-parent-comments'),
+    path('child-comments/post/<int:post_id>/parent/<int:parent_id>/', ChildPostCommentListAPIView.as_view(), name='post-child-comments'),
     path('comment/replies/<int:comment_id>/', CommentReplyListView.as_view(), name='comment-replies'),
     path('comment/reply/<int:comment_id>/', CommentReplyView.as_view(), name='comment-reply'),
     path('hidden-comments/', MyHiddenCommentsAPIView.as_view(), name='hidden-comments'),
