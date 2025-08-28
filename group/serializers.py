@@ -4,7 +4,7 @@ from rest_framework import serializers
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
-     GroupActionLog
+     GroupActionLog, GroupActionLog
 )
 from group.choices import (
     RoleChoices
