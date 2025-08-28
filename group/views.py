@@ -1040,7 +1040,8 @@ class DeleteGroupPostCommentAPIView(APIView):
             comment = get_object_or_404(GroupPostComment, id=comment_id)
 
             profile = get_user_profile(request.user)
-            if comment.profile != profile:
+            post_owner = comment.group_post.profile
+            if comment.profile != profile and post_owner != profile:
                 return Response(
                     error_response("You do not have permission to delete this comment."),
                     status=status.HTTP_403_FORBIDDEN
