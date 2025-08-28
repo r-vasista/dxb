@@ -172,6 +172,30 @@ class GroupDeleteAPIView(APIView):
             return Response(success_response({"message": "Group deleted successfully."}), status=status.HTTP_200_OK)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+class GroupDeleteAPIView(APIView):
+    permission_classes = [IsAuthenticated, IsGroupAdmin]
+
+    def get_object(self, group_id):
+        try:
+            group = Group.objects.get(id=group_id)
+            self.check_object_permissions(self.request, group)
+            return group
+        except Group.DoesNotExist:
+            return None
+        
+    def delete(self, request, group_id):
+        group = self.get_object(group_id)
+        if not group:
+            return Response(error_response("Group not found."), status=status.HTTP_404_NOT_FOUND)
+
+        try:
+            with transaction.atomic():
+                log_group_action(group, get_user_profile(request.user), GroupAction.DELETE, "Group deleted by user")
+                group.delete()
+            return Response(success_response({"message": "Group deleted successfully."}), status=status.HTTP_200_OK)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class GroupDetailAPIView(APIView):
@@ -1031,6 +1055,9 @@ class UpdateGroupPostCommentAPIView(APIView):
 
 class DeleteGroupPostCommentAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    """
+        comment owner and post owner can delete this comment
+    """
 
     def delete(self, request, comment_id):
         """
@@ -1040,7 +1067,8 @@ class DeleteGroupPostCommentAPIView(APIView):
             comment = get_object_or_404(GroupPostComment, id=comment_id)
 
             profile = get_user_profile(request.user)
-            if comment.profile != profile:
+            post_owner = comment.group_post.profile
+            if comment.profile != profile and post_owner != profile:
                 return Response(
                     error_response("You do not have permission to delete this comment."),
                     status=status.HTTP_403_FORBIDDEN
