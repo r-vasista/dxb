@@ -19,9 +19,10 @@ from core.pagination import PaginationMixin
 from datetime import timedelta
 from django.utils.timezone import now
 
+from group.choices import RoleChoices
 from user.models import CustomUser
 from group.models import Group,GroupMember,GroupActionLog,GroupPost,GroupPostComment,GroupJoinRequest
-from event.models import Event, EventAttendance,EventMedia, EventComment
+from event.models import Event, EventAttendance,EventMedia, EventComment, EventMediaComment
 
 from post.models import Post, PostStatus, PostVisibility
 from profiles.models import Profile
@@ -732,23 +733,40 @@ class SuperAdminBanMemberView(APIView):
             return Response(error_response("Member not found"), status=404)
 
 class SuperAdminChangeRoleView(APIView):
-    permission_classes = [AllowAny]
+    permission_classes = [AllowAny]  
 
-    def post(self, request, member_id):
+    def patch(self, request, id):   # keep <int:id> consistent with URL
         try:
             new_role = request.data.get("role")
-            member = GroupMember.objects.get(id=member_id)
+            if not new_role:
+                return Response(error_response("Role is required"), status=400)
+
+            # ✅ Validate role
+            if new_role not in dict(RoleChoices.choices):
+                return Response(error_response("Invalid role"), status=400)
+
+            member = GroupMember.objects.get(id=id)
             member.role = new_role
             member.save()
 
             GroupActionLog.objects.create(
-                group=member.group, profile=request.user.profile,
-                group_member=member, action="change_role",
-                description=f"Changed {member.profile.username} to {new_role}"
+                group=member.group,
+                profile=getattr(request.user, "profile", None),
+                group_member=member,
+                action="change_role",
+                description=f"SuperAdmin changed {member.profile.username}'s role to {new_role}"
             )
-            return Response(success_response({"role": new_role}))
+
+            return Response(success_response({
+                "member_id": member.id,
+                "username": member.profile.username,
+                "new_role": new_role
+            }))
+
         except GroupMember.DoesNotExist:
-            return Response(error_response("Member not found"), status=404)
+            return Response(error_response("Group member not found"), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
 
 class SuperAdminDeletePostView(APIView):
     permission_classes = [AllowAny]
@@ -863,10 +881,10 @@ class SuperAdminDeleteEventCommentView(APIView):
 
     def delete(self, request, id):
         try:
-            comment = EventComment.objects.get(id=id)
+            comment = EventMediaComment.objects.get(id=id)
             comment.delete()
             return Response({"status": True, "message": "Comment deleted successfully"})
-        except EventComment.DoesNotExist:
+        except EventMediaComment.DoesNotExist:
             return Response({"status": False, "message": "Comment not found"}, status=status.HTTP_404_NOT_FOUND)
 
 
