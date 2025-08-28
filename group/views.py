@@ -1031,6 +1031,9 @@ class UpdateGroupPostCommentAPIView(APIView):
 
 class DeleteGroupPostCommentAPIView(APIView):
     permission_classes = [IsAuthenticated]
+    """
+        comment owner and post owner can delete this comment
+    """
 
     def delete(self, request, comment_id):
         """
