@@ -17,3 +17,10 @@ class PermissionScope(models.TextChoices):
     GLOBAL = 'global', 'Global'
     ORGANIZATION = 'organization', 'Organization'
     ADMIN = 'admin', 'System Admin'
+    
+
+class ProviderChoices(models.TextChoices):
+    """
+    Choices for scope of the permissions
+    """
+    GOOGLE = 'google', 'Google'

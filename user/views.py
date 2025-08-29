@@ -18,10 +18,10 @@ from django.shortcuts import get_object_or_404
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 # Local imports
-from core.services import success_response, error_response
-from user.models import Role, Permission, UserType, UserLog
+from core.services import success_response, error_response, get_user_profile
+from user.models import Role, Permission, UserType, UserLog, SocialAccount, CustomUser
 from user.serializers import RoleSerializer, PermissionSerializer, CustomTokenObtainPairSerializer, UserSerializer
-from user.choices import PermissionScope
+from user.choices import PermissionScope, ProviderChoices
 from user.utils import get_client_ip, generate_registration_token, verify_registration_token
 
 from organization.serializers import RegisterOrganizationSerializer, AddressSerializer
@@ -37,6 +37,12 @@ from profiles.choices import (
 )
 from profiles.utils import (
     validate_username_format
+)
+from user.helpers import (
+    verify_google_id_token, GoogleTokenError
+)
+from user.utils import (
+    generate_unique_username, ensure_role, get_or_create_user_type
 )
 
 from notification.task import send_welcome_email_task
@@ -357,3 +363,101 @@ class PermissionListView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GoogleLoginAPIView(APIView):
+    permission_classes = [AllowAny]
+
+    @transaction.atomic
+    def post(self, request):
+        """
+        Expected: { "id_token": "<google-id-token>", "latitude"?, "longitude"?, "timezone"? }
+        """
+        id_tok = request.data.get("id_token")
+        if not id_tok:
+            return Response(error_response("id_token is required"), status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            payload = verify_google_id_token(id_tok)
+            email = (payload.get("email") or "").lower().strip()
+            name = payload.get("name") or ""
+            sub = payload.get("sub")  # Google stable user id
+            picture = payload.get("picture")
+
+            if not email:
+                return Response(error_response("Email missing in Google token."), status=status.HTTP_400_BAD_REQUEST)
+
+            # Optional location/timezone inputs
+            ip = get_client_ip(request)
+            lat = request.data.get('latitude')
+            lon = request.data.get('longitude')
+            tz = request.data.get('timezone', 'UTC')
+
+            # Find existing via SocialAccount (preferred)
+            user = None
+            try:
+                social = SocialAccount.objects.select_related("user").get(provider=ProviderChoices.GOOGLE, uid=sub)
+                user = social.user
+            except Exception as e:
+                # Fallback by email (first sign-in or no SocialAccount yet)
+                user = CustomUser.objects.filter(email=email).first()
+
+            created = False
+            if user is None:
+                # Create new user
+                user_type_obj = get_or_create_user_type(code="user", name="user")
+                user = CustomUser(
+                    email=email,
+                    user_type=user_type_obj,
+                    full_name=name or email.split("@")[0],
+                    timezone=tz,
+                    is_active=True,
+                    provider=ProviderChoices.GOOGLE
+                )
+                user.set_unusable_password()
+                user.save()
+                ensure_role(user, "user")
+                created = True
+
+            # # If SocialAccount doesn’t exist, create it now (bind Google sub to this user)
+            if 'SocialAccount' in globals():
+                SocialAccount.objects.get_or_create(
+                    provider=ProviderChoices.GOOGLE,
+                    uid=sub,
+                    defaults={"user": user, "email": email, "extra_data": {"picture": picture}},
+                )
+
+            # Ensure Profile exists (user profile path)
+            profile = get_user_profile(user)
+            if profile is None:
+                username = generate_unique_username(name, email)
+                profile = Profile.objects.create(
+                    user=user,
+                    profile_type=ProfileType.USER,
+                    username=username,
+                )
+
+            # Log sign-in
+            UserLog.objects.create(
+                user=user,
+                ip_address=ip,
+                latitude=lat,
+                longitude=lon,
+                timezone=tz
+            )
+
+            # Return SimpleJWT tokens (same shape as your normal login)
+            refresh = RefreshToken.for_user(user)
+            data = {
+                "access": str(refresh.access_token),
+                "refresh": str(refresh),
+                "profile_type": profile.profile_type,
+                "profile_id": profile.id
+            }
+            http_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+            return Response(success_response(data), status=http_status)
+
+        except GoogleTokenError as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(error_response(f"Google login failed: {e}"), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

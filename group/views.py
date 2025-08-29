@@ -1,3 +1,6 @@
+# Py imports
+from itertools import chain
+
 # Rest Framework imports
 from django.http import Http404
 from rest_framework.views import APIView
@@ -260,31 +263,32 @@ class GroupListAPIView(APIView, PaginationMixin):
 
             posts_qs = GroupPost.objects.select_related('profile').filter(group=group)
 
-            # Optional filter for is_pinned
-            is_pinned = request.query_params.get('is_pinned')
-            if is_pinned is not None:
-                posts_qs = posts_qs.filter(is_pinned=is_pinned.lower() == 'true')
+            # Active announcements (sorted by created_at desc)
+            announcements_qs = posts_qs.filter(
+                is_announcement=True,
+                announcement_expiry__gte=timezone.now()
+            ).order_by('-created_at')
 
-            # Get pinned posts separately
-            pinned_qs = posts_qs.filter(is_pinned=True).exclude(pinned_at__lt=timezone.now() - timedelta(days=10)).order_by('-created_at')
-            pinned_data = GroupPostSerializer(pinned_qs, many=True, context={'request': request}).data
+            # Normal posts (excluding active announcements)
+            normal_posts_qs = posts_qs.exclude(
+                id__in=announcements_qs.values_list('id', flat=True)
+            ).order_by('-created_at')
 
-            # Paginate ALL posts (pinned + normal)
-            all_posts_qs = posts_qs.order_by('-is_pinned', '-created_at')
-            paginated_posts = self.paginate_queryset(all_posts_qs, request)
-            serialized_posts = GroupPostSerializer(paginated_posts, many=True, context={'request': request}).data
+            # Chain both → announcements first, then normal posts
+            combined_qs = list(chain(announcements_qs, normal_posts_qs))
 
-            # Get default paginated response and inject pinned
-            paginated_response = self.get_paginated_response(serialized_posts)
-            paginated_response.data['pinned'] = pinned_data
+            # Paginate the combined queryset
+            paginated_posts = self.paginate_queryset(combined_qs, request)
+            serialized_posts = GroupPostSerializer(
+                paginated_posts, many=True, context={'request': request}
+            ).data
 
-            return paginated_response
+            return self.get_paginated_response(serialized_posts)
 
         except Group.DoesNotExist:
             return Response(error_response("Group Not Found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-
 
       
 

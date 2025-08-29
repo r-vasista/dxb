@@ -331,3 +331,13 @@ CHANNEL_LAYERS = {
         },
     },
 }
+
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# Google oauth client
+GOOGLE_OAUTH = {
+    "CLIENT_IDS": [GOOGLE_CLIENT_ID],
+    # "HOSTED_DOMAINS": [],
+    # Acceptable issuers per Google docs:
+    "ISSUERS": ["accounts.google.com", "https://accounts.google.com"],
+}

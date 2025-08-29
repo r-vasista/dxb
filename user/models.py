@@ -9,7 +9,7 @@ from django.contrib.contenttypes.fields import GenericRelation
 # Local imports
 from user.manager import CustomUserManager
 from core.models import BaseModel, BaseTypeModel
-from user.choices import PermissionType, PermissionScope
+from user.choices import PermissionType, PermissionScope, ProviderChoices
 
 # Python imports 
 import pytz
@@ -79,6 +79,7 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     last_login = models.DateTimeField(blank=True, null=True)
     full_name = models.CharField(max_length=200, blank=True, null=True)
     timezone = models.CharField(max_length=50, choices=[(tz, tz) for tz in pytz.all_timezones], default='UTC')
+    provider = models.CharField(max_length=20, choices=ProviderChoices.choices, blank=True, null=True)
 
     roles = models.ManyToManyField(Role, related_name='custom_users')
     custom_permissions = models.ManyToManyField(Permission, blank=True, related_name='custom_users')
@@ -119,3 +120,15 @@ class UserLog(models.Model):
 
     def __str__(self):
         return f"{self.user.email} logged in at {self.login_time}"
+
+
+class SocialAccount(models.Model):
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE, related_name="social_accounts")
+    provider = models.CharField(max_length=20, choices=ProviderChoices.choices)
+    uid = models.CharField(max_length=255, unique=True)  # Google "sub"
+    email = models.EmailField(blank=True, null=True)
+    extra_data = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        unique_together = [("provider", "uid")]

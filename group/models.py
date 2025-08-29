@@ -75,6 +75,7 @@ class GroupPost(BaseModel):
     is_pinned = models.BooleanField(default=False)
     pinned_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
+    announcement_expiry = models.DateTimeField(null=True, blank=True)
     likes_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
     share_count = models.PositiveIntegerField(default=0)

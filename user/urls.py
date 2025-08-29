@@ -1,6 +1,8 @@
 from django.urls import path
 
-from user.views import LoginView, RoleView, GlobalRoleView, PermissionListView, RegisterAccountAPIView, VerifyRegisterOTPIView
+from user.views import (
+    LoginView, RoleView, GlobalRoleView, PermissionListView, RegisterAccountAPIView, VerifyRegisterOTPIView, GoogleLoginAPIView
+)
 
 urlpatterns = [
     path('registration/', RegisterAccountAPIView.as_view(), name='registration'),
@@ -10,4 +12,5 @@ urlpatterns = [
     path('role/<int:pk>/', RoleView.as_view(), name='role-update'),
     path('roles/global/', GlobalRoleView.as_view(), name='global-role-list-detail'),
     path('permissions-list/', PermissionListView.as_view(), name='permissions-list'),
+    path('auth/google/', GoogleLoginAPIView.as_view(), name="google-login"),
 ]
