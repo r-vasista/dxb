@@ -72,7 +72,7 @@ class GroupDetailSerializer(serializers.ModelSerializer):
         return None
 
     
-class GroupPostSerializer(serializers.ModelSerializer):
+class  GroupPostSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
     tags = HashTagSerializer(many=True, read_only=True)
     comments_count = serializers.SerializerMethodField()
@@ -80,7 +80,7 @@ class GroupPostSerializer(serializers.ModelSerializer):
         model = GroupPost
         fields = [
             'id', 'group', 'profile', 'content', 'media_file', 'tags',
-            'is_pinned', 'is_announcement', 'likes_count','pinned_at',
+            'is_announcement', 'announcement_expiry', 'likes_count',
             'comments_count', 'share_count', 'is_flagged', 'flag_count',
             'slug'
         ]
