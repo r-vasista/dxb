@@ -1,6 +1,9 @@
 # Rest Framework imports
 from rest_framework import serializers
 
+#Django imports 
+from django.utils import timezone
+
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
@@ -9,10 +12,17 @@ from group.models import (
 from group.choices import (
     RoleChoices
 )
+from group.utils import (
+    handle_grouppost_hashtags
+)
 from profiles.serializers import (
     BasicProfileSerializer
 )
 from core.serializers import HashTagSerializer
+from core.services import get_user_profile
+from core.models import (
+    HashTag
+)
 
 class GroupCreateSerializer(serializers.ModelSerializer):
     
@@ -286,3 +296,60 @@ class BasicGroupDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Group
         fields = ['id', 'name', 'slug', 'cover_image', 'logo']
+        
+
+class GroupPostUpdateSerializer(serializers.ModelSerializer):
+    tags = serializers.PrimaryKeyRelatedField(
+        queryset=HashTag.objects.all(), many=True, required=False
+    )
+
+    class Meta:
+        model = GroupPost
+        fields = ['content', 'tags', 'is_pinned', 'is_announcement', 'announcement_expiry']
+        
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        profile = get_user_profile(request.user)
+
+        # Tags
+        if "tags" in validated_data:
+            tags = validated_data.pop("tags", [])
+            instance.tags.set(tags)
+
+        # Handle pinning logic
+        if "is_pinned" in validated_data:
+            pin_requested = validated_data.pop("is_pinned")
+            group_member = GroupMember.objects.filter(
+                group=instance.group, profile=profile, is_banned=False
+            ).first()
+            allowed_roles = [RoleChoices.ADMIN, RoleChoices.MODERATOR]
+            is_privileged = group_member and group_member.role in allowed_roles
+
+            if not is_privileged:
+                raise serializers.ValidationError("Only admins/moderators can pin posts.")
+
+            if pin_requested:
+                if not instance.is_pinned or instance.is_pin_expired():
+                    instance.is_pinned = True
+                    instance.pinned_at = timezone.now()
+                else:
+                    raise serializers.ValidationError("Post is already pinned and not expired.")
+            else:
+                instance.is_pinned = False
+                instance.pinned_at = None
+
+        if "is_announcement" in validated_data:
+            instance.is_announcement = validated_data["is_announcement"]
+
+        if "announcement_expiry" in validated_data:
+            instance.announcement_expiry = validated_data["announcement_expiry"]
+
+        # Content update
+        instance.content = validated_data.get("content", instance.content)
+
+        instance.save()
+
+        # Handle hashtags
+        handle_grouppost_hashtags(instance)
+
+        return instance
