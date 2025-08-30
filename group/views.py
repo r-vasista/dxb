@@ -31,7 +31,7 @@ from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
     GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer, 
-    GroupSearchSerializer,GroupSuggestionSerializer, BasicGroupDetailSerializer
+    GroupSearchSerializer,GroupSuggestionSerializer, BasicGroupDetailSerializer, GroupPostUpdateSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin, IsGroupMember
@@ -338,64 +338,40 @@ class  GroupPostDetailAPIView(APIView):
             post = GroupPost.objects.select_related("group").get(id=post_id)
             profile = get_user_profile(request.user)
 
-            # Only allow author or admin/moderator
+            # Only allow author or privileged roles
             is_author = post.profile == profile
             group_member = GroupMember.objects.filter(
-                group=post.group, profile=profile, is_banned=False).first()
+                group=post.group, profile=profile, is_banned=False
+            ).first()
             allowed_roles = [RoleChoices.ADMIN, RoleChoices.MODERATOR]
             is_privileged = group_member and group_member.role in allowed_roles
 
-            if not (is_author or is_privileged):return Response(error_response("You do not have permission to update this post."),
-                    status=status.HTTP_403_FORBIDDEN,)
+            if not (is_author or is_privileged):
+                return Response(
+                    error_response("You do not have permission to update this post."),
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
-            data = request.data.copy()
-            
-            updated = False
-
-            if "content" in data:
-                post.content = data["content"]
-                updated = True
-
-            if "tags" in data:
-                tag_ids = data.getlist("tags") if hasattr(data, "getlist") else data["tags"]
-                post.tags.set(tag_ids)
-                updated = True
-            handle_grouppost_hashtags(post)  # Define this as shown below.
-            if "is_pinned" in data:
-                if is_privileged:
-                    pin_requested = str(data["is_pinned"]).lower() in ["true", "1", "yes"]
-
-                    if pin_requested:
-                        if not post.is_pinned or post.is_pin_expired():
-                            post.is_pinned = True
-                            post.pinned_at = timezone.now()
-                            updated = True
-                        else:
-                            return Response(
-                                error_response("Post is already pinned and has not expired."),
-                                status=status.HTTP_400_BAD_REQUEST,
-                            )
-                    else:
-                        post.is_pinned = False
-                        post.pinned_at = None
-                        updated = True
-                else:
-                    return Response(
-                        error_response("Only admins/moderators can pin posts."),
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-            if updated:
-                post.save()
-            log_group_action(post.group, profile, GroupAction.POST_UPDATE, "Group post updated by user", group_post=post)
-            increment_group_member_activity(profile, post.group, points=3)
-
-            serializer = GroupPostSerializer(post)
-            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+            serializer = GroupPostUpdateSerializer(
+                post, data=request.data, partial=True, context={"request": request}
+            )
+            if serializer.is_valid():
+                post = serializer.save()
+                log_group_action(
+                    post.group, profile, GroupAction.POST_UPDATE,
+                    "Group post updated by user", group_post=post
+                )
+                increment_group_member_activity(profile, post.group, points=3)
+                return Response(
+                    success_response(GroupPostSerializer(post).data),
+                    status=status.HTTP_200_OK
+                )
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
         except GroupPost.DoesNotExist:
             return Response(error_response("Group post not found."), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)       
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)   
         
 
 class CreateGroupPostCommentAPIView(APIView):
