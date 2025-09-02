@@ -1,6 +1,6 @@
 from django.contrib import admin
 from post.models import (
-    Post, PostMedia, Hashtag, PostReaction, Comment, CommentLike, ArtType, PostView
+    Post, PostMedia, PostReaction, Comment, CommentLike, ArtType, PostView
 )
 
 @admin.register(Post)
@@ -11,13 +11,6 @@ class PostAdmin(admin.ModelAdmin):
 @admin.register(PostMedia)
 class PostMediaAdmin(admin.ModelAdmin):
     list_display = ['id', 'post', 'media_type', 'file']
-
-
-@admin.register(Hashtag)
-class HashtagAdmin(admin.ModelAdmin):
-    list_display = ['id', 'name']
-    search_fields = ['id', 'name']
-    list_filter = ['id', 'name']
 
 
 @admin.register(PostReaction)

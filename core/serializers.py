@@ -111,6 +111,7 @@ class UpcomingFeatureSerializer(serializers.ModelSerializer):
         fields = ['id', 'title', 'description', 'status', 'steps', 'created_at']
 
 class HashTagSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(source="display_name", read_only=True)
     class Meta:
         model = HashTag
         fields = ['name'] 

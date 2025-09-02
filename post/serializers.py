@@ -3,9 +3,8 @@ from rest_framework import serializers
 
 # Local imports
 from post.models import (
-    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SavedPost, SharePost, ArtType, CustomArtType
+    Post, PostMedia, PostReaction, Comment, CommentLike, SavedPost, SharePost, ArtType, CustomArtType
 )
-
 from post.utils import extract_mentions
 from profiles.models import Profile
 from profiles.serializers import ProfileSerializer
@@ -13,6 +12,7 @@ from profiles.choices import VisibilityStatus
 from post.choices import PostVisibility
 from core.serializers import TimezoneAwareSerializerMixin
 from core.services import get_user_profile
+from core.models import HashTag
 
 class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -201,7 +201,7 @@ class HashtagSerializer(serializers.ModelSerializer):
     """
     
     class Meta:
-        model = Hashtag
+        model = HashTag
         fields = ['name']
 
 

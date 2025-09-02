@@ -35,7 +35,7 @@ from profiles.models import (
 from profiles.serializers import ProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag, SharePost, ArtType
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, HashTag, SharePost, ArtType
 )
 from post.choices import (
     PostStatus,PostVisibility
@@ -697,7 +697,7 @@ class HashtagPostsView(APIView, PaginationMixin):
     """
     def get(self, request, hashtag_name):
         try:
-            hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
+            hashtag = get_object_or_404(HashTag, name=hashtag_name.lower())
 
             visibility_filter = get_post_visibility_filter(request.user)
 
@@ -723,9 +723,12 @@ class HashtagsListView(APIView, PaginationMixin):
         try:
             search_query = request.query_params.get('search', '').strip()
             
-            hashtags = Hashtag.objects.all()
+            hashtags = HashTag.objects.all()
             if search_query:
-                hashtags = hashtags.filter(name__icontains=search_query)
+                hashtags = hashtags.filter(
+                Q(name__icontains=search_query.lower()) |
+                Q(display_name__icontains=search_query)
+            )
 
             paginated_queryset = self.paginate_queryset(hashtags, request)
             serializer = HashtagSerializer(paginated_queryset, many=True, context={'request': request})
@@ -1104,9 +1107,12 @@ class GlobalSearchAPIView(APIView, PaginationMixin):
 
             # --- HASHTAGS ---
             if search_type in ['hashtag', 'all']:
-                hashtags = Hashtag.objects.all()
+                hashtags = HashTag.objects.all()
                 if search:
-                    hashtags = hashtags.filter(name__icontains=search)
+                    hashtags = hashtags.filter(
+                            Q(name__icontains=search.lower()) |
+                            Q(display_name__icontains=search)
+                        )
 
                 paginated_hashtags = self.paginate_queryset(hashtags.order_by('-id'), request)
                 data['hashtags'] = HashtagSerializer(paginated_hashtags, many=True, context={'request': request}).data
