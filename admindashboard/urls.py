@@ -1,9 +1,14 @@
 from django.urls import path
 from admindashboard.views import (
     UserStatsView, GroupStatsView, EventStatsView, PostStatsView, ProfileStatsView, NotificationStatsView,
-    ProfileAnalyticsView,ProfileFilterOptionsView , PostAnalyticsView, PostFilterOptionsView, GroupAnalyticsView, GroupFilterOptionsView,
-    EventAnalyticsView, EventFilterOptionsView, SuperAdminBanMemberView, SuperAdminChangeRoleView, SuperAdminDeletePostView,
-    SuperAdminDeleteCommentView, SuperAdminJoinRequestApiview , SuperAdminEditEventView , SuperAdminDeleteEventView ,SuperAdminDeleteEventCommentView, SuperAdminDeleteEventMediaView
+    ProfileAnalyticsView,ProfileFilterOptionsView , PostAnalyticsView, PostFilterOptionsView, GroupAnalyticsView, 
+    GroupFilterOptionsView,
+    EventAnalyticsView, EventFilterOptionsView, SuperAdminBanMemberView, SuperAdminChangeRoleView, SuperAdminDeleteGroupPostView,
+    SuperAdminDeleteCommentView, SuperAdminJoinRequestApiview , SuperAdminEditEventView , SuperAdminDeleteEventView ,
+    SuperAdminDeleteEventCommentView, SuperAdminDeleteEventMediaView,
+
+    SuperAdminEditPostView,SuperAdminDeletePostView,SuperAdminEditCommentView,SuperAdminDeletePostCommentView,
+    SuperAdminDeleteSharePostView,SuperAdminDeleteMentionView
 )
 
 urlpatterns = [
@@ -32,7 +37,7 @@ urlpatterns = [
     #admin Group Actions
     path("groups/members/<int:id>/ban",SuperAdminBanMemberView.as_view(),name="ban-group-member"),
     path("groups/members/<int:id>/role/",SuperAdminChangeRoleView.as_view(),name="ban-group-member"),
-    path("groups/posts/<int:id>/delete/",SuperAdminDeletePostView.as_view(),name="admin-group-post-delete"),
+    path("groups/posts/<int:id>/delete/",SuperAdminDeleteGroupPostView.as_view(),name="admin-group-post-delete"),
     path("groups/comments/<int:id>/delete/",SuperAdminDeleteCommentView.as_view(),name="admin-group-comment-delete"),
     path("groups/join-requests/<int:id>/",SuperAdminJoinRequestApiview.as_view(),name="admin-group-join-request"),
 
@@ -41,6 +46,14 @@ urlpatterns = [
     path("events/<int:id>/delete/", SuperAdminDeleteEventView.as_view(), name="admin-event-delete"),
     path("events/comments/<int:id>/delete/", SuperAdminDeleteEventCommentView.as_view(), name="admin-event-comment-delete"),
     path("events/media/<int:id>/delete/", SuperAdminDeleteEventMediaView.as_view(), name="admin-event-media-delete"),
+
+    # --- posts actions ---
+    path("posts/<int:id>/edit/", SuperAdminEditPostView.as_view(), name="admin-post-edit"),
+    path("posts/<int:id>/delete/", SuperAdminDeletePostView.as_view(), name="admin-post-delete"),
+    path("posts/comments/<int:id>/edit/", SuperAdminEditCommentView.as_view(), name="admin-post-comment-edit"),
+    path("posts/comments/<int:id>/delete/", SuperAdminDeletePostCommentView.as_view(), name="admin-post-comment-delete"),
+    path("posts/shared/<int:id>/delete/", SuperAdminDeleteSharePostView.as_view(), name="admin-shared-post-delete"),
+    path("posts/mentions/<int:id>/delete/", SuperAdminDeleteMentionView.as_view(), name="admin-post-mention-delete"),
 
     
 ]
