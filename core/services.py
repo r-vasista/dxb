@@ -3,9 +3,10 @@ from django.template.loader import render_to_string
 from django.template.exceptions import TemplateDoesNotExist, TemplateSyntaxError
 from django.conf import settings
 from django.template import Template, Context
+from django.db.models import F
 
-from core.models import EmailTemplate, EmailConfiguration
-from post.models import Hashtag, ArtType
+from core.models import EmailTemplate, EmailConfiguration, HashTag, HashTagVariant
+from post.models import ArtType
 
 
 import re
@@ -117,7 +118,19 @@ def handle_hashtags(post):
     post.hashtags.clear()
 
     for tag in hashtags:
-        hashtag_obj, created = Hashtag.objects.get_or_create(name=tag.lower())
+        normalized = tag.lower().strip()
+
+        # create/get main hashtag
+        hashtag_obj, created = HashTag.objects.get_or_create(name=normalized)
+
+        # track the display variant (e.g., "SuperHuman")
+        variant_obj, created = HashTagVariant.objects.get_or_create(
+            hashtag=hashtag_obj,
+            display_name=tag
+        )
+        variant_obj.usage_count = F('usage_count') + 1
+        variant_obj.save(update_fields=['usage_count'])
+
         post.hashtags.add(hashtag_obj)
 
 def get_actual_user(obj):

@@ -121,6 +121,17 @@ class RegisterAccountAPIView(APIView):
                 return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
+                referrer_profile = None
+                if referral_code:
+                    referrer_profile = Profile.objects.filter(
+                        referral_code=referral_code
+                    ).first()
+                    if not referrer_profile:
+                        return Response(
+                            {"error": "Invalid referral code."},
+                            status=status.HTTP_400_BAD_REQUEST,
+                        )
+                
                 if user_type == "organization":
                     user_type_obj, _ = UserType.objects.get_or_create(code="organization", defaults={"name": "Organization"})
                     user_serializer = UserSerializer(data={
@@ -203,14 +214,12 @@ class RegisterAccountAPIView(APIView):
                 else:
                     raise ValueError("Invalid user_type. Must be 'organization' or 'user'.")
                 
-                if referral_code:
-                    referrer_profile = get_object_or_404(Profile, referral_code=referral_code)
+                if referrer_profile:
                     profile.referred_by = referrer_profile
                     profile.save(update_fields=["referred_by"])
-
-                    # Award points (example: 50 each)
+                    # Award points
                     referrer_profile.add_points(50)
-                    profile.add_points(50)        
+                    profile.add_points(50)     
 
                 # Log user registration as login
                 UserLog.objects.create(

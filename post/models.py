@@ -16,7 +16,7 @@ from profiles.models import (
     Profile
 )
 from core.models import (
-    Country, State, City
+    Country, State, City, HashTag
 )
 from core.utils import (
     normalize_name
@@ -80,6 +80,7 @@ class Post(BaseModel):
     caption = models.TextField(blank=True)
     art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
     custom_art_types = models.ManyToManyField(CustomArtType, related_name='custom_art_type_posts', blank=True)
+    hashtags = models.ManyToManyField(HashTag,related_name="posts",blank=True)
 
     # Slug & Status
     slug = models.SlugField(max_length=150, blank=True, unique=True)
@@ -205,21 +206,6 @@ class CommentLike(BaseModel):
 
     class Meta:
         unique_together = ['comment', 'profile']
-
-
-class Hashtag(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    posts = models.ManyToManyField('Post', related_name='hashtags', blank=True)
-    
-    class Meta:
-        indexes = [
-            models.Index(
-                fields=['name'], name='hash_tag_name_idx'
-            )
-        ]
-
-    def __str__(self):
-        return f"#{self.name}"
 
 
 class PostView(BaseModel):

@@ -159,7 +159,28 @@ class FeatureStep(models.Model):
     
 
 class HashTag(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True)
+    display_name = models.CharField(max_length=100, null=True)
+    slug = models.SlugField(max_length=120, unique=True, db_index=True)
+    
+    def __str__(self):
+        return str(self.name)
+    
+    def save(self, *args, **kwargs):
+        # Normalize name → lowercase (no spaces, no special casing issues)
+        if self.name:
+            self.name = self.name.strip().lower()
+
+        # Ensure slug is generated from normalized name
+        if not self.slug:
+            self.slug = slugify(self.name)
+
+        # Fallback: if display_name not set, keep a proper capitalized form
+        if not self.display_name:
+            # Example: "superhuman" → "Superhuman"
+            self.display_name = self.name.capitalize()
+
+        super().save(*args, **kwargs)
     
 
 class Report(BaseModel):
@@ -194,3 +215,12 @@ class Report(BaseModel):
 
     def __str__(self):
         return f"Report({self.id}) → {self.content_type.model}#{self.object_id}"
+    
+
+class HashTagVariant(BaseModel):
+    hashtag = models.ForeignKey(HashTag, on_delete=models.CASCADE, related_name="variants")
+    display_name = models.CharField(max_length=100, db_index=True)
+    usage_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("hashtag", "display_name")
