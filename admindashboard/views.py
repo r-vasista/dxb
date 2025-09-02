@@ -1,7 +1,7 @@
 # Django imports
 from django.db.models import Q
 from django.utils import timezone
-from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly,IsAdminUser
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -24,7 +24,7 @@ from user.models import CustomUser
 from group.models import Group,GroupMember,GroupActionLog,GroupPost,GroupPostComment,GroupJoinRequest
 from event.models import Event, EventAttendance,EventMedia, EventComment, EventMediaComment
 
-from post.models import Post, PostStatus, PostVisibility
+from post.models import Post, PostStatus, PostVisibility,Comment,SharePost,Mention
 from profiles.models import Profile
 
 from notification.models import Notification
@@ -768,7 +768,7 @@ class SuperAdminChangeRoleView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=500)
 
-class SuperAdminDeletePostView(APIView):
+class SuperAdminDeleteGroupPostView(APIView):
     permission_classes = [AllowAny]
 
     def delete(self, request, post_id):
@@ -899,3 +899,84 @@ class SuperAdminDeleteEventMediaView(APIView):
             return Response({"status": True, "message": "Media deleted successfully"})
         except EventMedia.DoesNotExist:
             return Response({"status": False, "message": "Media not found"}, status=status.HTTP_404_NOT_FOUND)
+
+    
+
+class SuperAdminEditPostView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, id):
+        try:
+            post = Post.objects.get(id=id)
+            for field, value in request.data.items():
+                if hasattr(post, field):
+                    setattr(post, field, value)
+            post.save()
+            return Response(success_response({"id": post.id, "message": "Post updated"}))
+        except Post.DoesNotExist:
+            return Response(error_response("Post not found"), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+    
+
+class SuperAdminDeletePostView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, id):
+        try:
+            post = Post.objects.get(id=id)
+            post.delete()
+            return Response(success_response({"id": id, "message": "Post deleted"}))
+        except Post.DoesNotExist:
+            return Response(error_response("Post not found"), status=404)
+
+
+class SuperAdminEditCommentView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def patch(self, request, id):
+        try:
+            comment = Comment.objects.get(id=id)
+            content = request.data.get("content")
+            if content:
+                comment.content = content
+                comment.save()
+            return Response(success_response({"id": id, "message": "Comment updated"}))
+        except Comment.DoesNotExist:
+            return Response(error_response("Comment not found"), status=404)
+
+
+class SuperAdminDeletePostCommentView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, id):
+        try:
+            comment = Comment.objects.get(id=id)
+            comment.delete()
+            return Response(success_response({"id": id, "message": "Comment deleted"}))
+        except Comment.DoesNotExist:
+            return Response(error_response("Comment not found"), status=404)
+        
+class SuperAdminDeleteSharePostView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, id):
+        try:
+            share = SharePost.objects.get(id=id)
+            share.delete()
+            return Response(success_response({"id": id, "message": "Shared post removed"}))
+        except SharePost.DoesNotExist:
+            return Response(error_response("Shared post not found"), status=404)
+
+
+class SuperAdminDeleteMentionView(APIView):
+    permission_classes = [IsAdminUser]
+
+    def delete(self, request, id):
+        try:
+            mention = Mention.objects.get(id=id)
+            mention.delete()
+            return Response(success_response({"id": id, "message": "Mention deleted"}))
+        except Mention.DoesNotExist:
+            return Response(error_response("Mention not found"), status=404)
+

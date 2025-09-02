@@ -38,6 +38,8 @@ urlpatterns = [
     path('leave-group/<int:group_id>/', LeaveGroupAPIView.as_view(), name="leave-group"),
     path('group-member-detail/<int:id>/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
+
+    #Group Post
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<slug:slug>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
