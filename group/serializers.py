@@ -84,12 +84,12 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     
 class  GroupPostSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
-    tags = HashTagSerializer(many=True, read_only=True)
+    hashtags = HashTagSerializer(many=True, read_only=True)
     comments_count = serializers.SerializerMethodField()
     class Meta:
         model = GroupPost
         fields = [
-            'id', 'group', 'profile', 'content', 'media_file', 'tags',
+            'id', 'group', 'profile', 'content', 'media_file', 'hashtags',
             'is_announcement', 'announcement_expiry', 'likes_count',
             'comments_count', 'share_count', 'is_flagged', 'flag_count',
             'slug'
@@ -265,7 +265,7 @@ class GroupSearchSerializer(serializers.ModelSerializer):
         model = Group
         fields = [
             'id', 'name', 'slug', 'type', 'description',
-            'tags', 'creator', 'privacy', 'logo', 'cover_image',
+            'hashtags', 'creator', 'privacy', 'logo', 'cover_image',
             'member_count', 'post_count', 'avg_engagement',
             'trending_score', 'last_activity_at', 'featured'
         ]
@@ -299,22 +299,22 @@ class BasicGroupDetailSerializer(serializers.ModelSerializer):
         
 
 class GroupPostUpdateSerializer(serializers.ModelSerializer):
-    tags = serializers.PrimaryKeyRelatedField(
+    hashtags = serializers.PrimaryKeyRelatedField(
         queryset=HashTag.objects.all(), many=True, required=False
     )
 
     class Meta:
         model = GroupPost
-        fields = ['content', 'tags', 'is_pinned', 'is_announcement', 'announcement_expiry']
+        fields = ['content', 'hashtags', 'is_pinned', 'is_announcement', 'announcement_expiry']
         
     def update(self, instance, validated_data):
         request = self.context.get("request")
         profile = get_user_profile(request.user)
 
-        # Tags
-        if "tags" in validated_data:
-            tags = validated_data.pop("tags", [])
-            instance.tags.set(tags)
+        # Hashtags
+        if "hashtags" in validated_data:
+            hashtags = validated_data.pop("hashtags", [])
+            instance.hashtags.set(hashtags)
 
         # Handle pinning logic
         if "is_pinned" in validated_data:
