@@ -23,7 +23,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 
 # Local imports
 from core.services import (
-    success_response, error_response, get_user_profile, handle_hashtags, handle_art_styles
+    success_response, error_response, get_user_profile, handle_post_hashtags, handle_art_styles
 )
 from core.pagination import PaginationMixin
 from core.utils import process_media_file
@@ -110,7 +110,7 @@ class PostAPIView(APIView):
             serializer = PostSerializer(data=request.data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
-            handle_hashtags(post)
+            handle_post_hashtags(post)
             handle_art_styles(post, request.data.get("art_types"))
            # --- Scheduled Publishing Logic ---
             if post.status == PostStatus.SCHEDULED:

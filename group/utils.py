@@ -3,7 +3,7 @@ from django.db.models import F
 from group.models import GroupMember, GroupActionLog
 from group.choices import RoleChoices
 from core.models import HashTag
-from core.services import extract_hashtags
+from core.services import extract_hashtags, process_hashtags_for_instance
 
 def can_post_to_group(group, profile):
     try:
@@ -17,13 +17,12 @@ def can_post_to_group(group, profile):
         return False
 
 def handle_grouppost_hashtags(post):
-    """Updates hashtags for GroupPost based on its content field."""
+    """
+    Updates hashtags for GroupPost based on its content field,
+    using shared process_hashtags_for_instance logic.
+    """
     hashtag_text = post.content or ""
-    hashtags = extract_hashtags(hashtag_text)
-    post.tags.clear()
-    for tag in hashtags:
-        hashtag_obj, _ = HashTag.objects.get_or_create(name=tag.lower())
-        post.tags.add(hashtag_obj)
+    process_hashtags_for_instance(post, hashtag_text)
         
 
 def log_group_action(group, profile, action, description="", group_post=None, group_member=None, member_request=None):
@@ -53,3 +52,11 @@ def increment_group_member_activity(profile, group, points=1):
             member.save(update_fields=['activity_score'])
     except GroupMember.DoesNotExist:
         pass
+    
+def handle_group_hashtags(text, group):
+    """
+    Extract hashtags from text and assign them to the Group
+    with variant tracking & usage count.
+    """
+    
+    process_hashtags_for_instance(group, text)

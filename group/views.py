@@ -36,12 +36,10 @@ from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin, IsGroupMember
 )
 from group.utils import (
-    can_post_to_group, handle_grouppost_hashtags, log_group_action, increment_group_member_activity
+    can_post_to_group, handle_grouppost_hashtags, log_group_action, increment_group_member_activity,
+    handle_group_hashtags
 )
 from core.pagination import PaginationMixin
-from core.utils import (
-    extract_and_assign_hashtags
-)
 from core.services import (
     success_response, error_response, get_user_profile, get_actual_user
 )
@@ -86,7 +84,7 @@ class GroupCreateAPIView(APIView):
                 )
 
                 # 3. Extract & assign hashtags
-                extract_and_assign_hashtags(group.description, group)
+                handle_group_hashtags(group.description, group)
                 
                 # 4. Log the group creation
                 log_group_action(group, profile, GroupAction.CREATE, "Group created by user")
@@ -145,7 +143,7 @@ class GroupUpdateAPIView(APIView):
         try:
             with transaction.atomic():
                 group = serializer.save()
-                extract_and_assign_hashtags(group.description, group)
+                handle_group_hashtags(group.description, group)
                 log_group_action(group, get_user_profile(request.user), GroupAction.UPDATE, "Group updated by user")
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Exception as e:
@@ -1098,8 +1096,8 @@ class GroupyHashTagAPIView(APIView, PaginationMixin):
         # Get the hashtag by name (case-insensitive) or return 404
         hashtag = get_object_or_404(HashTag, name__iexact=hashtag_name)
 
-        # Filter groups linked to this hashtag
-        groups = Group.objects.filter(tags=hashtag).order_by("-trending_score")
+        # Filter groups linked to this hashtag 
+        groups = Group.objects.filter(hashtags=hashtag).order_by("-trending_score")
 
         paginated_qs = self.paginate_queryset(groups, request)
         serializer = GroupListSerializer(paginated_qs, many=True)
@@ -1120,7 +1118,7 @@ class RecommendedGroupsAPIView(APIView, PaginationMixin):
 
         # Step 3: Find other groups with these hashtags, exclude groups user is already in
         recommended_groups = (
-            Group.objects.filter(tags__in=hashtags)
+            Group.objects.filter(hashtags__in=hashtags)
             .exclude(id__in=user_groups.values_list("id", flat=True))
             .distinct()
             .order_by("-trending_score")
@@ -1371,7 +1369,7 @@ class GroupsFeedAPIView(APIView, PaginationMixin):
                 user_groups = Group.objects.filter(members__profile=profile)
                 hashtags = HashTag.objects.filter(groups__in=user_groups).distinct()
                 groups = (
-                    Group.objects.filter(tags__in=hashtags)
+                    Group.objects.filter(hashtags__in=hashtags)
                     .exclude(id__in=user_groups.values_list("id", flat=True))
                     .distinct()
                     .order_by('-trending_score', '-last_activity_at')
@@ -1397,7 +1395,7 @@ class GroupsFeedAPIView(APIView, PaginationMixin):
         
 class GroupSuggestionAPIView(APIView):
     """
-    Suggest groups to a user based on mutual interests (tags),
+    Suggest groups to a user based on mutual interests (hashtags),
     excluding groups the user is already a member of.
     """
     permission_classes = [IsAuthenticated]
@@ -1417,18 +1415,18 @@ class GroupSuggestionAPIView(APIView):
             joined_group_ids = GroupMember.objects.filter(profile=profile).values_list('group_id', flat=True)
 
 
-            # 3. Collect tags from groups the user is associated with
+            # 3. Collect hashtags from groups the user is associated with
             profile_tags = HashTag.objects.filter(groups__creator=profile).distinct()
 
             if not profile_tags.exists():
-                # No tags, return empty list
+                # No hashtags, return empty list
                 return Response(success_response([]), status=status.HTTP_200_OK)
 
-            # 4. Find other groups with these tags, excluding already joined groups
+            # 4. Find other groups with these hashtags, excluding already joined groups
             suggested_groups = (
-                Group.objects.filter(tags__in=profile_tags)
+                Group.objects.filter(hashtags__in=profile_tags)
                 .exclude(id__in=joined_group_ids)
-                .annotate(common_tags_count=Count('tags'))
+                .annotate(common_tags_count=Count('hashtags'))
                 .distinct()
                 .order_by('-common_tags_count', '-trending_score', '-last_activity_at')  # prioritize mutual interests
             )
@@ -1477,7 +1475,7 @@ class CreatedGroupsAPIView(APIView, PaginationMixin):
     def get(self, request, profile_id):
         try:
             profile = get_object_or_404(Profile, id=profile_id)
-            groups = Group.objects.filter(creator=profile).prefetch_related("tags")
+            groups = Group.objects.filter(creator=profile).prefetch_related("hashtags")
             
             paginated_qs = self.paginate_queryset(groups, request)
             serializer = BasicGroupDetailSerializer(paginated_qs, many=True)
@@ -1530,3 +1528,46 @@ class LeaveGroupAPIView(APIView):
             return Response(error_response("Group not found."), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=400)
+
+
+class GroupPostByHashtagAPIView(APIView, PaginationMixin):
+    """
+    GET /api/group-posts/by-hashtag/?tag=SuperHuman
+    Returns all group posts linked to a given hashtag.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            tag_name = request.query_params.get("tag")
+            if not tag_name:
+                return Response(
+                    error_response("Tag name is required."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Normalize the tag name to match stored hashtag
+            normalized = HashTag.normalize_name(tag_name)
+
+            # Get the main hashtag instance
+            hashtag = get_object_or_404(HashTag, name=normalized)
+            print(hashtag, hashtag.group_posts.all())
+
+            # Get posts associated with this hashtag
+            posts = (
+                hashtag.group_posts
+                .select_related("profile", "group")
+                .prefetch_related("hashtags")
+                .order_by("-created_at")
+            )
+
+            # Paginate
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = GroupPostSerializer(paginated_queryset, many=True, context={"request": request})
+
+            return self.get_paginated_response(serializer.data)
+
+        except Http404:
+            return Response(error_response("Hashtag not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

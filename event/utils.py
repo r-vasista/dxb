@@ -5,9 +5,11 @@ from django.utils.timezone import is_aware
 from django.shortcuts import get_object_or_404
 
 
-from event.models import EventTag, Event,EventActivityLog
+from event.models import Event,EventActivityLog
 from notification.task import send_event_share_notification_task
 from event.choices import EventActivityType
+from core.models import HashTag, HashTagVariant
+from core.services import process_hashtags_for_instance
 
 
 import pytz 
@@ -48,16 +50,8 @@ def extract_hashtags(text):
     return set(re.findall(r"#(\w+)", text or ""))
 
 def handle_event_hashtags(event):
-    """Extract hashtags from event fields and update M2M relation."""
     hashtag_text = f"{event.title or ''} {event.description or ''}"
-    hashtags = extract_hashtags(hashtag_text)
-
-    # Clear old hashtags
-    event.tags.clear()
-
-    for tag in hashtags:
-        hashtag_obj, _ = EventTag.objects.get_or_create(name=tag.lower())
-        event.tags.add(hashtag_obj)
+    process_hashtags_for_instance(event, hashtag_text)
 
 def is_host_or_cohost(event, profile):
     """

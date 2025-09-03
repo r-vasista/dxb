@@ -15,7 +15,7 @@ from core.models import (
     Country, City, State
 )
 from core.models import (
-    BaseModel
+    BaseModel, HashTag
 )
 from group.models import (
     Group
@@ -23,19 +23,6 @@ from group.models import (
 
 # Python imports
 import pytz
-
-class EventTag(BaseModel):
-    """
-    Tags for categorizing events
-    """
-    name = models.CharField(max_length=50, unique=True)
-    description = models.TextField(blank=True, null=True)
-    
-    class Meta:
-        ordering = ['name']
-        
-    def __str__(self):
-        return self.name
 
 
 class Event(BaseModel):
@@ -122,11 +109,7 @@ class Event(BaseModel):
         blank=True
     )
     
-    tags = models.ManyToManyField(
-        EventTag,
-        related_name='events',
-        blank=True
-    )
+    hashtags = models.ManyToManyField(HashTag, related_name="events")
     
     class Meta:
         ordering = ['-start_datetime']

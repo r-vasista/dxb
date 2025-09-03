@@ -118,7 +118,7 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
     class Meta:
         model = Event
         fields = "__all__"
-        read_only_fields = ['host']
+        read_only_fields = ['host', 'hashtags']
         
     def validate(self, attrs):
         if attrs['end_datetime'] <= attrs['start_datetime']:
@@ -318,7 +318,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
-            'event_image', 'attendee_count', 'tags', 'description',
+            'event_image', 'attendee_count', 'hashtags', 'description',
             'is_online', 'city', 'country', 'slug', 'event_logo', 'host_username',
             'host_profile_picture'
         ]
@@ -337,7 +337,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "start_datetime", "end_datetime", "timezone",
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
-            "event_image", "event_logo", "tags","slug", "aprove_attendees", "allow_public_media",
+            "event_image", "event_logo", "hashtags","slug", "aprove_attendees", "allow_public_media",
             "updated_end_datetime", "updated_start_datetime", "show_views"
         ]
         read_only_fields = ["slug", "start_datetime", "end_datetime"]

@@ -26,7 +26,7 @@ from event.serializers import (
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog,
-    EventTag
+    HashTag
 )
 from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
@@ -1574,7 +1574,8 @@ class FilterEventListAPIView(APIView, PaginationMixin):
         
 class EventByTagAPIView(APIView, PaginationMixin):
     """
-    Get all events based on a hashtag (EventTag).
+    Get all events based on a hashtag (HashTag).
+    Example: /api/events/by-tag/?tag=SuperHuman
     """
     def get(self, request):
         try:
@@ -1582,19 +1583,20 @@ class EventByTagAPIView(APIView, PaginationMixin):
             if not tag_name:
                 return Response({"error": "Tag name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get tag instance
-            tag = get_object_or_404(EventTag, name__iexact=tag_name)
-            
-            # Get all events associated with this tag
-            events=tag.events.all().select_related("host").prefetch_related("tags")
-            print(events, 'events')
-            # events = Event.objects.filter(tags=tag, is_active=True).select_related("host").prefetch_related("tags")
+            # Normalize for lookup
+            canonical = HashTag.normalize_name(tag_name)
 
-            # Serialize
-            paginated_queryset = self.paginate_queryset(events,request)
+            # Get hashtag instance
+            hashtag = get_object_or_404(HashTag, name=canonical)
+
+            # Get all events associated with this hashtag
+            events = hashtag.events.all().select_related("host").prefetch_related("hashtags")
+
+            # Paginate + serialize
+            paginated_queryset = self.paginate_queryset(events, request)
             serializer = EventSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
-        
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:

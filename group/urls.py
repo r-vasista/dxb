@@ -9,7 +9,7 @@ from group.views import (
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView, PublicGroupMemberListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
-    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView
+    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView, GroupPostByHashtagAPIView
 )
 
 urlpatterns = [
@@ -51,6 +51,7 @@ urlpatterns = [
     #Group Post
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),
     path('group-post-all/<int:group_id>/',GroupListAPIView.as_view(),name='list-group-posts'),
+    path('group-posts/by-hashtag/', GroupPostByHashtagAPIView.as_view(), name='group-posts-by-hashtag'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     path('group-post/<str:slug>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     

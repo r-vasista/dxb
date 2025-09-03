@@ -1,4 +1,7 @@
 
+import unicodedata
+import re
+
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
@@ -165,6 +168,24 @@ class HashTag(models.Model):
     
     def __str__(self):
         return str(self.name)
+    
+    @staticmethod
+    def normalize_name(raw: str) -> str:
+        """
+        Convert raw user input (e.g., '#Super Human') into the canonical form:
+        - strip leading '#'
+        - unicode normalize
+        - remove all whitespace
+        - lowercase
+        """
+        if not raw:
+            return ""
+        s = str(raw).strip()
+        if s.startswith("#"):
+            s = s[1:]
+        s = unicodedata.normalize("NFKC", s)
+        s = re.sub(r"\s+", "", s)
+        return s.lower()
     
     def save(self, *args, **kwargs):
         # Normalize name → lowercase (no spaces, no special casing issues)
