@@ -1501,3 +1501,46 @@ class LeaveGroupAPIView(APIView):
             return Response(error_response("Group not found."), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=400)
+
+
+class GroupPostByHashtagAPIView(APIView, PaginationMixin):
+    """
+    GET /api/group-posts/by-hashtag/?tag=SuperHuman
+    Returns all group posts linked to a given hashtag.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            tag_name = request.query_params.get("tag")
+            if not tag_name:
+                return Response(
+                    error_response("Tag name is required."),
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Normalize the tag name to match stored hashtag
+            normalized = HashTag.normalize_name(tag_name)
+
+            # Get the main hashtag instance
+            hashtag = get_object_or_404(HashTag, name=normalized)
+            print(hashtag, hashtag.group_posts.all())
+
+            # Get posts associated with this hashtag
+            posts = (
+                hashtag.group_posts
+                .select_related("profile", "group")
+                .prefetch_related("hashtags")
+                .order_by("-created_at")
+            )
+
+            # Paginate
+            paginated_queryset = self.paginate_queryset(posts, request)
+            serializer = GroupPostSerializer(paginated_queryset, many=True, context={"request": request})
+
+            return self.get_paginated_response(serializer.data)
+
+        except Http404:
+            return Response(error_response("Hashtag not found"), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)

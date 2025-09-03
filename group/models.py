@@ -71,7 +71,7 @@ class GroupPost(BaseModel):
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     content = models.TextField()
     media_file = models.FileField(upload_to='group_media/', null=True, blank=True)
-    hashtags = models.ManyToManyField(HashTag, blank=True)
+    hashtags = models.ManyToManyField(HashTag, blank=True, related_name='group_posts')
     is_pinned = models.BooleanField(default=False)
     pinned_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
