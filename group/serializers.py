@@ -102,7 +102,6 @@ class  GroupPostSerializer(serializers.ModelSerializer):
         return GroupPostComment.objects.filter(
             group_post=obj,
             is_active=True,
-            parent__isnull=True  # ✅ Count only top-level comments
         ).count()
 
 
