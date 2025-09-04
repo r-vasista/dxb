@@ -2,6 +2,7 @@ import json
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
+from django.db.models import F
 
 from .models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
 from .utils import is_group_member
@@ -71,6 +72,17 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             message_type=payload.get("message_type", ChatMessage.TEXT),
             content=payload.get("content", ""),
         )
+
+        # update denormalized fields
+        group.last_message = msg
+        group.last_message_at = msg.created_at
+        group.save(update_fields=["last_message", "last_message_at"])
+
+        # increment unread for other members
+        ChatGroupMember.objects.filter(group=group).exclude(profile=profile).update(
+            unread_count=F("unread_count") + 1
+        )
+
         return {
             "id": msg.id,
             "group": str(group.id),
@@ -113,12 +125,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         profile = user.profile
         group = ChatGroup.objects.get(id=self.group_id)
 
-        # Find messages in this group not yet seen by this user
         unseen_messages = ChatMessage.objects.filter(
             group=group
         ).exclude(sender=profile).exclude(
-        receipts__user=profile
-    )
+            receipts__user=profile
+        )
 
         now = timezone.now()
         receipts = []
@@ -134,6 +145,11 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "profile_id": profile.id,
                 "seen_at": now.isoformat(),
             })
+
+        # also reset unread counter
+        ChatGroupMember.objects.filter(group=group, profile=profile).update(
+            unread_count=0, last_read_at=now
+        )
 
         return receipts
 
