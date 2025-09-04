@@ -13,7 +13,7 @@ from rest_framework.exceptions import PermissionDenied
 
 from core.services import success_response, error_response, get_user_profile
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
-from chat.serializers import ChatGroupSerializer, ChatMessageSerializer
+from chat.serializers import ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer
 from chat.permissions import IsChatMember
 from chat.utils import get_or_create_personal_group, is_group_member
 from chat.choices import ChatType
@@ -159,10 +159,10 @@ class MarkAllMessagesReadAPIView(APIView):
                 ]
                 MessageReceipt.objects.bulk_create(receipts, ignore_conflicts=True)
 
-                # Update membership last_read_at
+                # Reset unread counter + update last_read_at
                 ChatGroupMember.objects.filter(
                     group_id=group_id, profile=profile
-                ).update(last_read_at=now)
+                ).update(unread_count=0, last_read_at=now)
 
             return Response(success_response(
                 {"read_count": len(receipts)}, 
@@ -201,12 +201,13 @@ class MarkMessagesReadByIdAPIView(APIView):
                 ]
                 MessageReceipt.objects.bulk_create(receipts, ignore_conflicts=True)
 
-                # Optional: update last_read_at if the latest marked message is newer
+                # Find the latest read message
                 latest_msg = target_messages.order_by("-created_at").first()
+
                 if latest_msg:
                     ChatGroupMember.objects.filter(
                         group_id=group_id, profile=profile
-                    ).update(last_read_at=now)
+                    ).update(unread_count=0, last_read_at=now)
 
             return Response(success_response(
                 {"read_count": len(receipts)}, 
@@ -217,3 +218,67 @@ class MarkMessagesReadByIdAPIView(APIView):
             return Response(error_response("Chat group not found"), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+# class MyActiveChatsAPIView(APIView, PaginationMixin):
+#     """
+#     GET /api/chat/my-conversations/
+#     Returns all personal and group chats where the current user is a member
+#     and at least one message exists.
+#     """
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request):
+#         profile = get_user_profile(request.user)
+#         q = request.query_params.get("q")
+
+#         # Chats where user is a member AND conversation has started
+#         chats = ChatGroup.objects.filter(
+#             memberships__profile=profile,
+#             messages__isnull=False
+#         ).order_by("-last_message_at", "-created_at").distinct()
+
+#         if q:
+#             chats = chats.filter(
+#                 Q(group__name__icontains=q) |  # group chat search
+#                 Q(group__id__icontains=q) |    # by group id
+#                 Q(memberships__profile__username__icontains=q)  # personal chat search
+#             )
+
+#         page = self.paginate_queryset(chats, request)
+#         serializer = ChatGroupSerializer(page, many=True, context={"request": request})
+#         return self.get_paginated_response(serializer.data)
+
+
+class MyActiveChatsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        profile = get_user_profile(request.user)
+        q = request.query_params.get("q", "").strip()
+
+        qs = (
+            ChatGroupMember.objects
+            .filter(profile=profile, group__last_message__isnull=False)
+            .select_related("group", "group__group", "group__last_message", "group__last_message__sender")
+            .order_by("-group__last_message__created_at", "-group__created_at")
+        )
+
+        if q:
+            qs = qs.filter(
+                Q(group__group__name__icontains=q) |
+                Q(group__id__icontains=q) |
+                Q(group__memberships__profile__username__icontains=q)
+            ).distinct()
+
+        page = self.paginate_queryset(qs, request)
+
+        serializer = ChatGroupMiniSerializer(page, many=True, context={"request": request, "profile": profile})
+        total_unread_chats = ChatGroupMember.objects.filter(
+            profile=profile, unread_count__gt=0, group__last_message__isnull=False
+        ).count()
+
+        return self.get_paginated_response({
+            "chats": serializer.data,
+            "total_unread_chats": total_unread_chats,
+        })

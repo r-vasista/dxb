@@ -20,6 +20,9 @@ class ChatGroup(models.Model):
     )
     created_at = models.DateTimeField(auto_now_add=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
+    last_message = models.ForeignKey(
+        "ChatMessage", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+    )
 
     # for a personal chat, enforce 2 members via app logic (not DB)
     def __str__(self):
@@ -33,6 +36,7 @@ class ChatGroupMember(models.Model):
     # per-room prefs
     is_muted = models.BooleanField(default=False)
     last_read_at = models.DateTimeField(null=True, blank=True)
+    unread_count = models.PositiveIntegerField(default=0)
 
     class Meta:
         unique_together = ("group", "profile")
