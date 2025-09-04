@@ -26,6 +26,8 @@ from core.services import (
     success_response, error_response, get_user_profile, handle_post_hashtags, handle_art_styles
 )
 from core.pagination import PaginationMixin
+from django.contrib.contenttypes.models import ContentType
+
 from core.utils import process_media_file
 from notification.task import notify_friends_of_new_post, send_comment_notification_task, send_mention_notification_task, send_post_reaction_notification_task, send_post_share_notification_task
 from post.models import ReactionType, PostView, SavedPost
@@ -61,6 +63,8 @@ from core.permissions import (
     is_owner_or_org_member
 )
 
+from core .models import Report
+from core. serializers import ReportSerializer
 
 User = get_user_model()
 
@@ -181,7 +185,7 @@ class PostAPIView(APIView):
             serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            handle_hashtags(post)
+            handle_post_hashtags(post)
 
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
@@ -1292,3 +1296,62 @@ class ChildPostCommentListAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ReportPostAPIView(APIView):
+    """
+    API endpoint to report a Post (or other content objects).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+
+        # Validate content_type and object_id
+        content_type_str = data.get("content_type", "post")  # default to "post"
+        object_id = data.get("object_id")
+
+        if not object_id:
+            return Response({"error": "object_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content_type = ContentType.objects.get(model=content_type_str)
+        except ContentType.DoesNotExist:
+            return Response({"error": "Invalid content type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        model_class = content_type.model_class()
+        target_object = get_object_or_404(model_class, id=object_id)
+
+        # Build serializer with request context
+        serializer = ReportSerializer(data=data, context={"request": request})
+        if serializer.is_valid():
+            report = serializer.save(
+                reporter=request.user.profile,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+            return Response(
+                {"message": "Report submitted successfully.", "report_id": report.id},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ReportProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data["content_type"] = "profile"  # force profile type
+
+        serializer = ReportSerializer(data=data, context={"request": request})
+        if serializer.is_valid():
+            report = serializer.save(
+                reporter=request.user.profile,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+            return Response(
+                {"message": "Profile reported successfully.", "report_id": report.id},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
