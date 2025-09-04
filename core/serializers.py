@@ -2,9 +2,11 @@ import pytz
 from rest_framework import serializers
 from django.db.models.fields import DateTimeField
 from datetime import datetime
+from django.contrib.contenttypes.models import ContentType
+
 
 from core.models import (
-    Country, State, City, WeeklyChallenge,UpcomingFeature, FeatureStep,HashTag
+    Country, State, City, WeeklyChallenge,UpcomingFeature, FeatureStep,HashTag,Report
 )
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
@@ -115,3 +117,43 @@ class HashTagSerializer(serializers.ModelSerializer):
     class Meta:
         model = HashTag
         fields = ['name'] 
+
+class ReportSerializer(serializers.ModelSerializer):
+    content_type = serializers.CharField(write_only=True)  # e.g. "post"
+    object_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Report
+        fields = [
+            "id",
+            "content_type",
+            "object_id",
+            "reason",
+            "details",
+            "created_at",
+        ]
+        read_only_fields = ["id", "created_at"]
+
+    def validate(self, attrs):
+        model_name = attrs.get("content_type")
+        object_id = attrs.get("object_id")
+
+        # Ensure content_type exists
+        try:
+            content_type = ContentType.objects.get(model=model_name)
+        except ContentType.DoesNotExist:
+            raise serializers.ValidationError({"content_type": "Invalid content type."})
+
+        # Ensure object exists
+        model_class = content_type.model_class()
+        if not model_class.objects.filter(id=object_id).exists():
+            raise serializers.ValidationError(
+                {"object_id": f"{model_name} with this id does not exist."}
+            )
+
+        attrs["content_type"] = content_type
+        return attrs
+
+    def create(self, validated_data):
+        # Reporter, ip, user_agent will be passed from view
+        return Report.objects.create(**validated_data)

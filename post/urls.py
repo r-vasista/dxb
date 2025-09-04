@@ -4,7 +4,8 @@ from post.views import (
     CommentView, CommentLikeToggleView, CommentDetailView,CommentReplyListView,CommentReplyView,LatestPostsAPIView,FriendsPostsAPIView,
     TrendingPostsAPIView, HashtagPostsView, HashtagsListView, PostShareView, ProfileGalleryView, UpdateGalleryOrderView,
     ProfilePostTrengingListView, MyDraftPostsView, ArtTypeListAPIView, CreatePostViewAPIView,SavedPostsListAPIView, SavePostAPIView,GlobalSearchAPIView, SearchProfilesView,
-    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView, CommentUpdateAPIView, ParentPostCommentListAPIView, ChildPostCommentListAPIView
+    MyHiddenCommentsAPIView,UpdateCommentVisibilityAPIView, CommentUpdateAPIView, ParentPostCommentListAPIView, ChildPostCommentListAPIView,
+    ReportPostAPIView,ReportProfileAPIView
     )
 
 
@@ -61,4 +62,7 @@ urlpatterns = [
     path('global-search/', GlobalSearchAPIView.as_view(), name='global-search'),
 
     path('search/profiles/', SearchProfilesView.as_view(), name='search-profiles'),
+
+    path('post-report/',ReportPostAPIView.as_view(),name='post-report'),
+    path('profile-report/',ReportProfileAPIView.as_view(),name='profile-report'),
 ]
