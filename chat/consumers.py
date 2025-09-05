@@ -4,8 +4,9 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import F
 
-from .models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
-from .utils import is_group_member
+from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
+from chat.utils import is_group_member
+from chat.serializers import ChatMessageSerializer
 from core.services import get_user_profile
 
 
@@ -83,14 +84,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             unread_count=F("unread_count") + 1
         )
 
-        return {
-            "id": msg.id,
-            "group": str(group.id),
-            "sender": {"id": profile.id, "username": profile.username},
-            "message_type": msg.message_type,
-            "content": msg.content,
-            "created_at": msg.created_at.isoformat(),
-        }
+        # serializing for consistent response
+        return ChatMessageSerializer(msg, context={"request": None}).data
 
     async def handle_send_message(self, payload):
         user = self.scope["user"]

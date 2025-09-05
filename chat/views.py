@@ -2,8 +2,12 @@
 from django.shortcuts import get_object_or_404
 from django.db import transaction
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, F
 from django.http import Http404
+from django.db import transaction
+
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
 
 from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
@@ -105,36 +109,36 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
 
 
 
-class SendMessageAPIView(APIView):
-    """
-    POST /api/chat/groups/<uuid:group_id>/messages/
-    Optional REST endpoint to send a message (WS is primary).
-    """
-    permission_classes = [IsAuthenticated, IsChatMember]
+# class SendMessageAPIView(APIView):
+#     """
+#     POST /api/chat/groups/<uuid:group_id>/messages/
+#     Optional REST endpoint to send a message (WS is primary).
+#     """
+#     permission_classes = [IsAuthenticated, IsChatMember]
 
-    def post(self, request, group_id):
-        group = get_object_or_404(ChatGroup, id=group_id)
-        self.check_object_permissions(request, group)
+#     def post(self, request, group_id):
+#         group = get_object_or_404(ChatGroup, id=group_id)
+#         self.check_object_permissions(request, group)
 
-        profile = get_user_profile(request.user)
+#         profile = get_user_profile(request.user)
 
-        serializer = ChatMessageSerializer(data=request.data, context={"request": request})
-        if not serializer.is_valid():
-            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+#         serializer = ChatMessageSerializer(data=request.data, context={"request": request})
+#         if not serializer.is_valid():
+#             return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            with transaction.atomic():
-                msg = ChatMessage.objects.create(
-                    group=group,
-                    sender=profile,
-                    message_type=serializer.validated_data.get("message_type", ChatMessage.TEXT),
-                    content=serializer.validated_data.get("content", ""),
-                    file=serializer.validated_data.get("file", None),
-                )
-            out = ChatMessageSerializer(msg, context={"request": request}).data
-            return Response(success_response(out), status=status.HTTP_201_CREATED)
-        except Exception as e:
-            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+#         try:
+#             with transaction.atomic():
+#                 msg = ChatMessage.objects.create(
+#                     group=group,
+#                     sender=profile,
+#                     message_type=serializer.validated_data.get("message_type", ChatMessage.TEXT),
+#                     content=serializer.validated_data.get("content", ""),
+#                     file=serializer.validated_data.get("file", None),
+#                 )
+#             out = ChatMessageSerializer(msg, context={"request": request}).data
+#             return Response(success_response(out), status=status.HTTP_201_CREATED)
+#         except Exception as e:
+#             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class MarkAllMessagesReadAPIView(APIView):
@@ -220,36 +224,6 @@ class MarkMessagesReadByIdAPIView(APIView):
             return Response(error_response(str(e)), status=500)
 
 
-# class MyActiveChatsAPIView(APIView, PaginationMixin):
-#     """
-#     GET /api/chat/my-conversations/
-#     Returns all personal and group chats where the current user is a member
-#     and at least one message exists.
-#     """
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request):
-#         profile = get_user_profile(request.user)
-#         q = request.query_params.get("q")
-
-#         # Chats where user is a member AND conversation has started
-#         chats = ChatGroup.objects.filter(
-#             memberships__profile=profile,
-#             messages__isnull=False
-#         ).order_by("-last_message_at", "-created_at").distinct()
-
-#         if q:
-#             chats = chats.filter(
-#                 Q(group__name__icontains=q) |  # group chat search
-#                 Q(group__id__icontains=q) |    # by group id
-#                 Q(memberships__profile__username__icontains=q)  # personal chat search
-#             )
-
-#         page = self.paginate_queryset(chats, request)
-#         serializer = ChatGroupSerializer(page, many=True, context={"request": request})
-#         return self.get_paginated_response(serializer.data)
-
-
 class MyActiveChatsAPIView(APIView, PaginationMixin):
     permission_classes = [IsAuthenticated]
 
@@ -282,3 +256,60 @@ class MyActiveChatsAPIView(APIView, PaginationMixin):
             "chats": serializer.data,
             "total_unread_chats": total_unread_chats,
         })
+
+
+class SendMessageAPIView(APIView):
+    """
+    API for sending a chat message (text, image, or file).
+    Triggers a WebSocket broadcast after saving the message.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_id):
+        profile = get_user_profile(request.user)
+        group = ChatGroup.objects.filter(id=group_id).first()
+        
+        if not group:
+            return Response(error_response("Chat group not found"), status=404)
+
+        try:
+            with transaction.atomic():
+                message_type = request.data.get("message_type", ChatMessage.TEXT)
+                content = request.data.get("content", "")
+                file = request.FILES.get("file")
+
+                if message_type in [ChatMessage.IMAGE, ChatMessage.FILE] and not file:
+                    return Response(error_response("File is required for this message type"), status=400)
+
+                msg = ChatMessage.objects.create(
+                    group=group,
+                    sender=profile,
+                    message_type=message_type,
+                    content=content,
+                    file=file if file else None,
+                )
+
+                # update denormalized fields
+                group.last_message = msg
+                group.last_message_at = msg.created_at
+                group.save(update_fields=["last_message", "last_message_at"])
+
+                # increment unread counts for other members
+                ChatGroupMember.objects.filter(group=group).exclude(profile=profile).update(
+                    unread_count=F("unread_count") + 1
+                )
+
+                # serialize message
+                data = ChatMessageSerializer(msg, context={"request": request}).data
+
+                # broadcast via WebSocket
+                channel_layer = get_channel_layer()
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{group.id}",
+                    {"type": "chat.message", "data": data}
+                )
+
+            return Response(success_response(data, "Message sent successfully"))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)

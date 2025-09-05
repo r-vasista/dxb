@@ -38,6 +38,7 @@ class ChatMessageReceiptializer(serializers.ModelSerializer):
 class ChatMessageSerializer(serializers.ModelSerializer):
     sender = BasicProfileSerializer(read_only=True)
     receipts = ChatMessageReceiptializer(many=True, read_only=True)
+    group = serializers.UUIDField(source="group.id", read_only=True)
 
     class Meta:
         model = ChatMessage
