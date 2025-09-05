@@ -1,11 +1,13 @@
 import json
+import asyncio
+
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import F
 
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
-from chat.utils import is_group_member
+from chat.utils import is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
 
@@ -96,6 +98,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 self.room_name,
                 {"type": "chat.message", "data": data}
             )
+            # update active chats for all members
+            group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
+            members = await database_sync_to_async(
+                list
+            )(ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True))
+            await asyncio.gather(
+                *[async_broadcast_active_chats_update(pid) for pid in members]
+            )
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
@@ -159,6 +169,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     self.room_name,
                     {"type": "chat.read", "data": receipts}
                 )
+                
+                # update active chats only for THIS user
+                await async_broadcast_active_chats_update(user.profile.id)
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
@@ -179,7 +192,7 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=4403)
             return
 
-        # ✅ get profile in sync-safe way
+
         self.profile = await self._get_profile(user)
 
         # each user gets their own group
@@ -191,9 +204,8 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
         # send initial data
         await self.send_active_chats()
 
-
     async def disconnect(self, close_code):
-        if self.group_name:  # only discard if it exists
+        if self.group_name:
             await self.channel_layer.group_discard(self.group_name, self.channel_name)
 
     @database_sync_to_async
@@ -205,7 +217,10 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
         qs = (
             ChatGroupMember.objects
             .filter(profile=self.profile, group__last_message__isnull=False)
-            .select_related("group", "group__group", "group__last_message", "group__last_message__sender")
+            .select_related(
+                "group", "group__group",
+                "group__last_message", "group__last_message__sender"
+            )
             .order_by("-group__last_message__created_at", "-group__created_at")
         )
 
@@ -213,7 +228,9 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
             qs, many=True, context={"profile": self.profile}
         )
         total_unread_chats = ChatGroupMember.objects.filter(
-            profile=self.profile, unread_count__gt=0, group__last_message__isnull=False
+            profile=self.profile,
+            unread_count__gt=0,
+            group__last_message__isnull=False
         ).count()
 
         return {

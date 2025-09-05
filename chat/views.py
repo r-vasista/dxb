@@ -19,7 +19,7 @@ from core.services import success_response, error_response, get_user_profile
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
 from chat.serializers import ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer
 from chat.permissions import IsChatMember
-from chat.utils import get_or_create_personal_group, is_group_member
+from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update
 from chat.choices import ChatType
 from profiles.models import Profile
 from core.pagination import PaginationMixin
@@ -167,6 +167,9 @@ class MarkAllMessagesReadAPIView(APIView):
                 ChatGroupMember.objects.filter(
                     group_id=group_id, profile=profile
                 ).update(unread_count=0, last_read_at=now)
+                
+            # update active chats only for THIS user
+            broadcast_active_chats_update(profile.id)
 
             return Response(success_response(
                 {"read_count": len(receipts)}, 
@@ -302,12 +305,17 @@ class SendMessageAPIView(APIView):
                 # serialize message
                 data = ChatMessageSerializer(msg, context={"request": request}).data
 
-                # broadcast via WebSocket
+                # broadcast message to chat room
                 channel_layer = get_channel_layer()
                 async_to_sync(channel_layer.group_send)(
                     f"chat_{group.id}",
                     {"type": "chat.message", "data": data}
                 )
+                
+                # update active chats for all members
+                member_ids = ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True)
+                for pid in member_ids:
+                    broadcast_active_chats_update(pid)
 
             return Response(success_response(data, "Message sent successfully"))
 

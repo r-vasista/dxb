@@ -44,15 +44,22 @@ def is_group_member(group, profile):
     return group.memberships.filter(profile=profile).exists()
 
 
-def broadcast_active_chats(profile_id):
+def broadcast_active_chats_update(profile_id):
     """
-    Send active chats update to a specific user profile.
+    Notify ActiveChatsConsumer for this user to refresh active chats.
     """
-    groups = ChatGroup.objects.filter(members__profile_id=profile_id).select_related("last_message")
-    payload = ChatGroupSerializer(groups, many=True).data
-
     channel_layer = get_channel_layer()
     async_to_sync(channel_layer.group_send)(
         f"active_chats_{profile_id}",
-        {"type": "active_chats.update", "data": payload}
+        {"type": "active_chats_update"}
+    )
+    
+async def async_broadcast_active_chats_update(profile_id):
+    """
+    Async version: call this from consumers.
+    """
+    channel_layer = get_channel_layer()
+    await channel_layer.group_send(
+        f"active_chats_{profile_id}",
+        {"type": "active_chats_update"}
     )
