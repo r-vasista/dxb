@@ -70,7 +70,6 @@ class ChatMessageMiniSerializer(serializers.ModelSerializer):
 class ChatGroupMiniSerializer(serializers.ModelSerializer):
     chat_id = serializers.UUIDField(source="group.id", read_only=True)
     type = serializers.CharField(source="group.type", read_only=True)
-    title = serializers.SerializerMethodField()
     counterpart = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField()
     is_muted = serializers.BooleanField()
@@ -79,23 +78,18 @@ class ChatGroupMiniSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatGroupMember
         fields = [
-            "chat_id", "type", "title", "counterpart",
+            "chat_id", "type", "counterpart",
             "unread_count", "is_muted", "last_message", "last_read_at"
         ]
-
-    def get_title(self, obj):
-        g = obj.group
-        if g.type == ChatType.PERSONAL:
-            me = self.context["profile"]
-            other = next((m.profile for m in g.memberships.all() if m.profile_id != me.id), None)
-            return other.username if other else "Personal Chat"
-        return getattr(getattr(g, "group", None), "name", "Group")
 
     def get_counterpart(self, obj):
         g = obj.group
         if g.type == ChatType.PERSONAL:
             me = self.context["profile"]
-            other = next((m.profile for m in g.memberships.all() if m.profile_id != me.id), None)
+            other = next(
+                (m.profile for m in g.memberships.all() if m.profile_id != me.id),
+                None
+            )
             if other:
-                return {"id": other.id, "username": other.username}
+                return BasicProfileSerializer(other, context=self.context).data
         return None
