@@ -2,6 +2,11 @@ from django.db.models import Q
 from django.db import transaction
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage
 from chat.choices import ChatType
+from chat.serializers import ChatGroupSerializer
+
+
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
 
 def get_or_create_personal_group(profile_a, profile_b):
     """
@@ -37,3 +42,24 @@ def get_or_create_personal_group(profile_a, profile_b):
 
 def is_group_member(group, profile):
     return group.memberships.filter(profile=profile).exists()
+
+
+def broadcast_active_chats_update(profile_id):
+    """
+    Notify ActiveChatsConsumer for this user to refresh active chats.
+    """
+    channel_layer = get_channel_layer()
+    async_to_sync(channel_layer.group_send)(
+        f"active_chats_{profile_id}",
+        {"type": "active_chats_update"}
+    )
+    
+async def async_broadcast_active_chats_update(profile_id):
+    """
+    Async version: call this from consumers.
+    """
+    channel_layer = get_channel_layer()
+    await channel_layer.group_send(
+        f"active_chats_{profile_id}",
+        {"type": "active_chats_update"}
+    )

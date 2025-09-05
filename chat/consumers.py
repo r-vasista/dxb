@@ -1,12 +1,14 @@
 import json
+import asyncio
+
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import F
 
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
-from chat.utils import is_group_member
-from chat.serializers import ChatMessageSerializer
+from chat.utils import is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
+from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
 
 
@@ -96,6 +98,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 self.room_name,
                 {"type": "chat.message", "data": data}
             )
+            # update active chats for all members
+            group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
+            members = await database_sync_to_async(
+                list
+            )(ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True))
+            await asyncio.gather(
+                *[async_broadcast_active_chats_update(pid) for pid in members]
+            )
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
@@ -159,9 +169,78 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     self.room_name,
                     {"type": "chat.read", "data": receipts}
                 )
+                
+                # update active chats only for THIS user
+                await async_broadcast_active_chats_update(user.profile.id)
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
     async def chat_read(self, event):
         # Send receipts to client
         await self.send_json({"type": "read", "data": event["data"]})
+
+
+class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
+    """
+    WebSocket path: /ws/active-chats/
+    Sends THIS USER's active chats list in real time.
+    """
+
+    async def connect(self):
+        user = self.scope["user"]
+        if not user.is_authenticated:
+            await self.close(code=4403)
+            return
+
+
+        self.profile = await self._get_profile(user)
+
+        # each user gets their own group
+        self.group_name = f"active_chats_{self.profile.id}"
+
+        await self.channel_layer.group_add(self.group_name, self.channel_name)
+        await self.accept()
+
+        # send initial data
+        await self.send_active_chats()
+
+    async def disconnect(self, close_code):
+        if self.group_name:
+            await self.channel_layer.group_discard(self.group_name, self.channel_name)
+
+    @database_sync_to_async
+    def _get_profile(self, user):
+        return get_user_profile(user)
+
+    @database_sync_to_async
+    def _get_active_chats(self):
+        qs = (
+            ChatGroupMember.objects
+            .filter(profile=self.profile, group__last_message__isnull=False)
+            .select_related(
+                "group", "group__group",
+                "group__last_message", "group__last_message__sender"
+            )
+            .order_by("-group__last_message__created_at", "-group__created_at")
+        )
+
+        serializer = ChatGroupMiniSerializer(
+            qs, many=True, context={"profile": self.profile}
+        )
+        total_unread_chats = ChatGroupMember.objects.filter(
+            profile=self.profile,
+            unread_count__gt=0,
+            group__last_message__isnull=False
+        ).count()
+
+        return {
+            "chats": serializer.data,
+            "total_unread_chats": total_unread_chats,
+        }
+
+    async def send_active_chats(self):
+        data = await self._get_active_chats()
+        await self.send_json({"type": "active_chats", "data": data})
+
+    async def active_chats_update(self, event):
+        await self.send_active_chats()
