@@ -178,6 +178,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_read(self, event):
         # Send receipts to client
         await self.send_json({"type": "read", "data": event["data"]})
+        
+    async def chat_message_deleted(self, event):
+        # Send to connected clients
+        await self.send_json({
+            "action": "message_deleted",
+            "message_id": event["message_id"],
+            "group_id": event["group_id"],
+        }) 
 
 
 class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):

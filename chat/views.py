@@ -90,7 +90,7 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
             before_id = request.query_params.get("before")
             after_id = request.query_params.get("after")
 
-            messages = ChatMessage.objects.filter(group=group, is_deleted=False).select_related(
+            messages = ChatMessage.objects.filter(group=group).select_related(
                 "sender__user"
             ).order_by("-id")
 
@@ -105,7 +105,7 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
         except Http404 as e:
             return Response(error_response(str(e)),status=404)
         except Exception as e:
-            return Response(error_response(str(e)),status=400)
+            return Response(error_response(str(e)),status=500)
 
 
 
@@ -321,3 +321,39 @@ class SendMessageAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+class DeleteMessageAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, message_id):
+        try:
+            user = request.user
+            profile = get_user_profile(user)
+
+            message = get_object_or_404(ChatMessage, id=message_id)
+
+            # only sender can delete
+            if message.sender != profile:
+                return Response({"error": "Not allowed to delete this message"}, status=status.HTTP_403_FORBIDDEN)
+
+            # mark as deleted
+            message.is_deleted = True
+            message.save(update_fields=["is_deleted"])
+
+            # broadcast to websocket
+            channel_layer = get_channel_layer()
+            async_to_sync(channel_layer.group_send)(
+                f"chat_{message.group.id}",
+                {
+                    "type": "chat.message_deleted",
+                    "message_id": str(message.id),
+                    "group_id": str(message.group.id),
+                }
+            )
+
+            return Response(success_response(f'message deleted'),status=200)
+        except Http404 as e:
+            return Response(error_response(str(e)),status=404)
+        except Exception as e:
+            return Response(error_response(str(e)),status=500)
