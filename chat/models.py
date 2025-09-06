@@ -64,11 +64,18 @@ class ChatMessage(models.Model):
     edited_at = models.DateTimeField(null=True, blank=True)
 
     is_deleted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_edited = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
             models.Index(fields=["group", "-created_at"]),
         ]
+    
+    def mark_as_edited(self, new_content):
+        self.content = new_content
+        self.is_edited = True
+        self.save(update_fields=["content", "is_edited", "updated_at"]) 
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)

@@ -26,6 +26,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         {"action":"typing","is_typing":true}
       - mark read:
         {"action":"mark_read"}
+      - edit message
+        {"action": "edit_message","message_id": "1234","content": "Updated message text"}
     """
 
     async def connect(self):
@@ -64,6 +66,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.handle_typing(content)
         elif action == "mark_read":
             await self.handle_mark_read(content)
+        elif action == "edit_message":
+            await self.handle_edit_message(content)
 
     @database_sync_to_async
     def _create_message(self, user, payload):
@@ -185,7 +189,39 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             "action": "message_deleted",
             "message_id": event["message_id"],
             "group_id": event["group_id"],
-        }) 
+        })
+    
+    @database_sync_to_async
+    def _edit_message(self, user, payload):
+        profile = get_user_profile(user)
+        msg_id = payload.get("message_id")
+        new_content = payload.get("content", "").strip()
+
+        if not msg_id or not new_content:
+            raise ValueError("message_id and content required")
+
+        try:
+            msg = ChatMessage.objects.get(id=msg_id, sender=profile)
+        except ChatMessage.DoesNotExist:
+            raise ValueError("Message not found or not yours")
+
+        msg.mark_as_edited(new_content)
+        return ChatMessageSerializer(msg, context={"request": None}).data
+
+    async def handle_edit_message(self, payload):
+        user = self.scope["user"]
+        try:
+            data = await self._edit_message(user, payload)
+            # broadcast edit event
+            await self.channel_layer.group_send(
+                self.room_name,
+                {"type": "chat.message_edited", "data": data}
+            )
+        except Exception as e:
+            await self.send_json({"type": "error", "message": str(e)})
+
+    async def chat_message_edited(self, event):
+        await self.send_json({"type": "message_edited", "data": event["data"]})
 
 
 class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
