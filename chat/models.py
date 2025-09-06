@@ -91,3 +91,16 @@ class MessageReceipt(models.Model):
 
     class Meta:
         unique_together = ("message", "user")
+        
+
+class ChatClear(models.Model):
+    """
+    Tracks the point at which a user cleared a chat.
+    Messages older than `cleared_at` won't be shown to that user.
+    """
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="cleared_chats")
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name="clears")
+    cleared_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("profile", "group")

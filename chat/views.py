@@ -16,7 +16,7 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 
 from core.services import success_response, error_response, get_user_profile
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
+from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear
 from chat.serializers import ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer
 from chat.permissions import IsChatMember
 from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update
@@ -78,7 +78,8 @@ class MyChatGroupsAPIView(APIView, PaginationMixin):
 class GroupMessagesAPIView(APIView, PaginationMixin):
     """
     GET /api/chat/groups/<uuid:group_id>/messages/?before=<id>&after=<id>
-    Returns paginated messages for a group. (Newest first by default)
+    Returns paginated messages for a group. (Newest first by default).
+    Respects per-user chat clear timestamp.
     """
     permission_classes = [IsAuthenticated, IsChatMember]
 
@@ -87,26 +88,39 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
             group = get_object_or_404(ChatGroup, id=group_id)
             self.check_object_permissions(request, group)
 
+            profile = get_user_profile(request.user)
+
             before_id = request.query_params.get("before")
             after_id = request.query_params.get("after")
 
+            # Base queryset
             messages = ChatMessage.objects.filter(group=group).select_related(
                 "sender__user"
-            ).order_by("-id")
+            )
 
+            # Apply clear chat filter (skip messages before clear timestamp)
+            clear_entry = ChatClear.objects.filter(profile=profile, group=group).first()
+            if clear_entry:
+                messages = messages.filter(created_at__gt=clear_entry.cleared_at)
+
+            # Apply before/after pagination
             if before_id:
                 messages = messages.filter(id__lt=before_id)
             if after_id:
                 messages = messages.filter(id__gt=after_id).order_by("id")
+            else:
+                messages = messages.order_by("-id")
 
+            # Paginate
             page = self.paginate_queryset(messages, request)
             serializer = ChatMessageSerializer(page, many=True, context={"request": request})
+            
             return self.get_paginated_response(serializer.data)
-        except Http404 as e:
-            return Response(error_response(str(e)),status=404)
-        except Exception as e:
-            return Response(error_response(str(e)),status=500)
 
+        except Http404 as e:
+            return Response(error_response(str(e)), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
 
 
 # class SendMessageAPIView(APIView):
@@ -335,7 +349,7 @@ class DeleteMessageAPIView(APIView):
 
             # only sender can delete
             if message.sender != profile:
-                return Response({"error": "Not allowed to delete this message"}, status=status.HTTP_403_FORBIDDEN)
+                return Response(error_response("Not allowed to delete this message"), status=status.HTTP_403_FORBIDDEN)
 
             # mark as deleted
             message.is_deleted = True
