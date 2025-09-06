@@ -42,8 +42,18 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted", "receipts"]
-        read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts"]
+        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted", "receipts",
+                  "updated_at", "is_edited"]
+        read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts", "updated_at", "is_edited"]
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if instance.is_deleted:
+            data["content"] = "This message was deleted"
+            data["file"] = None
+
+        return data
 
 
 class ChatMessageMiniSerializer(serializers.ModelSerializer):

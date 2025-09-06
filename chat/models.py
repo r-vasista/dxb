@@ -64,11 +64,18 @@ class ChatMessage(models.Model):
     edited_at = models.DateTimeField(null=True, blank=True)
 
     is_deleted = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_edited = models.BooleanField(default=False)
 
     class Meta:
         indexes = [
             models.Index(fields=["group", "-created_at"]),
         ]
+    
+    def mark_as_edited(self, new_content):
+        self.content = new_content
+        self.is_edited = True
+        self.save(update_fields=["content", "is_edited", "updated_at"]) 
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
@@ -84,3 +91,16 @@ class MessageReceipt(models.Model):
 
     class Meta:
         unique_together = ("message", "user")
+        
+
+class ChatClear(models.Model):
+    """
+    Tracks the point at which a user cleared a chat.
+    Messages older than `cleared_at` won't be shown to that user.
+    """
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="cleared_chats")
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name="clears")
+    cleared_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("profile", "group")

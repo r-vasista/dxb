@@ -6,7 +6,7 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import F
 
-from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt
+from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear
 from chat.utils import is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
@@ -26,6 +26,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         {"action":"typing","is_typing":true}
       - mark read:
         {"action":"mark_read"}
+      - edit message
+        {"action": "edit_message","message_id": "1234","content": "Updated message text"}
+      - clear chat
+        {"action": "clear_chat"}
     """
 
     async def connect(self):
@@ -64,6 +68,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.handle_typing(content)
         elif action == "mark_read":
             await self.handle_mark_read(content)
+        elif action == "edit_message":
+            await self.handle_edit_message(content)
+        elif action == "clear_chat":
+            await self.handle_clear_chat(content)
 
     @database_sync_to_async
     def _create_message(self, user, payload):
@@ -178,6 +186,71 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     async def chat_read(self, event):
         # Send receipts to client
         await self.send_json({"type": "read", "data": event["data"]})
+        
+    async def chat_message_deleted(self, event):
+        # Send to connected clients
+        await self.send_json({
+            "action": "message_deleted",
+            "message_id": event["message_id"],
+            "group_id": event["group_id"],
+        })
+    
+    @database_sync_to_async
+    def _edit_message(self, user, payload):
+        profile = get_user_profile(user)
+        msg_id = payload.get("message_id")
+        new_content = payload.get("content", "").strip()
+
+        if not msg_id or not new_content:
+            raise ValueError("message_id and content required")
+
+        try:
+            msg = ChatMessage.objects.get(id=msg_id, sender=profile)
+        except ChatMessage.DoesNotExist:
+            raise ValueError("Message not found or not yours")
+
+        msg.mark_as_edited(new_content)
+        return ChatMessageSerializer(msg, context={"request": None}).data
+
+    async def handle_edit_message(self, payload):
+        user = self.scope["user"]
+        try:
+            data = await self._edit_message(user, payload)
+            # broadcast edit event
+            await self.channel_layer.group_send(
+                self.room_name,
+                {"type": "chat.message_edited", "data": data}
+            )
+        except Exception as e:
+            await self.send_json({"type": "error", "message": str(e)})
+
+    async def chat_message_edited(self, event):
+        await self.send_json({"type": "message_edited", "data": event["data"]})
+    
+    @database_sync_to_async
+    def _clear_chat(self, user):
+        profile = get_user_profile(user)
+        group = ChatGroup.objects.get(id=self.group_id)
+
+        ChatClear.objects.update_or_create(
+            profile=profile, group=group,
+            defaults={"cleared_at": timezone.now()}
+        )
+        
+        ChatGroupMember.objects.filter(group=group, profile=profile).update(
+            unread_count=0, last_read_at=timezone.now()
+        )
+
+        return {"group_id": str(group.id), "cleared_at": timezone.now().isoformat()}
+
+    async def handle_clear_chat(self, payload):
+        user = self.scope["user"]
+        try:
+            data = await self._clear_chat(user)
+            # only notify THIS user (not the whole group!)
+            await self.send_json({"type": "chat_cleared", "data": data})
+        except Exception as e:
+            await self.send_json({"type": "error", "message": str(e)})
 
 
 class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
