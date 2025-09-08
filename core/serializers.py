@@ -13,16 +13,30 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
     Converts all DateTimeFields from UTC → user's timezone in output,
     and from user's timezone → UTC in input (write).
+    Works in both API views (context['request']) and Consumers (context['user']).
     """
+
+    def _get_user_timezone(self):
+        # Try request first
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and getattr(request.user, "timezone", None):
+            user_tz_str = request.user.timezone
+        else:
+            # Fall back to consumer user in context
+            user = self.context.get("user")
+            if user and getattr(user, "timezone", None):
+                user_tz_str = user.timezone
+            else:
+                user_tz_str = "UTC"
+
+        try:
+            return pytz.timezone(user_tz_str)
+        except pytz.UnknownTimeZoneError:
+            return pytz.UTC
 
     def to_representation(self, instance):
         rep = super().to_representation(instance)
-        request = self.context.get('request')
-        user_tz_str = getattr(request.user, 'timezone', 'UTC') if request and hasattr(request, 'user') else 'UTC'
-        try:
-            user_tz = pytz.timezone(user_tz_str)
-        except pytz.UnknownTimeZoneError:
-            user_tz = pytz.UTC
+        user_tz = self._get_user_timezone()
 
         for field_name, field in self.fields.items():
             if isinstance(field, serializers.DateTimeField) and rep.get(field_name):
@@ -31,27 +45,17 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                     if value:
                         rep[field_name] = value.astimezone(user_tz).isoformat()
                 except Exception:
-                    pass  # Failsafe
+                    pass
         return rep
 
     def to_internal_value(self, data):
-        """
-        Converts datetime inputs from user's timezone → UTC
-        """
-        request = self.context.get('request')
-        user_tz_str = getattr(request.user, 'timezone', 'UTC') if request and hasattr(request, 'user') else 'UTC'
-
-        try:
-            user_tz = pytz.timezone(user_tz_str)
-        except pytz.UnknownTimeZoneError:
-            user_tz = pytz.UTC
+        user_tz = self._get_user_timezone()
 
         for field_name, field in self.fields.items():
             if isinstance(field, serializers.DateTimeField) and field_name in data:
                 try:
                     raw = data[field_name]
 
-                    # Parse raw string manually to ignore DRF’s UTC parsing
                     if isinstance(raw, str):
                         naive_dt = datetime.strptime(raw, '%Y-%m-%d %H:%M:%S')
                         local_dt = user_tz.localize(naive_dt)
@@ -64,10 +68,9 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                             dt = dt.astimezone(user_tz)
                         data[field_name] = dt.astimezone(pytz.UTC)
 
-                except Exception as e:
+                except Exception:
                     pass
 
-        return super().to_internal_value(data)
         
 
 class CountrySerializer(serializers.ModelSerializer):

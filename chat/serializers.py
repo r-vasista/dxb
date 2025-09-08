@@ -4,6 +4,7 @@ from chat.choices import ChatType
 from profiles.serializers import BasicProfileSerializer  
 from group.serializers import BasicGroupDetailSerializer
 from core.services import get_user_profile
+from core.serializers import TimezoneAwareSerializerMixin
 
 
 class ChatGroupMemberSerializer(serializers.ModelSerializer):
@@ -35,7 +36,7 @@ class ChatMessageReceiptializer(serializers.ModelSerializer):
         fields = ["user", "is_seen", "seen_at"]
 
 
-class ChatMessageSerializer(serializers.ModelSerializer):
+class ChatMessageSerializer(TimezoneAwareSerializerMixin):
     sender = BasicProfileSerializer(read_only=True)
     receipts = ChatMessageReceiptializer(many=True, read_only=True)
     group = serializers.UUIDField(source="group.id", read_only=True)
@@ -81,7 +82,7 @@ class ChatMessageMiniSerializer(serializers.ModelSerializer):
         return False
 
 
-class ChatGroupMiniSerializer(serializers.ModelSerializer):
+class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
     chat_id = serializers.UUIDField(source="group.id", read_only=True)
     type = serializers.CharField(source="group.type", read_only=True)
     counterpart = serializers.SerializerMethodField()

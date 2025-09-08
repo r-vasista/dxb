@@ -99,7 +99,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         )
 
         # serializing for consistent response
-        return ChatMessageSerializer(msg, context={"request": None}).data
+        return ChatMessageSerializer(msg, context={"request": None, "user": user}).data
 
     async def handle_send_message(self, payload):
         user = self.scope["user"]
