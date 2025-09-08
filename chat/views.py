@@ -94,7 +94,7 @@ class GroupMessagesAPIView(APIView, PaginationMixin):
             after_id = request.query_params.get("after")
 
             # Base queryset
-            messages = ChatMessage.objects.filter(group=group).select_related(
+            messages = ChatMessage.objects.filter(group=group).exclude(deletions__profile=profile).select_related(
                 "sender__user"
             )
 
