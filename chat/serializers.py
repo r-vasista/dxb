@@ -72,6 +72,9 @@ class ChatMessageMiniSerializer(serializers.ModelSerializer):
 
     def get_sender_is_me(self, obj):
         request = self.context.get("request")
+        consumer_profile = self.context.get("profile")
+        if consumer_profile and obj.sender_id == consumer_profile.id:
+            return True
         if request and request.user.is_authenticated:
             profile = get_user_profile(request.user)
             return obj.sender_id == profile.id
