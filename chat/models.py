@@ -104,3 +104,12 @@ class ChatClear(models.Model):
 
     class Meta:
         unique_together = ("profile", "group")
+
+
+class DeleteMessage(models.Model):
+    message = models.ForeignKey(ChatMessage, on_delete=models.CASCADE, related_name="deletions")
+    profile = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="deleted_messages")
+    deleted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("message", "profile")

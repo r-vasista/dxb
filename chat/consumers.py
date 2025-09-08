@@ -6,7 +6,7 @@ from channels.db import database_sync_to_async
 from django.utils import timezone
 from django.db.models import F
 
-from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear
+from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
 from chat.utils import is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
@@ -30,6 +30,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         {"action": "edit_message","message_id": "1234","content": "Updated message text"}
       - clear chat
         {"action": "clear_chat"}
+      - delete for me:
+        {"action": "delete_for_me", "message_ids": ["id1", "id2", "id3"]}
     """
 
     async def connect(self):
@@ -72,6 +74,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             await self.handle_edit_message(content)
         elif action == "clear_chat":
             await self.handle_clear_chat(content)
+        elif action == "delete_for_me":
+            await self.handle_delete_for_me(content)
 
     @database_sync_to_async
     def _create_message(self, user, payload):
@@ -249,6 +253,54 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             data = await self._clear_chat(user)
             # only notify THIS user (not the whole group!)
             await self.send_json({"type": "chat_cleared", "data": data})
+        except Exception as e:
+            await self.send_json({"type": "error", "message": str(e)})
+    
+    @database_sync_to_async
+    def _delete_for_me_bulk(self, user, payload):
+        profile = get_user_profile(user)
+        message_ids = payload.get("message_ids", [])
+
+        if not message_ids or not isinstance(message_ids, list):
+            raise ValueError("message_ids (list) required")
+
+        # Ensure messages belong to this group
+        msgs = ChatMessage.objects.filter(
+            id__in=message_ids,
+            group_id=self.group_id
+        )
+
+        if not msgs.exists():
+            raise ValueError("No valid messages found in this chat")
+
+        now = timezone.now()
+        deleted = []
+
+        for msg in msgs:
+            DeleteMessage.objects.update_or_create(
+                profile=profile,
+                message=msg,
+                defaults={"deleted_at": now}
+            )
+            deleted.append({
+                "message_id": str(msg.id),
+                "group_id": str(msg.group_id),
+                "deleted_at": now.isoformat(),
+            })
+
+        return deleted
+
+    async def handle_delete_for_me(self, payload):
+        user = self.scope["user"]
+        try:
+            data = await self._delete_for_me_bulk(user, payload)
+
+            # Notify only THIS user
+            await self.send_json({
+                "type": "messages_deleted_for_me",
+                "data": data
+            })
+
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
