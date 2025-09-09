@@ -69,7 +69,8 @@ from core.models import (
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
-    Debug version: prints conversion steps
+    Converts all DateTimeFields from UTC → user's timezone in output,
+    and from user's timezone → UTC in input (write).
     """
 
     def get_user_timezone(self):
@@ -80,15 +81,11 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
             tz_str = "UTC"
 
         try:
-            tz = pytz.timezone(tz_str)
-            print(f"[DEBUG] Using user timezone: {tz_str}")
-            return tz
+            return pytz.timezone(tz_str)
         except pytz.UnknownTimeZoneError:
-            print(f"[DEBUG] Unknown timezone {tz_str}, defaulting to UTC")
             return pytz.UTC
 
     def to_representation(self, instance):
-        print('REPRESENTING')
         rep = super().to_representation(instance)
         user_tz = self.get_user_timezone()
 
@@ -97,15 +94,12 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                 try:
                     value = getattr(instance, field_name)
                     if value:
-                        print(f"[DEBUG] Serializing field '{field_name}' = {value} (UTC)")
                         rep[field_name] = value.astimezone(user_tz).isoformat()
-                        print(f"[DEBUG] → Converted to {rep[field_name]} (user tz)")
-                except Exception as e:
-                    print(f"[DEBUG] Serialization failed for {field_name}: {e}")
+                except Exception:
+                    pass  # Failsafe
         return rep
 
     def to_internal_value(self, data):
-        print("SAVING")
         validated = super().to_internal_value(data)
         user_tz = self.get_user_timezone()
 
@@ -115,26 +109,18 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                 try:
                     if isinstance(raw, str):
                         dt = parser.parse(raw)
-
-                        # 👇 FIX: if no tzinfo in raw string, assume user's timezone
                         if dt.tzinfo is None:
                             dt = user_tz.localize(dt)
-                            print(f"[DEBUG] Localized naive '{field_name}' → {dt}")
                         else:
                             dt = dt.astimezone(user_tz)
-                            print(f"[DEBUG] Normalized aware '{field_name}' → {dt}")
                     else:
                         dt = field.to_internal_value(raw)
                         if dt.tzinfo is None:
                             dt = user_tz.localize(dt)
 
-                    # Always save as UTC
                     validated[field_name] = dt.astimezone(pytz.UTC)
-                    print(f"[DEBUG] Stored '{field_name}' in UTC → {validated[field_name]}")
-
-                except Exception as e:
-                    print(f"[DEBUG] Conversion failed for {field_name}: {e}")
-        print('SAVING WIHT DATA: ', validated)
+                except Exception:
+                    pass  # Failsafe
         return validated
 
 class CountrySerializer(serializers.ModelSerializer):
