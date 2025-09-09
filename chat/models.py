@@ -113,3 +113,17 @@ class DeleteMessage(models.Model):
 
     class Meta:
         unique_together = ("message", "profile")
+
+
+class ScheduleMessage(models.Model):
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name="scheduled_messages")
+    sender = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="scheduled_messages")
+    message_type = models.CharField(max_length=20, default=ChatMessage.TEXT)
+    content = models.TextField(blank=True, null=True)
+    file = models.FileField(upload_to="chat/scheduled/", blank=True, null=True)
+    scheduled_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    executed = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f'{self.sender} to {self.group} at {self.scheduled_at}'

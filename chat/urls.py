@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import (
     EnsurePersonalChatAPIView, MyChatGroupsAPIView, GroupMessagesAPIView, SendMessageAPIView,
-    MarkAllMessagesReadAPIView, MarkMessagesReadByIdAPIView, MyActiveChatsAPIView, DeleteMessageAPIView
+    MarkAllMessagesReadAPIView, MarkMessagesReadByIdAPIView, MyActiveChatsAPIView, DeleteMessageAPIView, ScheduleMessageAPIView
 )
 
 urlpatterns = [
@@ -13,4 +13,6 @@ urlpatterns = [
     path("mark-read/<uuid:group_id>/", MarkMessagesReadByIdAPIView.as_view(), name="mark_read_by_ids"),
     path("my-active-chats/", MyActiveChatsAPIView.as_view(), name="my-active-chats"),
     path("delete-message/<int:message_id>/", DeleteMessageAPIView.as_view(), name="delete-message"),
+    path("schedule-message/<str:group_id>/", ScheduleMessageAPIView.as_view(), name="schedule-message"),
+    
 ]
