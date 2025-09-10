@@ -26,6 +26,7 @@ from organization.serializers import (
 )
 from core.services import get_user_profile
 from core.utils import process_media_file
+from core.serializers import TimezoneAwareSerializerMixin
 from event.serializers import (
     EventListSerializer
 )
@@ -511,10 +512,10 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ['id', 'username', 'bio', 'profile_picture', 'tools', 'awards']
 
-class BasicProfileSerializer(serializers.ModelSerializer):
+class BasicProfileSerializer(TimezoneAwareSerializerMixin):
     class Meta:
         model = Profile
-        fields = ['id', 'username','profile_picture']
+        fields = ['id', 'username', 'profile_picture', 'is_online', 'last_seen']
         
         
 class UserDocumentSerializer(serializers.ModelSerializer):

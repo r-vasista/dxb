@@ -3,6 +3,8 @@ from django.db import transaction
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage
 from chat.choices import ChatType
 from chat.serializers import ChatGroupSerializer
+from profiles.models import Profile
+from profiles.serializers import BasicProfileSerializer
 
 
 from channels.layers import get_channel_layer
@@ -63,3 +65,43 @@ async def async_broadcast_active_chats_update(profile_id):
         f"active_chats_{profile_id}",
         {"type": "active_chats_update"}
     )
+
+def get_chat_counterpart_ids(profile_id):
+    """
+    Given a profile_id, return all profile_ids of users
+    who share at least one chat with this profile.
+    """
+    group_ids = ChatGroupMember.objects.filter(profile_id=profile_id)\
+                                       .values_list("group_id", flat=True)
+    counterpart_ids = ChatGroupMember.objects.filter(group_id__in=group_ids)\
+                                             .exclude(profile_id=profile_id)\
+                                             .values_list("profile_id", flat=True)\
+                                             .distinct()
+    return list(counterpart_ids)
+
+def async_broadcast_presence_update(profile, is_online):
+    channel_layer = get_channel_layer()
+    counterpart_ids = get_chat_counterpart_ids(profile.id)
+
+    for pid in counterpart_ids:
+        try:
+            counterpart = Profile.objects.select_related("user").get(id=pid)
+
+            serialized_profile = BasicProfileSerializer(
+                profile,
+                context={"user": counterpart.user}
+            ).data
+
+            payload = {
+                "type": "presence.update",
+                "data": {
+                    "profile": serialized_profile,
+                    "is_online": is_online,
+                }
+            }
+
+            async_to_sync(channel_layer.group_send)(
+                f"active_chats_{pid}", payload
+            )
+        except Profile.DoesNotExist:
+            continue

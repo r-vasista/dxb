@@ -9,7 +9,7 @@ from django.db.models import F
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
 from chat.choices import MessageType
 from chat.utils import (
-    is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
+    is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update, async_broadcast_presence_update
 )
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
@@ -119,7 +119,7 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         user = self.scope["user"]
 
         try:
-            profile = get_user_profile(user)
+            profile = await self._get_profile(user)
             group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
 
             if payload.get("message_type") == MessageType.POST:
@@ -420,6 +420,7 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
                 "group", "group__group",
                 "group__last_message", "group__last_message__sender"
             )
+            .prefetch_related("group__memberships__profile")  # <— key optimization
             .order_by("-group__last_message__created_at", "-group__created_at")
         )
 
@@ -449,3 +450,37 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
             "type": "typing",
             "data": event["data"]
         })
+        
+    async def presence_update(self, event):
+        await self.send_json({
+            "type": "presence_update",
+            "data": event["data"]
+        })
+
+
+class PresenceConsumer(AsyncJsonWebsocketConsumer):
+    async def connect(self):
+        user = self.scope["user"]
+        if not user.is_authenticated:
+            await self.close(code=4403)
+            return
+
+        self.profile = await database_sync_to_async(get_user_profile)(user)
+
+        await self.accept()
+        await self._set_online_status(True)
+
+    async def disconnect(self, close_code):
+        if hasattr(self, "profile"):
+            await self._set_online_status(False)
+
+    @database_sync_to_async
+    def _set_online_status(self, is_online: bool):
+
+        self.profile.is_online = is_online
+        if not is_online:
+            self.profile.last_seen = timezone.now()
+        self.profile.save(update_fields=["is_online", "last_seen"])
+
+        # broadcast presence update to active chats sidebar
+        async_broadcast_presence_update(self.profile, self.profile.is_online)

@@ -110,7 +110,11 @@ class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
                 None
             )
             if other:
-                return BasicProfileSerializer(other, context=self.context).data
+                # Ensure timezone context is available
+                ctx = dict(self.context)
+                if "user" not in ctx:
+                    ctx["user"] = me.user
+                return BasicProfileSerializer(other, context=ctx).data
         return None
 
 

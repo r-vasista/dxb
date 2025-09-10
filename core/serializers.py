@@ -69,16 +69,23 @@ from core.models import (
 
 class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
     """
-    Converts all DateTimeFields from UTC → user's timezone in output,
-    and from user's timezone → UTC in input (write).
+    Converts all DateTimeFields:
+      - From UTC → user's timezone in output
+      - From user's timezone → UTC in input
+    Works with both DRF (request in context) and Consumers (user in context).
     """
 
     def get_user_timezone(self):
+        tz_str = "UTC"
+
+        # 1. DRF request context
         request = self.context.get("request")
-        if request and hasattr(request, "user"):
+        if request and hasattr(request, "user") and request.user.is_authenticated:
             tz_str = getattr(request.user, "timezone", "UTC")
-        else:
-            tz_str = "UTC"
+
+        # 2. Consumer context (explicit user)
+        elif self.context.get("user") and self.context["user"].is_authenticated:
+            tz_str = getattr(self.context["user"], "timezone", "UTC")
 
         try:
             return pytz.timezone(tz_str)
@@ -122,6 +129,7 @@ class TimezoneAwareSerializerMixin(serializers.ModelSerializer):
                 except Exception:
                     pass  # Failsafe
         return validated
+
 
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
