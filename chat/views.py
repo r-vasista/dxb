@@ -17,10 +17,13 @@ from rest_framework.exceptions import PermissionDenied
 
 from core.services import success_response, error_response, get_user_profile
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear
-from chat.serializers import ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer
+from chat.serializers import (
+    ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer, ScheduleMessageSerializer
+)
 from chat.permissions import IsChatMember
 from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update
 from chat.choices import ChatType
+from chat.tasks import deliver_scheduled_message
 from profiles.models import Profile
 from core.pagination import PaginationMixin
 
@@ -371,3 +374,17 @@ class DeleteMessageAPIView(APIView):
             return Response(error_response(str(e)),status=404)
         except Exception as e:
             return Response(error_response(str(e)),status=500)
+
+
+class ScheduleMessageAPIView(APIView):
+    def post(self, request, group_id):
+        serializer = ScheduleMessageSerializer(data=request.data, context={"request": request})
+        serializer.is_valid(raise_exception=True)
+        scheduled_message = serializer.save(group_id=group_id)
+
+        deliver_scheduled_message.apply_async(
+            args=[scheduled_message.id],
+            eta=scheduled_message.scheduled_at
+        )
+
+        return Response(success_response(serializer.data), status=201)

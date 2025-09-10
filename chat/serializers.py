@@ -1,9 +1,11 @@
 from rest_framework import serializers
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt
+from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ScheduleMessage
 from chat.choices import ChatType
 from profiles.serializers import BasicProfileSerializer  
 from group.serializers import BasicGroupDetailSerializer
 from core.services import get_user_profile
+from core.serializers import TimezoneAwareSerializerMixin
+from post.serializers import PostSerializer
 
 
 class ChatGroupMemberSerializer(serializers.ModelSerializer):
@@ -35,14 +37,15 @@ class ChatMessageReceiptializer(serializers.ModelSerializer):
         fields = ["user", "is_seen", "seen_at"]
 
 
-class ChatMessageSerializer(serializers.ModelSerializer):
+class ChatMessageSerializer(TimezoneAwareSerializerMixin):
     sender = BasicProfileSerializer(read_only=True)
     receipts = ChatMessageReceiptializer(many=True, read_only=True)
     group = serializers.UUIDField(source="group.id", read_only=True)
+    shared_post = PostSerializer(read_only=True)
 
     class Meta:
         model = ChatMessage
-        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted", "receipts",
+        fields = ["id", "group", "sender", "message_type", "content", "file", "shared_post", "created_at", "edited_at", "is_deleted", "receipts",
                   "updated_at", "is_edited"]
         read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts", "updated_at", "is_edited"]
     
@@ -81,7 +84,7 @@ class ChatMessageMiniSerializer(serializers.ModelSerializer):
         return False
 
 
-class ChatGroupMiniSerializer(serializers.ModelSerializer):
+class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
     chat_id = serializers.UUIDField(source="group.id", read_only=True)
     type = serializers.CharField(source="group.type", read_only=True)
     counterpart = serializers.SerializerMethodField()
@@ -107,3 +110,14 @@ class ChatGroupMiniSerializer(serializers.ModelSerializer):
             if other:
                 return BasicProfileSerializer(other, context=self.context).data
         return None
+
+
+class ScheduleMessageSerializer(TimezoneAwareSerializerMixin):
+    class Meta:
+        model = ScheduleMessage
+        fields = ["id", "group", "sender", "message_type", "content", "file", "scheduled_at", "executed"]
+        read_only_fields = ["id", "sender", "executed"]
+
+    def create(self, validated_data):
+        validated_data["sender"] = self.context["request"].user.profile
+        return super().create(validated_data)

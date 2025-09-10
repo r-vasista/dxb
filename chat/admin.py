@@ -1,6 +1,6 @@
 from django.contrib import admin
 from chat.models import (
-    ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear
+    ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear,ScheduleMessage
 )
 
 @admin.register(ChatGroup)
@@ -33,3 +33,9 @@ class ChatClearAdmin(admin.ModelAdmin):
     list_display = ['id', 'profile', 'group', 'cleared_at']
     search_fields =  ['id', 'profile', 'group', 'cleared_at']
     list_filter = ['id', 'profile', 'group', 'cleared_at']
+
+@admin.register(ScheduleMessage)
+class ScheduleMessageAdmin(admin.ModelAdmin):
+    list_display = ['id', 'sender', 'group', 'scheduled_at', 'executed']
+    search_fields = ['id', 'sender', 'group', 'scheduled_at', 'executed']
+    list_filter = ['id', 'sender', 'group', 'scheduled_at', 'executed']

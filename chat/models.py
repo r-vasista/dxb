@@ -5,6 +5,7 @@ from django.utils import timezone
 from profiles.models import Profile
 from chat.choices import ChatType
 from group.models import Group
+from post.models import Post
 
 
 class ChatGroup(models.Model):
@@ -46,11 +47,13 @@ class ChatMessage(models.Model):
     TEXT = "text"
     IMAGE = "image"
     FILE = "file"
+    POST = "post" 
 
     MESSAGE_TYPES = (
         (TEXT, "Text"),
         (IMAGE, "Image"),
         (FILE, "File"),
+        (POST, "Post"),
     )
 
     id = models.BigAutoField(primary_key=True)
@@ -59,6 +62,10 @@ class ChatMessage(models.Model):
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default=TEXT)
     content = models.TextField(blank=True)
     file = models.FileField(upload_to="chat/files/", blank=True, null=True)
+    
+    shared_post = models.ForeignKey(
+        Post, null=True, blank=True, on_delete=models.SET_NULL, related_name="shared_in_messages"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
@@ -113,3 +120,17 @@ class DeleteMessage(models.Model):
 
     class Meta:
         unique_together = ("message", "profile")
+
+
+class ScheduleMessage(models.Model):
+    group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name="scheduled_messages")
+    sender = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="scheduled_messages")
+    message_type = models.CharField(max_length=20, default=ChatMessage.TEXT)
+    content = models.TextField(blank=True, null=True)
+    file = models.FileField(upload_to="chat/scheduled/", blank=True, null=True)
+    scheduled_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    executed = models.BooleanField(default=False)
+    
+    def __str__(self):
+        return f'{self.sender} to {self.group} at {self.scheduled_at}'
