@@ -5,6 +5,7 @@ from profiles.serializers import BasicProfileSerializer
 from group.serializers import BasicGroupDetailSerializer
 from core.services import get_user_profile
 from core.serializers import TimezoneAwareSerializerMixin
+from post.serializers import PostSerializer
 
 
 class ChatGroupMemberSerializer(serializers.ModelSerializer):
@@ -40,10 +41,11 @@ class ChatMessageSerializer(TimezoneAwareSerializerMixin):
     sender = BasicProfileSerializer(read_only=True)
     receipts = ChatMessageReceiptializer(many=True, read_only=True)
     group = serializers.UUIDField(source="group.id", read_only=True)
+    shared_post = PostSerializer(read_only=True)
 
     class Meta:
         model = ChatMessage
-        fields = ["id", "group", "sender", "message_type", "content", "file", "created_at", "edited_at", "is_deleted", "receipts",
+        fields = ["id", "group", "sender", "message_type", "content", "file", "shared_post", "created_at", "edited_at", "is_deleted", "receipts",
                   "updated_at", "is_edited"]
         read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts", "updated_at", "is_edited"]
     

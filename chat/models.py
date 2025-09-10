@@ -5,6 +5,7 @@ from django.utils import timezone
 from profiles.models import Profile
 from chat.choices import ChatType
 from group.models import Group
+from post.models import Post
 
 
 class ChatGroup(models.Model):
@@ -46,11 +47,13 @@ class ChatMessage(models.Model):
     TEXT = "text"
     IMAGE = "image"
     FILE = "file"
+    POST = "post" 
 
     MESSAGE_TYPES = (
         (TEXT, "Text"),
         (IMAGE, "Image"),
         (FILE, "File"),
+        (POST, "Post"),
     )
 
     id = models.BigAutoField(primary_key=True)
@@ -59,6 +62,10 @@ class ChatMessage(models.Model):
     message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default=TEXT)
     content = models.TextField(blank=True)
     file = models.FileField(upload_to="chat/files/", blank=True, null=True)
+    
+    shared_post = models.ForeignKey(
+        Post, null=True, blank=True, on_delete=models.SET_NULL, related_name="shared_in_messages"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)

@@ -7,10 +7,13 @@ from django.utils import timezone
 from django.db.models import F
 
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
-from chat.utils import is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
+from chat.utils import (
+    is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update
+)
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
 from profiles.serializers import BasicProfileSerializer
+from post.models import Post
 
 
 def group_room_name(group_id: str) -> str:
@@ -101,24 +104,56 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         # serializing for consistent response
         return ChatMessageSerializer(msg, context={"request": None, "user": user}).data
+    
+    @database_sync_to_async
+    def _get_profile(self, user):
+        return get_user_profile(user)
+
+    @database_sync_to_async
+    def _serialize_message(self, msg, user=None):
+        return ChatMessageSerializer(msg, context={"request": None, "user": user}).data
 
     async def handle_send_message(self, payload):
         user = self.scope["user"]
+
         try:
-            data = await self._create_message(user, payload)
-            # broadcast
+            if payload.get("message_type") == ChatMessage.POST:
+                post_id = payload.get("post_id")
+                if not post_id:
+                    raise ValueError("post_id required for post message")
+
+                post = await database_sync_to_async(Post.objects.get)(id=post_id)
+                profile = await self._get_profile(user)  # ✅ wrapped
+                group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
+
+                msg = await database_sync_to_async(ChatMessage.objects.create)(
+                    group=group,
+                    sender=profile,
+                    message_type=ChatMessage.POST,
+                    shared_post=post
+                )
+            else:
+                data = await self._create_message(user, payload)
+                msg = await database_sync_to_async(ChatMessage.objects.get)(id=data["id"])
+
+            # ✅ wrapped serializer
+            serialized = await self._serialize_message(msg, user)
+
+            # broadcast to group
             await self.channel_layer.group_send(
                 self.room_name,
-                {"type": "chat.message", "data": data}
+                {"type": "chat.message", "data": serialized}
             )
-            # update active chats for all members
+
+            # also update active chats list
             group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
-            members = await database_sync_to_async(
-                list
-            )(ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True))
+            members = await database_sync_to_async(list)(
+                ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True)
+            )
             await asyncio.gather(
                 *[async_broadcast_active_chats_update(pid) for pid in members]
             )
+
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
@@ -154,7 +189,6 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 for pid in members
             ]
         )
-
 
     async def chat_typing(self, event):
         await self.send_json({"type": "typing", "data": event["data"]})
