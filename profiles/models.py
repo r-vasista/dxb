@@ -78,6 +78,9 @@ class Profile(BaseModel):
     website_url = models.URLField(blank=True, null=True)
     notify_email = models.BooleanField(default=True)
     
+    is_online = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    
     last_active_at = models.DateTimeField(null=True, blank=True)
     last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     art_service_enabled = models.BooleanField(default=False)

@@ -3,9 +3,10 @@ from django.db import models
 from django.utils import timezone
 
 from profiles.models import Profile
-from chat.choices import ChatType
+from chat.choices import ChatType, MessageType
 from group.models import Group
 from post.models import Post
+from event.models import Event
 
 
 class ChatGroup(models.Model):
@@ -63,9 +64,8 @@ class ChatMessage(models.Model):
     content = models.TextField(blank=True)
     file = models.FileField(upload_to="chat/files/", blank=True, null=True)
     
-    shared_post = models.ForeignKey(
-        Post, null=True, blank=True, on_delete=models.SET_NULL, related_name="shared_in_messages"
-    )
+    shared_post = models.ForeignKey(Post, null=True, blank=True, on_delete=models.SET_NULL, related_name="post_in_messages")
+    shared_event = models.ForeignKey(Event, on_delete=models.SET_NULL, null=True, blank=True, related_name="event_in_messages")
 
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
