@@ -290,21 +290,37 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         msg.mark_as_edited(new_content)
         return ChatMessageSerializer(msg, context={"request": None}).data
 
+    @database_sync_to_async
+    def _get_visible_member_ids(self, msg_id):
+        """
+        Return profile_ids of members who have NOT deleted this message.
+        """
+        return list(
+            ChatGroupMember.objects
+            .filter(group_id=self.group_id)
+            .exclude(profile__deleted_messages__message_id=msg_id)  # exclude deleted
+            .values_list("profile_id", flat=True)
+        )
+
     async def handle_edit_message(self, payload):
         user = self.scope["user"]
         try:
             data = await self._edit_message(user, payload)
-            # broadcast edit event
+
+            # get only members who still see this message
+            visible_member_ids = await self._get_visible_member_ids(data["id"])
+
             await self.channel_layer.group_send(
                 self.room_name,
                 {"type": "chat.message_edited", "data": data}
             )
-             # update active chats sidebar
-            group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
-            members = await database_sync_to_async(list)(
-                ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True)
+
+
+            # update active chats sidebar only for visible members
+            await asyncio.gather(
+                *[async_broadcast_active_chats_update(pid) for pid in visible_member_ids]
             )
-            await asyncio.gather(*[async_broadcast_active_chats_update(pid) for pid in members])
+
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
