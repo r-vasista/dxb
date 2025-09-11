@@ -81,8 +81,20 @@ def get_chat_counterpart_ids(profile_id):
 
 def async_broadcast_presence_update(profile, is_online):
     channel_layer = get_channel_layer()
-    counterpart_ids = get_chat_counterpart_ids(profile.id)
+    group_ids = list(
+        ChatGroupMember.objects.filter(profile=profile)
+        .values_list("group_id", flat=True)
+    )
 
+    # All counterparts (other profiles in these groups)
+    counterpart_ids = (
+        ChatGroupMember.objects.filter(group_id__in=group_ids)
+        .exclude(profile_id=profile.id)
+        .values_list("profile_id", flat=True)
+        .distinct()
+    )
+
+    # Prepare payload (once)
     for pid in counterpart_ids:
         try:
             counterpart = Profile.objects.select_related("user").get(id=pid)
@@ -100,8 +112,16 @@ def async_broadcast_presence_update(profile, is_online):
                 }
             }
 
+            # 1. Send to counterpart's sidebar
             async_to_sync(channel_layer.group_send)(
                 f"active_chats_{pid}", payload
             )
         except Profile.DoesNotExist:
             continue
+
+    # 2. Send once per shared group
+    for gid in group_ids:
+        async_to_sync(channel_layer.group_send)(
+            f"chat_{gid}",
+            {"type": "chat.presence", "data": payload["data"]}
+        )

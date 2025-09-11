@@ -403,6 +403,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
+        
+    async def chat_presence(self, event):
+        await self.send_json({
+            "type": "presence_update",
+            "data": event["data"]
+        })
 
 
 class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
