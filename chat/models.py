@@ -82,7 +82,8 @@ class ChatMessage(models.Model):
     def mark_as_edited(self, new_content):
         self.content = new_content
         self.is_edited = True
-        self.save(update_fields=["content", "is_edited", "updated_at"]) 
+        self.edited_at = timezone.now()
+        self.save(update_fields=["content", "is_edited", "edited_at", "updated_at"])
 
     def save(self, *args, **kwargs):
         super().save(*args, **kwargs)
