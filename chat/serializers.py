@@ -92,8 +92,7 @@ class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
     counterpart = serializers.SerializerMethodField()
     unread_count = serializers.IntegerField()
     is_muted = serializers.BooleanField()
-    last_message = ChatMessageMiniSerializer(source="group.last_message", read_only=True)
-
+    last_message = serializers.SerializerMethodField()
     class Meta:
         model = ChatGroupMember
         fields = [
@@ -116,6 +115,20 @@ class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
                     ctx["user"] = me.user
                 return BasicProfileSerializer(other, context=ctx).data
         return None
+    
+    def get_last_message(self, obj):
+        profile = self.context["profile"]
+
+        # Exclude messages deleted for this profile
+        qs = (
+            ChatMessage.objects
+            .filter(group=obj.group, is_deleted=False)
+            .exclude(deletions__profile=profile)
+            .order_by("-created_at")
+        )
+
+        msg = qs.first()
+        return ChatMessageMiniSerializer(msg, context=self.context).data if msg else None
 
 
 class ScheduleMessageSerializer(TimezoneAwareSerializerMixin):

@@ -23,7 +23,7 @@ class ChatGroup(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     last_message_at = models.DateTimeField(null=True, blank=True)
     last_message = models.ForeignKey(
-        "ChatMessage", on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
+        "ChatMessage", on_delete=models.SET_NULL, null=True, blank=True, related_name="msg_chat_group"
     )
 
     # for a personal chat, enforce 2 members via app logic (not DB)

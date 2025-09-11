@@ -299,6 +299,12 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 self.room_name,
                 {"type": "chat.message_edited", "data": data}
             )
+             # update active chats sidebar
+            group = await database_sync_to_async(ChatGroup.objects.get)(id=self.group_id)
+            members = await database_sync_to_async(list)(
+                ChatGroupMember.objects.filter(group=group).values_list("profile_id", flat=True)
+            )
+            await asyncio.gather(*[async_broadcast_active_chats_update(pid) for pid in members])
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
 
@@ -374,6 +380,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                 "type": "messages_deleted_for_me",
                 "data": data
             })
+            
+            # Recalculate sidebar ONLY for this user
+            profile = await database_sync_to_async(get_user_profile)(user)
+            await async_broadcast_active_chats_update(profile.id)
 
         except Exception as e:
             await self.send_json({"type": "error", "message": str(e)})
