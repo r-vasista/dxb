@@ -352,28 +352,46 @@ class DeleteMessageAPIView(APIView):
 
             # only sender can delete
             if message.sender != profile:
-                return Response(error_response("Not allowed to delete this message"), status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    error_response("Not allowed to delete this message"),
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
             # mark as deleted
             message.is_deleted = True
             message.save(update_fields=["is_deleted"])
 
-            # broadcast to websocket
             channel_layer = get_channel_layer()
+
+            # 🔹 1. Broadcast to chat room
             async_to_sync(channel_layer.group_send)(
                 f"chat_{message.group.id}",
                 {
                     "type": "chat.message_deleted",
                     "message_id": str(message.id),
                     "group_id": str(message.group.id),
-                }
+                },
             )
 
-            return Response(success_response(f'message deleted'),status=200)
+            # 🔹 2. If it was last message, broadcast to active chats
+            group = message.group
+            if group.last_message_id == message.id:
+                # get all group members via ChatGroupMember
+                member_ids = list(
+                    ChatGroupMember.objects.filter(group=group)
+                    .values_list("profile_id", flat=True)
+                )
+
+                for pid in member_ids:
+                    broadcast_active_chats_update(pid)
+
+            return Response(success_response("message deleted"), status=200)
+
         except Http404 as e:
-            return Response(error_response(str(e)),status=404)
+            return Response(error_response(str(e)), status=404)
         except Exception as e:
-            return Response(error_response(str(e)),status=500)
+            return Response(error_response(str(e)), status=500)
+
 
 
 class ScheduleMessageAPIView(APIView):
