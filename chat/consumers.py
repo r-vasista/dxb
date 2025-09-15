@@ -4,7 +4,7 @@ import asyncio
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
-from django.db.models import F
+from django.db.models import F, Subquery, OuterRef
 
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
 from chat.choices import MessageType
@@ -341,6 +341,9 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
             unread_count=0, last_read_at=timezone.now()
         )
 
+        # After clearing, broadcast sidebar update
+        broadcast_active_chats_update(profile.id)
+
         return {"group_id": str(group.id), "cleared_at": timezone.now().isoformat()}
 
     async def handle_clear_chat(self, payload):
@@ -448,11 +451,19 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
         qs = (
             ChatGroupMember.objects
             .filter(profile=self.profile, group__last_message__isnull=False)
+            .exclude(
+                group__last_message__created_at__lte=Subquery(
+                    ChatClear.objects.filter(
+                        profile=self.profile,
+                        group=OuterRef("group_id")
+                    ).values("cleared_at")[:1]
+                )
+            )
             .select_related(
                 "group", "group__group",
                 "group__last_message", "group__last_message__sender"
             )
-            .prefetch_related("group__memberships__profile")  # <— key optimization
+            .prefetch_related("group__memberships__profile")
             .order_by("-group__last_message__created_at", "-group__created_at")
         )
 
@@ -463,6 +474,13 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
             profile=self.profile,
             unread_count__gt=0,
             group__last_message__isnull=False
+        ).exclude(
+            group__last_message__created_at__lte=Subquery(
+                ChatClear.objects.filter(
+                    profile=self.profile,
+                    group=OuterRef("group_id")
+                ).values("cleared_at")[:1]
+            )
         ).count()
 
         return {
