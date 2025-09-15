@@ -28,6 +28,8 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
     Protocol (JSON):
       - send message:
         {"action":"send_message","message_type":"text","content":"hi"}
+        {"action": "send_message","message_type": "post", "post_id": "2"}
+        {"action": "send_message","message_type": "event", "event_id": "12"}
       - typing:
         {"action":"typing","is_typing":true}
       - mark read:
