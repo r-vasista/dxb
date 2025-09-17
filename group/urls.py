@@ -7,9 +7,9 @@ from group.views import (
     GroupPostLikesByIdAPIView, GroupPostLikeDetailAPIView, GroupPostCommentLikeToggleAPIView, GroupPostCommentLikeListAPIView,
     GroupJoinRequestCreateAPIView, GroupJoinRequestListAPIView, GroupJoinRequestActionAPIView,
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
-    GroupDeleteAPIView , GroupActionLogListAPIView,
+    GroupDeleteAPIView , GroupActionLogListAPIView, PublicGroupMemberListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
-    GroupsFeedAPIView, GroupSuggestionAPIView
+    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView, GroupPostByHashtagAPIView
 )
 
 urlpatterns = [
@@ -19,7 +19,8 @@ urlpatterns = [
     path('update-group/<int:group_id>/', GroupUpdateAPIView.as_view(), name='update-group'),
     path('delete-group/<int:group_id>/', GroupDeleteAPIView.as_view(), name='delete-group'),
     path('group-details/<int:group_id>/', GroupDetailAPIView.as_view(), name='group-details'),
-    path('group-details/<slug:slug>/', GroupDetailAPIView.as_view(), name='group-details'),
+    path('group-details/<slug:slug>/', GroupDetailAPIView.as_view(), name='created-groups'),
+    path('created-groups/<int:profile_id>/', CreatedGroupsAPIView.as_view(), name='new-groups-list/'),
     path('new-groups-list/', NewGroupsListAPIView.as_view(), name='new-groups-list/'),
     path('trending-groups-list/', TrendingGroupsAPIView.as_view(), name='trending-groups-list'),
     path('hashtag-groups/<str:hashtag_name>/', GroupyHashTagAPIView.as_view(), name="groups-by-hashtag-name"),
@@ -34,18 +35,25 @@ urlpatterns = [
     path('group-requests/<int:group_id>/', GroupJoinRequestListAPIView.as_view(), name='group-requests'),
     path('respond-request/<int:group_id>/<int:request_id>/', GroupJoinRequestActionAPIView.as_view(), name='respond-requests'),
     path('add-group-member/', GroupAddMemberAPIView.as_view(), name='add-group-memeber'),
+    path('leave-group/<int:group_id>/', LeaveGroupAPIView.as_view(), name="leave-group"),
     path('group-member-detail/<int:id>/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
+
+    #Group Post
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<slug:slug>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
+    path('public-group-members-list/<int:group_id>/', PublicGroupMemberListAPIView.as_view(), name='public-group-members-list'),
+    path('public-group-members-list/<slug:slug>/', PublicGroupMemberListAPIView.as_view(), name='public-group-members-list'),
     path('group-members-Leaderboard-list/<int:group_id>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
     path('group-members-Leaderboard-list/<slug:slug>/', GroupMemberLeaderboardListAPIView.as_view(), name='group-members-Leaderboard-list'),
     
     #Group Post
     path('post/create/<int:group_id>/',GroupPostCreateAPIView.as_view(),name='create-group-post'),
     path('group-post-all/<int:group_id>/',GroupListAPIView.as_view(),name='list-group-posts'),
+    path('group-posts/by-hashtag/', GroupPostByHashtagAPIView.as_view(), name='group-posts-by-hashtag'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
+    path('group-post/<str:slug>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     
     # Flag Group POst
     path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),

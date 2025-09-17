@@ -1,3 +1,5 @@
+import uuid
+
 # Django imports
 from django.db import models
 from django.utils.text import slugify
@@ -12,7 +14,7 @@ from organization.models import (
     Organization
 )
 from profiles.choices import (
-    VisibilityStatus, FieldType, ProfileType, StaticFieldType
+    VisibilityStatus, FieldType, ProfileType, StaticFieldType, DocumentType, VerificationStatus
 )
 from profiles.utils import (
     validate_username_format
@@ -76,6 +78,9 @@ class Profile(BaseModel):
     website_url = models.URLField(blank=True, null=True)
     notify_email = models.BooleanField(default=True)
     
+    is_online = models.BooleanField(default=False)
+    last_seen = models.DateTimeField(null=True, blank=True)
+    
     last_active_at = models.DateTimeField(null=True, blank=True)
     last_reminder_sent_at = models.DateTimeField(null=True, blank=True)
     art_service_enabled = models.BooleanField(default=False)
@@ -96,12 +101,30 @@ class Profile(BaseModel):
         'self', on_delete=models.SET_NULL, null=True, blank=True,
         related_name='verified_profiles'
     )
+    referral_code = models.CharField(max_length=12, unique=True, blank=True, null=True)
+    referred_by = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="referrals"
+    )
+    points = models.PositiveIntegerField(default=0)
     
     def save(self, *args, **kwargs):
         # Normalize username to lowercase before saving
         if self.username:
             self.username = self.username.lower()
+            
+        # Auto-generate referral code only when creating a new profile
+        if not self.referral_code:
+            code = str(uuid.uuid4()).split("-")[0].upper()
+            # Ensure uniqueness
+            while Profile.objects.filter(referral_code=code).exists():
+                code = str(uuid.uuid4()).split("-")[0].upper()
+            self.referral_code = code
+            
         super().save(*args, **kwargs)
+    
+    def add_points(self, amount: int):
+        self.points += amount
+        self.save(update_fields=["points"])
 
     @property
     def followers_count(self):
@@ -501,3 +524,48 @@ class ArtServiceInquiry(models.Model):
 
     def __str__(self):
         return f"{self.inquirer_profile.username} -> {self.artist_profile.username}"
+    
+
+class VerificationRequest(BaseModel):
+    """
+    A verification request raised by a user.
+    Admins approve/reject this request after reviewing linked documents.
+    """
+
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name="verification_requests"
+    )
+    status = models.CharField(
+        max_length=20, choices=VerificationStatus.choices, default=VerificationStatus.PENDING
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    reviewed_by = models.ForeignKey(
+        Profile, null=True, blank=True, on_delete=models.SET_NULL,
+        related_name="reviewed_verification_requests"
+    )
+    rejection_reason = models.TextField(null=True, blank=True)
+
+    def __str__(self):
+        return f"VerificationRequest({self.profile.username}) - {self.status}"
+
+
+class UserDocument(BaseModel):
+    """
+    Stores documents uploaded as part of a verification request.
+    """
+
+    request = models.ForeignKey(
+        VerificationRequest, on_delete=models.CASCADE, related_name="documents"
+    )
+    document_type = models.CharField(
+        max_length=50, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
+    file = models.FileField(upload_to="user_documents/")
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.request.profile.username} - {self.document_type}"
+    

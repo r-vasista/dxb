@@ -15,7 +15,7 @@ from post.choices import (
 
 #models 
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag,SharePost
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, SharePost
 )
 from profiles.models import (
     Profile

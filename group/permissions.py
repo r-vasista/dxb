@@ -50,3 +50,21 @@ class IsGroupAdmin(BasePermission):
             return membership.role == RoleChoices.ADMIN
         except GroupMember.DoesNotExist:
             return False
+
+
+class IsGroupMember(BasePermission):
+    """
+    Allows access only to group Admin.
+    """
+
+    def has_object_permission(self, request, view, obj):
+        """
+        `obj` is expected to be a Group instance.
+        """
+        if not request.user.is_authenticated:
+            return False
+
+        try:
+            return GroupMember.objects.filter(group=obj, profile=get_user_profile(request.user)).exists()
+        except GroupMember.DoesNotExist:
+            return False
