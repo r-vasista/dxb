@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>You're Invited!</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f7f8fa;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            max-width: 600px;
+            margin: auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.05);
+        }
+
+        h2 {
+            color: #2c3e50;
+        }
+
+        p {
+            line-height: 1.6;
+        }
+
+        .btn {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+
+        .footer {
+            margin-top: 30px;
+            font-size: 12px;
+            color: #777;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>You're Invited to Join {{ invite.organization.name }}</h2>
+
+        <p>Hello,</p>
+
+        <p><strong>{{ invite.invited_by.email }}</strong> has invited you to join the organization 
+        <strong>{{ invite.organization.name }}</strong> as a <strong>{{ invite.role.name }}</strong>.</p>
+
+        {% if invite.message %}
+            <blockquote style="color: #555; font-style: italic; margin: 20px 0;">
+                "{{ invite.message }}"
+            </blockquote>
+        {% endif %}
+
+        <p>To accept the invitation, click the button below:</p>
+
+        <a href="{{ accept_url }}" class="btn">Accept Invitation</a>
+
+        <p>If you did not expect this invitation, you can safely ignore this email.</p>
+
+        <div class="footer">
+            © {{ invite.organization.name }} | This invitation will expire on {{ invite.expires_at|date:"F j, Y, g:i a" }}
+        </div>
+    </div>
+</body>
+</html>
