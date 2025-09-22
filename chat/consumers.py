@@ -4,7 +4,7 @@ import asyncio
 from channels.generic.websocket import AsyncJsonWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.utils import timezone
-from django.db.models import F, Subquery, OuterRef
+from django.db.models import F, Subquery, OuterRef, Exists
 
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
 from chat.choices import MessageType
@@ -450,17 +450,19 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
 
     @database_sync_to_async
     def _get_active_chats(self):
+        clears = ChatClear.objects.filter(
+            profile=self.profile,
+            group=OuterRef("group_id"),
+            cleared_at__gte=OuterRef("group__last_message__created_at")
+        )
+
         qs = (
             ChatGroupMember.objects
             .filter(profile=self.profile, group__last_message__isnull=False)
-            .exclude(
-                group__last_message__created_at__lte=Subquery(
-                    ChatClear.objects.filter(
-                        profile=self.profile,
-                        group=OuterRef("group_id")
-                    ).values("cleared_at")[:1]
-                )
+            .annotate(
+                cleared=Exists(clears)  # True if user cleared after last_message
             )
+            .filter(cleared=False)  # only keep non-cleared chats
             .select_related(
                 "group", "group__group",
                 "group__last_message", "group__last_message__sender"
@@ -472,18 +474,18 @@ class ActiveChatsConsumer(AsyncJsonWebsocketConsumer):
         serializer = ChatGroupMiniSerializer(
             qs, many=True, context={"profile": self.profile}
         )
-        total_unread_chats = ChatGroupMember.objects.filter(
-            profile=self.profile,
-            unread_count__gt=0,
-            group__last_message__isnull=False
-        ).exclude(
-            group__last_message__created_at__lte=Subquery(
-                ChatClear.objects.filter(
-                    profile=self.profile,
-                    group=OuterRef("group_id")
-                ).values("cleared_at")[:1]
+
+        total_unread_chats = (
+            ChatGroupMember.objects
+            .filter(
+                profile=self.profile,
+                unread_count__gt=0,
+                group__last_message__isnull=False
             )
-        ).count()
+            .annotate(cleared=Exists(clears))
+            .filter(cleared=False)
+            .count()
+        )
 
         return {
             "chats": serializer.data,
