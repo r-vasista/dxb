@@ -25,7 +25,7 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
         
         # Check if user exists
         try:
-            user = User.objects.get(email=email)
+            user = User.objects.get(email__iexact=email)
         except User.DoesNotExist:
             raise AuthenticationFailed("No account found with this email.")
 
