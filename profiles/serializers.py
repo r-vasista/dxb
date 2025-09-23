@@ -388,6 +388,7 @@ class FriendRequestSerializer(serializers.ModelSerializer):
             'from_username',
             'from_profile_pic',
             'status',
+            'created_at',
         ]
 
 
