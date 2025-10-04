@@ -15,7 +15,8 @@ from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
 from profiles.serializers import BasicProfileSerializer
 from post.models import Post
-from event.models import Event
+from event.models import Event, EventMedia
+from    .models import GroupPost
 
 
 def group_room_name(group_id: str) -> str:
@@ -150,6 +151,24 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
                     sender=profile,
                     message_type=MessageType.EVENT,
                     shared_event=event,
+                )
+                
+            elif payload.get("message_type") == MessageType.GROUP_POST:
+                gp_id = payload.get("group_post_id")
+                if not gp_id:
+                    raise ValueError("group_post_id required")
+                gp = await database_sync_to_async(GroupPost.objects.get)(id=gp_id)
+                msg = await database_sync_to_async(ChatMessage.objects.create)(
+                    group=group, sender=profile, message_type=ChatMessage.GROUP_POST, shared_group_post=gp
+                )
+
+            elif payload.get("message_type") == MessageType.EVENT_MEDIA:
+                em_id = payload.get("event_media_id")
+                if not em_id:
+                    raise ValueError("event_media_id required")
+                em = await database_sync_to_async(EventMedia.objects.get)(id=em_id)
+                msg = await database_sync_to_async(ChatMessage.objects.create)(
+                    group=group, sender=profile, message_type=ChatMessage.EVENT_MEDIA, shared_event_media=em
                 )
 
             else:

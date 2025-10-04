@@ -6,7 +6,8 @@ from group.serializers import BasicGroupDetailSerializer
 from core.services import get_user_profile
 from core.serializers import TimezoneAwareSerializerMixin
 from post.serializers import PostSerializer
-from event.serializers import EventDetailSerializer
+from event.serializers import EventDetailSerializer, EventMediaSerializer
+from group.serializers import GroupPostSerializer
 
 
 class ChatGroupMemberSerializer(serializers.ModelSerializer):
@@ -44,11 +45,13 @@ class ChatMessageSerializer(TimezoneAwareSerializerMixin):
     group = serializers.UUIDField(source="group.id", read_only=True)
     shared_post = PostSerializer(read_only=True)
     shared_event = EventDetailSerializer(read_only=True)
+    shared_group_post = GroupPostSerializer(read_only=True)
+    shared_event_media = EventMediaSerializer(read_only=True)
 
     class Meta:
         model = ChatMessage
         fields = ["id", "group", "sender", "message_type", "content", "file", "shared_post", "shared_event", "created_at", "edited_at", "is_deleted", "receipts",
-                  "updated_at", "is_edited"]
+                  "updated_at", "is_edited",  "shared_group_post", "shared_event_media"]
         read_only_fields = ["id", "sender", "created_at", "edited_at", "is_deleted", "group", "receipts", "updated_at", "is_edited"]
     
     def to_representation(self, instance):

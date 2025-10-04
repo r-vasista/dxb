@@ -4,9 +4,9 @@ from django.utils import timezone
 
 from profiles.models import Profile
 from chat.choices import ChatType, MessageType
-from group.models import Group
+from group.models import Group, GroupPost
 from post.models import Post
-from event.models import Event
+from event.models import Event, EventMedia
 
 
 class ChatGroup(models.Model):
@@ -48,24 +48,33 @@ class ChatMessage(models.Model):
     TEXT = "text"
     IMAGE = "image"
     FILE = "file"
-    POST = "post" 
+    POST = "post"
+    EVENT = "event"
+    GROUP_POST = "group_post"
+    EVENT_MEDIA = "event_media"
 
     MESSAGE_TYPES = (
         (TEXT, "Text"),
         (IMAGE, "Image"),
         (FILE, "File"),
         (POST, "Post"),
+        (EVENT, "Event"),
+        (GROUP_POST, "GroupPost"),
+        (EVENT_MEDIA, "EventMedia"),
     )
 
     id = models.BigAutoField(primary_key=True)
     group = models.ForeignKey(ChatGroup, on_delete=models.CASCADE, related_name="messages")
     sender = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name="sent_messages")
-    message_type = models.CharField(max_length=10, choices=MESSAGE_TYPES, default=TEXT)
+
+    message_type = models.CharField(max_length=20, choices=MESSAGE_TYPES, default=TEXT)
     content = models.TextField(blank=True)
     file = models.FileField(upload_to="chat/files/", blank=True, null=True)
-    
+
     shared_post = models.ForeignKey(Post, null=True, blank=True, on_delete=models.SET_NULL, related_name="post_in_messages")
-    shared_event = models.ForeignKey(Event, on_delete=models.SET_NULL, null=True, blank=True, related_name="event_in_messages")
+    shared_event = models.ForeignKey(Event, null=True, blank=True, on_delete=models.SET_NULL, related_name="event_in_messages")
+    shared_group_post = models.ForeignKey(GroupPost, null=True, blank=True, on_delete=models.SET_NULL, related_name="group_post_in_messages")
+    shared_event_media = models.ForeignKey(EventMedia, null=True, blank=True, on_delete=models.SET_NULL, related_name="event_media_in_messages")
 
     created_at = models.DateTimeField(auto_now_add=True)
     edited_at = models.DateTimeField(null=True, blank=True)
@@ -78,7 +87,7 @@ class ChatMessage(models.Model):
         indexes = [
             models.Index(fields=["group", "-created_at"]),
         ]
-    
+
     def mark_as_edited(self, new_content):
         self.content = new_content
         self.is_edited = True
