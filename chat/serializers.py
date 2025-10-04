@@ -87,6 +87,14 @@ class ChatMessageMiniSerializer(serializers.ModelSerializer):
             profile = get_user_profile(request.user)
             return obj.sender_id == profile.id
         return False
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        if instance.is_deleted:
+            data["content"] = "This message was deleted"
+        return data
+
 
 
 class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
@@ -125,7 +133,7 @@ class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
         # Exclude messages deleted for this profile
         qs = (
             ChatMessage.objects
-            .filter(group=obj.group, is_deleted=False)
+            .filter(group=obj.group)
             .exclude(deletions__profile=profile)
             .order_by("-created_at")
         )
