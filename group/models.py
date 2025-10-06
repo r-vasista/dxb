@@ -212,6 +212,7 @@ class GroupPostFlag(models.Model):
     def __str__(self):
         return f"Flag by {self.reported_by} on Post {self.post}"
 
+
 class ShareGroupPost(BaseModel):
     group_post = models.ForeignKey(
         GroupPost, on_delete=models.CASCADE, related_name="shares"

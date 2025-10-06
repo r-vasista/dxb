@@ -9,7 +9,7 @@ from group.views import (
     UpdateGroupPostCommentAPIView, DeleteGroupPostCommentAPIView, TrendingGroupsAPIView, GroupyHashTagAPIView, RecommendedGroupsAPIView, 
     GroupDeleteAPIView , GroupActionLogListAPIView, PublicGroupMemberListAPIView,
     FlagGroupPostAPIView, GroupFlaggedPostsAPIView, GroupMemberLeaderboardListAPIView, GroupEventsListAPIView, MyGroupsListAPIView,
-    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView, GroupPostByHashtagAPIView
+    GroupsFeedAPIView, GroupSuggestionAPIView, CreatedGroupsAPIView, LeaveGroupAPIView, GroupPostByHashtagAPIView, GroupPostShareView
 )
 
 urlpatterns = [
@@ -38,8 +38,6 @@ urlpatterns = [
     path('leave-group/<int:group_id>/', LeaveGroupAPIView.as_view(), name="leave-group"),
     path('group-member-detail/<int:id>/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
     path('update-group-member/', GroupMemberDetailAPIView.as_view(), name='update-group-member'),
-
-    #Group Post
     path('remove-group-member/', GroupMemberDetailAPIView.as_view(), name='remove-group-member'),
     path('group-members-list/<int:group_id>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
     path('group-members-list/<slug:slug>/', GroupMemberListAPIView.as_view(), name='group-members-list'),
@@ -54,6 +52,7 @@ urlpatterns = [
     path('group-posts/by-hashtag/', GroupPostByHashtagAPIView.as_view(), name='group-posts-by-hashtag'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     path('group-post/<str:slug>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
+    path('share-group-post/<int:post_id>/',GroupPostShareView.as_view(),name='share-group-post'),
     
     # Flag Group POst
     path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),
