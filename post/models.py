@@ -126,9 +126,12 @@ class Post(BaseModel):
 
     def save(self, *args, **kwargs):
         # Auto-generate slug per post
-        if not self.slug and self.title:
-            base_title = self.title.strip()[:MAX_SLUG_BASE_LENGTH]
-            base_slug = slugify(base_title)
+        if not self.slug:
+            if self.title:
+                base_title = self.title.strip()[:MAX_SLUG_BASE_LENGTH]
+                base_slug = slugify(base_title)
+            else:
+                base_slug = "post"  # fallback when title is missing
 
             username = self.profile.username if self.profile and self.profile.username else "user"
             timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
@@ -139,6 +142,7 @@ class Post(BaseModel):
         if self.status == PostStatus.PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
 
+        # Assign gallery order
         if not self.gallery_order and self.profile:
             max_order = Post.objects.filter(profile=self.profile).aggregate(
                 max_order=models.Max('gallery_order')
@@ -146,6 +150,7 @@ class Post(BaseModel):
             self.gallery_order = max_order + 1
 
         super().save(*args, **kwargs)
+
 
 
 class PostMedia(BaseModel):
