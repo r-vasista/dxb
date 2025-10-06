@@ -6,7 +6,8 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog,
+    ShareEventMedia
 )
 from event.utils import generate_google_calendar_link, is_host_or_cohost
 from event.choices import (
@@ -206,7 +207,7 @@ class EventMediaSerializer(serializers.ModelSerializer):
         model = EventMedia
         fields = [
                     'id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at',
-                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count'
+                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count', 'share_count'
                 ]
         read_only_fields = ['media_type', 'uploaded_at', 'uploaded_by_host']
     
@@ -399,3 +400,10 @@ class EventActivityLogSerializer(serializers.ModelSerializer):
         model = EventActivityLog
         fields = ['id', 'event', 'activity_type', 'timestamp']
         read_only_fields = ['id', 'timestamp']
+        
+
+class ShareEventMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShareEventMedia
+        fields = ['event_media', 'profile']
+        

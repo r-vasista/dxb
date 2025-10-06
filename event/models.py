@@ -221,6 +221,7 @@ class EventMedia(BaseModel):
     is_pinned = models.BooleanField(default=False)
     like_count=models.IntegerField(default=0)
     comments_count=models.IntegerField(default=0)
+    share_count = models.PositiveIntegerField(default=0)
     
     class Meta:
         ordering = ['-uploaded_at']
@@ -347,3 +348,19 @@ class EventActivityLog(BaseModel):
     class Meta:
         unique_together = ('profile', 'event', 'activity_type')
         indexes = [models.Index(fields=['event', 'activity_type'])]
+
+
+class ShareEventMedia(BaseModel):
+    event_media = models.ForeignKey(
+        EventMedia, on_delete=models.CASCADE, related_name="shares"
+    )
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name="event_media_shares"
+    )
+
+    class Meta:
+        unique_together = ('event_media', 'profile')
+
+    def __str__(self):
+        return f"{self.profile.username} shared {self.event_media.id}"
+    

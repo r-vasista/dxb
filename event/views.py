@@ -22,11 +22,11 @@ from django.db import IntegrityError
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer, ShareEventMediaSerializer
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog,
-    HashTag
+    HashTag, ShareEventMedia
 )
 from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
@@ -1601,3 +1601,31 @@ class EventByTagAPIView(APIView, PaginationMixin):
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"status": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventMediaShareView(APIView):
+    """
+    POST /api/event-media/{media_id}/share/
+    Allows a profile to share an event media once.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, media_id):
+        try:
+            event_media = get_object_or_404(EventMedia, id=media_id)
+            profile = get_user_profile(request.user)
+
+            existing_share = ShareEventMedia.objects.filter(event_media=event_media, profile=profile).first()
+            if existing_share:
+                return Response(success_response("Event media already shared."), status=status.HTTP_200_OK)
+
+            serializer = ShareEventMediaSerializer(data={"event_media": event_media.id, "profile": profile.id})
+            serializer.is_valid(raise_exception=True)
+            share = serializer.save()
+
+            event_media.share_count = ShareEventMedia.objects.filter(event_media=event_media).count()
+            event_media.save(update_fields=["share_count"])
+            
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)

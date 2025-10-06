@@ -52,7 +52,7 @@ urlpatterns = [
     path('group-posts/by-hashtag/', GroupPostByHashtagAPIView.as_view(), name='group-posts-by-hashtag'),
     path('group-post/<int:post_id>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
     path('group-post/<str:slug>/',GroupPostDetailAPIView.as_view(),name='group-post-details'),
-    path('share-group-post/<int:post_id>/',GroupPostShareView.as_view(),name='share-group-post'),
+    path('share-group-post/<int:group_post_id>/',GroupPostShareView.as_view(),name='share-group-post'),
     
     # Flag Group POst
     path('flag-group-post/<int:post_id>/',FlagGroupPostAPIView.as_view(),name='flag-group-post'),
