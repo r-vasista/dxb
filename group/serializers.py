@@ -7,7 +7,7 @@ from django.utils import timezone
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
-     GroupActionLog, GroupActionLog
+     GroupActionLog, GroupActionLog, ShareGroupPost
 )
 from group.choices import (
     RoleChoices
@@ -352,3 +352,10 @@ class GroupPostUpdateSerializer(serializers.ModelSerializer):
         handle_grouppost_hashtags(instance)
 
         return instance
+
+
+class ShareGroupPostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShareGroupPost
+        fields = ['group_post', 'profile']
+

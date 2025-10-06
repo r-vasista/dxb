@@ -21,7 +21,8 @@ from django.db.models import Count, Q, F
 
 # Local imports
 from group.models import (
-    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag , GroupActionLog
+    Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
+    GroupActionLog, ShareGroupPost
 )
 from group.choices import (
     RoleChoices, JoiningRequestStatus, GroupAction
@@ -30,7 +31,7 @@ from group.serializers import (
     GroupCreateSerializer, GroupPostSerializer, GroupDetailSerializer, GroupPostCommentSerializer, AddGroupMemberSerializer, GroupMemberSerializer, 
     GroupListSerializer, GroupPostLikeSerializer, GroupPostCommentLikeSerializer, GroupUpdateSerializer, GroupMemberUpdateSerializer, 
     GroupJoinRequestSerializer, GroupPostFlagSerializer, GroupPostFlagListSerializer , GroupActionLogSerializer, 
-    GroupSearchSerializer,GroupSuggestionSerializer, BasicGroupDetailSerializer, GroupPostUpdateSerializer
+    GroupSearchSerializer,GroupSuggestionSerializer, BasicGroupDetailSerializer, GroupPostUpdateSerializer, ShareGroupPostSerializer
 )
 from group.permissions import (
     can_add_members, IsGroupAdminOrModerator, IsGroupAdmin, IsGroupMember
@@ -1571,3 +1572,31 @@ class GroupPostByHashtagAPIView(APIView, PaginationMixin):
             return Response(error_response("Hashtag not found"), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class GroupPostShareView(APIView):
+    """
+    POST /api/group-posts/{group_post_id}/share/
+    Allows a profile to share a group post once.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, group_post_id):
+        try:
+            group_post = get_object_or_404(GroupPost, id=group_post_id)
+            profile = get_user_profile(request.user)
+
+            existing_share = ShareGroupPost.objects.filter(group_post=group_post, profile=profile).first()
+            if existing_share:
+                return Response(success_response("Group post already shared."), status=status.HTTP_200_OK)
+
+            serializer = ShareGroupPostSerializer(data={"group_post": group_post.id, "profile": profile.id})
+            serializer.is_valid(raise_exception=True)
+            share = serializer.save()
+
+            group_post.share_count = ShareGroupPost.objects.filter(group_post=group_post).count()
+            group_post.save(update_fields=["share_count"])
+
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
