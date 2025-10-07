@@ -9,7 +9,8 @@ from django.db.models import F, Subquery, OuterRef, Exists
 from chat.models import ChatGroup, ChatMessage, ChatGroupMember, MessageReceipt, ChatClear, DeleteMessage
 from chat.choices import MessageType
 from chat.utils import (
-    is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update, async_broadcast_presence_update
+    is_group_member, broadcast_active_chats_update, async_broadcast_active_chats_update, async_broadcast_presence_update,
+    can_edit
 )
 from chat.serializers import ChatMessageSerializer, ChatGroupMiniSerializer
 from core.services import get_user_profile
@@ -302,6 +303,10 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
 
         if not msg_id or not new_content:
             raise ValueError("message_id and content required")
+        
+        ok, err = can_edit(profile)
+        if not ok:
+            raise ValueError(err)
 
         try:
             msg = ChatMessage.objects.get(id=msg_id, sender=profile)
@@ -432,6 +437,14 @@ class ChatConsumer(AsyncJsonWebsocketConsumer):
         await self.send_json({
             "type": "presence_update",
             "data": event["data"]
+        })
+    
+    async def chat_message_removed(self, event):
+    # Premium invisible delete → completely remove from chat
+        await self.send_json({
+            "type": "message_removed",
+            "message_id": event["message_id"],
+            "group_id": event["group_id"],
         })
 
 

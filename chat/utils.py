@@ -1,14 +1,22 @@
-from django.db.models import Q
+from datetime import date
+
+from django.db.models import Q, F
 from django.db import transaction
+from django.utils import timezone
+
 from chat.models import ChatGroup, ChatGroupMember, ChatMessage
 from chat.choices import ChatType
 from chat.serializers import ChatGroupSerializer
 from profiles.models import Profile
 from profiles.serializers import BasicProfileSerializer
+from subscription.models import ChatEditLimit
 
 
 from channels.layers import get_channel_layer
 from asgiref.sync import async_to_sync
+
+DAILY_EDIT_LIMIT = 3
+DAILY_DELETE_LIMIT = 3
 
 def get_or_create_personal_group(profile_a, profile_b):
     """
@@ -125,3 +133,30 @@ def async_broadcast_presence_update(profile, is_online):
             f"chat_{gid}",
             {"type": "chat.presence", "data": payload["data"]}
         )
+
+def get_or_create_edit_limit(profile):
+    today = timezone.localdate()
+    limit, _ = ChatEditLimit.objects.get_or_create(profile=profile, date=today)
+    return limit
+
+def can_edit(profile):
+    subscription = getattr(profile, "subscription", None)
+    if subscription and subscription.is_active and subscription.plan.unlimited_edits:
+        return True, None  # premium → no limit
+    limit = get_or_create_edit_limit(profile)
+    if limit.edit_count >= DAILY_EDIT_LIMIT:
+        return False, "Daily edit limit reached (max 3)."
+    limit.edit_count = F("edit_count") + 1
+    limit.save(update_fields=["edit_count"])
+    return True, None
+
+def can_delete(profile):
+    subscription = getattr(profile, "subscription", None)
+    if subscription and subscription.is_active and subscription.plan.unlimited_edits:
+        return True, subscription.plan.invisible_delete
+    limit = get_or_create_edit_limit(profile)
+    if limit.delete_count >= DAILY_DELETE_LIMIT:
+        return False, False
+    limit.delete_count = F("delete_count") + 1
+    limit.save(update_fields=["delete_count"])
+    return True, False

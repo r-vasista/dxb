@@ -70,6 +70,7 @@ INSTALLED_APPS = [
     "group",
     "chat",
     "admindashboard",
+    "subscription",
     
 ]
 

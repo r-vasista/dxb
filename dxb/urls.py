@@ -34,6 +34,7 @@ urlpatterns = [
     path('group/', include('group.urls')),
     path('chat/', include('chat.urls')),
     path('admindashboard/', include('admindashboard.urls')),
+    path('subscription/', include('subscription.urls'))
 ]
 
 if settings.DEBUG:

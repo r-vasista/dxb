@@ -21,7 +21,7 @@ from chat.serializers import (
     ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer, ScheduleMessageSerializer
 )
 from chat.permissions import IsChatMember
-from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update
+from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update, can_delete
 from chat.choices import ChatType
 from chat.tasks import deliver_scheduled_message
 from profiles.models import Profile
@@ -340,6 +340,7 @@ class SendMessageAPIView(APIView):
             return Response(error_response(str(e)), status=500)
 
 
+
 class DeleteMessageAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
@@ -347,51 +348,91 @@ class DeleteMessageAPIView(APIView):
         try:
             user = request.user
             profile = get_user_profile(user)
-
             message = get_object_or_404(ChatMessage, id=message_id)
 
-            # only sender can delete
+            # Only sender can delete
             if message.sender != profile:
                 return Response(
                     error_response("Not allowed to delete this message"),
                     status=status.HTTP_403_FORBIDDEN,
                 )
 
-            # mark as deleted
-            message.is_deleted = True
-            message.save(update_fields=["is_deleted"])
+            # Check delete limit and premium invisibility
+            ok, invisible_delete = can_delete(profile)
+            if not ok:
+                return Response(
+                    error_response("Daily delete limit reached (max 3)."),
+                    status=status.HTTP_429_TOO_MANY_REQUESTS,
+                )
 
             channel_layer = get_channel_layer()
-
-            # 🔹 1. Broadcast to chat room
-            async_to_sync(channel_layer.group_send)(
-                f"chat_{message.group.id}",
-                {
-                    "type": "chat.message_deleted",
-                    "message_id": str(message.id),
-                    "group_id": str(message.group.id),
-                },
-            )
-
-            # 🔹 2. If it was last message, broadcast to active chats
             group = message.group
-            if group.last_message_id == message.id:
-                # get all group members via ChatGroupMember
+            last_message_id = group.last_message.id
+
+            if invisible_delete:
+                msg_id = message.id
+                group = message.group
+
+                # find previous message (non-deleted and older)
+                prev_msg = (
+                    ChatMessage.objects
+                    .filter(group=group)
+                    .exclude(id=msg_id)
+                    .order_by('-created_at')
+                    .first()
+                )
+
+                # hard delete the message
+                message.delete()
+
+                # update group last_message
+                if prev_msg:
+                    group.last_message = prev_msg
+                    group.last_message_at = prev_msg.created_at
+                else:
+                    group.last_message = None
+                    group.last_message_at = None
+                group.save(update_fields=["last_message", "last_message_at"])
+
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{group.id}",
+                    {
+                        "type": "chat.message_removed",
+                        "message_id": str(msg_id),
+                        "group_id": str(group.id),
+                    },
+                )
+            else:
+                # Free users → soft delete
+                message.is_deleted = True
+                message.save(update_fields=["is_deleted"])
+
+                async_to_sync(channel_layer.group_send)(
+                    f"chat_{group.id}",
+                    {
+                        "type": "chat.message_deleted",
+                        "message_id": str(message.id),
+                        "group_id": str(group.id),
+                    },
+                )
+
+            # Update active chat sidebar if last message was deleted
+            if last_message_id == message_id:
                 member_ids = list(
                     ChatGroupMember.objects.filter(group=group)
                     .values_list("profile_id", flat=True)
                 )
-
                 for pid in member_ids:
                     broadcast_active_chats_update(pid)
 
-            return Response(success_response("message deleted"), status=200)
+            msg = "message deleted" if not invisible_delete else "message permanently deleted"
+            return Response(success_response(msg), status=200)
 
         except Http404 as e:
             return Response(error_response(str(e)), status=404)
         except Exception as e:
             return Response(error_response(str(e)), status=500)
-
+        
 
 
 class ScheduleMessageAPIView(APIView):
