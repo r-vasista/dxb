@@ -361,7 +361,7 @@ class DeleteMessageAPIView(APIView):
             ok, invisible_delete = can_delete(profile)
             if not ok:
                 return Response(
-                    error_response("Daily delete limit reached (max 3)."),
+                    error_response("Daily delete limit reached."),
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
@@ -434,7 +434,6 @@ class DeleteMessageAPIView(APIView):
             return Response(error_response(str(e)), status=500)
         
 
-
 class ScheduleMessageAPIView(APIView):
     def post(self, request, group_id):
         serializer = ScheduleMessageSerializer(data=request.data, context={"request": request})
@@ -445,5 +444,5 @@ class ScheduleMessageAPIView(APIView):
             args=[scheduled_message.id],
             eta=scheduled_message.scheduled_at
         )
-
+        
         return Response(success_response(serializer.data), status=201)
