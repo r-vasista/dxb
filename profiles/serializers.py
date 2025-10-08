@@ -33,6 +33,7 @@ from event.serializers import (
 from post.choices import (
     PostStatus
 )
+from subscription.models import UserSubscription
 
 
 class StaticFieldValueSerializer(serializers.ModelSerializer):
@@ -246,6 +247,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source='city.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     country_name = serializers.CharField(source='country.name', read_only=True)
+    subscription_type = serializers.SerializerMethodField()
+    subscription_expires_at = serializers.SerializerMethodField()
 
     
     class Meta:
@@ -258,7 +261,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
             'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required', 'followers_count', 
-            'following_count', 'friends_count', 'total_posts_count', 'referral_code'
+            'following_count', 'friends_count', 'total_posts_count', 'referral_code', 'subscription_type', 
+            'subscription_expires_at',
         ]
     
     def get_is_friend(self, obj):
@@ -373,6 +377,22 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     
     def get_total_posts_count(self, obj):
         return obj.posts.filter(status=PostStatus.PUBLISHED).count()
+    
+    def get_subscription_type(self, obj):
+        active_sub = (
+            UserSubscription.objects.filter(profile=obj, is_active=True)
+            .order_by("-start_date")
+            .first()
+        )
+        return active_sub.plan.name if active_sub else "FREE"
+
+    def get_subscription_expires_at(self, obj):
+        active_sub = (
+            UserSubscription.objects.filter(profile=obj, is_active=True)
+            .order_by("-start_date")
+            .first()
+        )
+        return active_sub.end_date if active_sub else None
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
