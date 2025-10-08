@@ -8,6 +8,7 @@ from django.contrib.auth.models import update_last_login
 from django.contrib.auth import get_user_model
 from user.models import Role, Permission
 from organization.models import Organization
+from subscription.models import UserSubscription
 
 User = get_user_model()
 
@@ -55,6 +56,20 @@ class CustomTokenObtainPairSerializer(TokenObtainSerializer):
             data['created_at'] = profile.created_at
             data['profile_tutorial'] = profile.profile_tutorial
             data['wall_tutorial'] = profile.wall_tutorial
+            
+            active_sub = (
+                UserSubscription.objects.filter(profile=profile, is_active=True)
+                .order_by("-start_date")
+                .first()
+            )
+
+            if active_sub:
+                data["subscription_type"] = active_sub.plan.name
+                data["subscription_expires_at"] = active_sub.end_date
+            else:
+                data["subscription_type"] = "FREE"
+                data["subscription_expires_at"] = None
+                
         else:
             data["profile_id"] = None
             data["profile_type"] = None
