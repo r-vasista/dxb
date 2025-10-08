@@ -107,6 +107,11 @@ class Post(BaseModel):
     is_featured = models.BooleanField(default=False)
     allow_comments = models.BooleanField(default=True)
     allow_reactions = models.BooleanField(default=True)
+    
+    # scheduling fields
+    is_scheduled = models.BooleanField(default=False)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    original_visibility = models.CharField(max_length=20, choices=PostVisibility.choices, null=True, blank=True)
 
     city = models.ForeignKey(City, blank=True, null=True, on_delete=models.SET_NULL)
     state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)

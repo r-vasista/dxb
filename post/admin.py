@@ -5,7 +5,7 @@ from post.models import (
 
 @admin.register(Post)
 class PostAdmin(admin.ModelAdmin):
-    list_display = ['id', 'profile', 'title', 'gallery_order', 'view_count']
+    list_display = ['id', 'profile', 'title', 'status', 'visibility', 'gallery_order', 'view_count']
 
 
 @admin.register(PostMedia)

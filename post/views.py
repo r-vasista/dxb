@@ -131,8 +131,15 @@ class PostAPIView(APIView):
                 if scheduled_dt <= timezone.now():
                     post.delete()
                     return Response(error_response("scheduled_at must be in the future"), status=400)
+                
+                # Save original visibility before hiding it
+                post.original_visibility = post.visibility
+                post.visibility = PostVisibility.PRIVATE
+                post.scheduled_at = scheduled_dt
+                post.save(update_fields=["original_visibility", "visibility", "scheduled_at", "status"])
 
                 # Schedule the publish task
+                # publish_scheduled_post.apply_async(args=[post.id])
                 publish_scheduled_post.apply_async(args=[post.id], eta=scheduled_dt)
 
             else:
