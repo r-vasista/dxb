@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ScheduleMessage
+from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ScheduleMessage, ChatTheme
 from chat.choices import ChatType
 from profiles.serializers import BasicProfileSerializer  
 from group.serializers import BasicGroupDetailSerializer
@@ -151,3 +151,11 @@ class ScheduleMessageSerializer(TimezoneAwareSerializerMixin):
     def create(self, validated_data):
         validated_data["sender"] = self.context["request"].user.profile
         return super().create(validated_data)
+
+
+class ChatThemeSerializer(serializers.ModelSerializer):
+    uploaded_by_name = serializers.CharField(source="uploaded_by.username", read_only=True)
+
+    class Meta:
+        model = ChatTheme
+        fields = '__all__'

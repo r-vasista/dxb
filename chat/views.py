@@ -14,11 +14,15 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.parsers import MultiPartParser, FormParser
 
 from core.services import success_response, error_response, get_user_profile
-from chat.models import ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear
+from chat.models import (
+    ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear, ChatTheme, ChatGroupTheme
+)
 from chat.serializers import (
-    ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer, ScheduleMessageSerializer
+    ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer, ScheduleMessageSerializer,
+    ChatThemeSerializer
 )
 from chat.permissions import IsChatMember
 from chat.utils import get_or_create_personal_group, is_group_member, broadcast_active_chats_update, can_delete
@@ -446,3 +450,63 @@ class ScheduleMessageAPIView(APIView):
         )
         
         return Response(success_response(serializer.data), status=201)
+
+
+class UploadAndApplyChatThemeAPIView(APIView):
+    """
+    POST /api/chat/themes/upload-and-apply/
+
+    Allows a user to upload a custom chat theme and apply it to a chat group.
+    User must be a member of the given chat group.
+    """
+    permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        try:
+            profile = request.user.profile
+            group_id = request.data.get("group_id")
+            name = request.data.get("name")
+            description = request.data.get("description", "")
+            background_image = request.data.get("background_image")
+            is_public = request.data.get("is_public", False)
+
+            if not group_id or not name:
+                return Response(error_response("Both 'group_id' and 'name' are required."), status=400)
+
+            # Validate group and membership
+            try:
+                group = ChatGroup.objects.get(id=group_id)
+            except ChatGroup.DoesNotExist:
+                return Response(error_response("Chat group not found."), status=404)
+
+            if not ChatGroupMember.objects.filter(group=group, profile=profile).exists():
+                return Response(error_response("You are not a member of this chat group."), status=403)
+
+            with transaction.atomic():
+                # Create new custom theme
+                theme = ChatTheme.objects.create(
+                    name=name,
+                    description=description,
+                    type="custom",
+                    uploaded_by=profile,
+                    background_image=background_image,
+                    is_public=is_public,
+                )
+
+                # Apply it to the chat
+                chat_theme, _ = ChatGroupTheme.objects.update_or_create(
+                    group=group,
+                    defaults={
+                        "theme": theme,
+                        "applied_by": profile,
+                        "applied_at": timezone.now(),
+                    },
+                )
+
+            serializer = ChatThemeSerializer(theme)
+            return Response(success_response("Theme uploaded and applied successfully.", serializer.data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+        
