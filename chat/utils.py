@@ -145,7 +145,7 @@ def can_edit(profile):
         return True, None  # premium → no limit
     limit = get_or_create_edit_limit(profile)
     if limit.edit_count >= DAILY_EDIT_LIMIT:
-        return False, "Daily edit limit reached."
+        return False, "Daily limit reached! Go Premium to unlock unlimited edits and exclusive benefits.."
     limit.edit_count = F("edit_count") + 1
     limit.save(update_fields=["edit_count"])
     return True, None

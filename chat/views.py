@@ -361,7 +361,7 @@ class DeleteMessageAPIView(APIView):
             ok, invisible_delete = can_delete(profile)
             if not ok:
                 return Response(
-                    error_response("Daily delete limit reached."),
+                    error_response("Daily limit reached! Go Premium to unlock unlimited deletions and exclusive benefits.."),
                     status=status.HTTP_429_TOO_MANY_REQUESTS,
                 )
 
