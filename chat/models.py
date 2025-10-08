@@ -144,3 +144,56 @@ class ScheduleMessage(models.Model):
     
     def __str__(self):
         return f'{self.sender} to {self.group} at {self.scheduled_at}'
+
+
+class ChatTheme(models.Model):
+    THEME_TYPE_CHOICES = [
+        ("default", "Default"),
+        ("custom", "Custom"),
+    ]
+    
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    type = models.CharField(max_length=10, choices=THEME_TYPE_CHOICES, default="DEFAULT")
+
+    # For default themes, uploaded_by is null
+    uploaded_by = models.ForeignKey(
+        Profile,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="uploaded_themes"
+    )
+    
+    background_image = models.ImageField(upload_to="chat/themes/backgrounds/", null=True, blank=True)
+    is_public = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
+
+
+class ChatGroupTheme(models.Model):
+    group = models.OneToOneField(
+        ChatGroup,
+        on_delete=models.CASCADE,
+        related_name="theme"
+    )
+    theme = models.ForeignKey(
+        ChatTheme,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applied_groups"
+    )
+    applied_by = models.ForeignKey(
+        Profile,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="applied_chat_themes"
+    )
+    applied_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.group} → {self.theme}"
