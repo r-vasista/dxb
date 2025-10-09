@@ -92,7 +92,7 @@ class  GroupPostSerializer(serializers.ModelSerializer):
             'id', 'group', 'profile', 'content', 'media_file', 'hashtags',
             'is_announcement', 'announcement_expiry', 'likes_count',
             'comments_count', 'share_count', 'is_flagged', 'flag_count',
-            'slug'
+            'slug', 'created_at', 'updated_at'
         ]
         read_only_fields =['slug']
         extra_kwargs = {
