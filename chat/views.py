@@ -469,7 +469,6 @@ class UploadAndApplyChatThemeAPIView(APIView):
             name = request.data.get("name")
             description = request.data.get("description", "")
             background_image = request.data.get("background_image")
-            is_public = request.data.get("is_public", False)
 
             if not group_id or not name:
                 return Response(error_response("Both 'group_id' and 'name' are required."), status=400)
@@ -491,7 +490,7 @@ class UploadAndApplyChatThemeAPIView(APIView):
                     type="custom",
                     uploaded_by=profile,
                     background_image=background_image,
-                    is_public=is_public,
+                    is_public=False,
                 )
 
                 # Apply it to the chat
@@ -510,3 +509,45 @@ class UploadAndApplyChatThemeAPIView(APIView):
         except Exception as e:
             return Response(error_response(str(e)), status=500)
         
+
+class RemoveChatThemeAPIView(APIView):
+    """
+    DELETE /api/chat/themes/remove/
+
+    Removes the applied chat theme from a given chat group.
+    User must be a member of the group.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request):
+        try:
+            profile = request.user.profile
+            group_id = request.data.get("group_id")
+
+            if not group_id:
+                return Response(error_response("'group_id' is required."), status=400)
+
+            # Validate group
+            try:
+                group = ChatGroup.objects.get(id=group_id)
+            except ChatGroup.DoesNotExist:
+                return Response(error_response("Chat group not found."), status=404)
+
+            # Check membership
+            if not ChatGroupMember.objects.filter(group=group, profile=profile).exists():
+                return Response(error_response("You are not a member of this chat group."), status=403)
+
+            # Check if theme exists
+            try:
+                chat_theme = ChatGroupTheme.objects.get(group=group)
+            except ChatGroupTheme.DoesNotExist:
+                return Response(error_response("No theme applied to this group."), status=404)
+
+            with transaction.atomic():
+                # Remove the theme (but keep record for history if needed)
+                chat_theme.delete()
+
+            return Response(success_response("Chat theme removed successfully."), status=200)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
