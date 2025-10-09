@@ -302,7 +302,7 @@ class  GroupPostDetailAPIView(APIView):
                 post = GroupPost.objects.get(slug=slug)
             else:
                 return Response(error_response('post id or slug must be provided', status=status.HTTP_400_BAD_REQUEST))
-            serializer =  GroupPostSerializer(post)
+            serializer =  GroupPostSerializer(post, context={'request':request})
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except GroupPost.DoesNotExist:
             return Response(error_response("Group post not found."), status=status.HTTP_404_NOT_FOUND)

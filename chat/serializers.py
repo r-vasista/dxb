@@ -5,7 +5,7 @@ from profiles.serializers import BasicProfileSerializer
 from group.serializers import BasicGroupDetailSerializer
 from core.services import get_user_profile
 from core.serializers import TimezoneAwareSerializerMixin
-from post.serializers import PostSerializer
+from post.serializers import PostSerializer, BasicPostSerializer
 from event.serializers import EventDetailSerializer, EventMediaSerializer
 from group.serializers import GroupPostSerializer
 
@@ -43,10 +43,10 @@ class ChatMessageSerializer(TimezoneAwareSerializerMixin):
     sender = BasicProfileSerializer(read_only=True)
     receipts = ChatMessageReceiptializer(many=True, read_only=True)
     group = serializers.UUIDField(source="group.id", read_only=True)
-    shared_post = PostSerializer(read_only=True)
-    shared_event = EventDetailSerializer(read_only=True)
-    shared_group_post = GroupPostSerializer(read_only=True)
-    shared_event_media = EventMediaSerializer(read_only=True)
+    shared_post = serializers.SerializerMethodField()
+    shared_event = serializers.SerializerMethodField()
+    shared_group_post = serializers.SerializerMethodField()
+    shared_event_media = serializers.SerializerMethodField()
 
     class Meta:
         model = ChatMessage
@@ -62,6 +62,26 @@ class ChatMessageSerializer(TimezoneAwareSerializerMixin):
             data["file"] = None
 
         return data
+    
+    def get_shared_post(self, obj):
+        if obj.shared_post:
+            return BasicPostSerializer(obj.shared_post, context=self.context).data
+        return None
+    
+    def get_shared_event(self, obj):
+        if obj.shared_event:
+            return EventDetailSerializer(obj.shared_event, context=self.context).data
+        return None
+
+    def get_shared_group_post(self, obj):
+        if obj.shared_group_post:
+            return GroupPostSerializer(obj.shared_group_post, context=self.context).data
+        return None
+
+    def get_shared_event_media(self, obj):
+        if obj.shared_event_media:
+            return EventMediaSerializer(obj.shared_event_media, context=self.context).data
+        return None
 
 
 class ChatMessageMiniSerializer(serializers.ModelSerializer):

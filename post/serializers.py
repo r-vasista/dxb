@@ -7,7 +7,7 @@ from post.models import (
 )
 from post.utils import extract_mentions
 from profiles.models import Profile
-from profiles.serializers import ProfileSerializer
+from profiles.serializers import ProfileSerializer, BasicProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.choices import PostVisibility
 from core.serializers import TimezoneAwareSerializerMixin
@@ -264,3 +264,10 @@ class PostCommentListSerializer(serializers.ModelSerializer):
 
     def get_has_replies(self, obj):
         return obj.replies.filter(is_approved=True).exists()
+
+class BasicPostSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+    media = PostMediaSerializer(many=True, read_only=True)
+    class Meta:
+        model = Post
+        fields=['profile', 'media', 'title', 'slug', 'content']
