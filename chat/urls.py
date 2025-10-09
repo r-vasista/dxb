@@ -2,7 +2,7 @@ from django.urls import path
 from .views import (
     EnsurePersonalChatAPIView, MyChatGroupsAPIView, GroupMessagesAPIView, SendMessageAPIView,
     MarkAllMessagesReadAPIView, MarkMessagesReadByIdAPIView, MyActiveChatsAPIView, DeleteMessageAPIView, ScheduleMessageAPIView,
-    UploadAndApplyChatThemeAPIView, RemoveChatThemeAPIView
+    UploadAndApplyChatThemeAPIView, RemoveChatThemeAPIView, GetChatThemeAPIView
 )
 
 urlpatterns = [
@@ -17,5 +17,6 @@ urlpatterns = [
     path("schedule-message/<str:group_id>/", ScheduleMessageAPIView.as_view(), name="schedule-message"),
     path("apply-chat-theme/", UploadAndApplyChatThemeAPIView.as_view(), name="apply-chat-theme"),
     path("remove-chat-theme/", RemoveChatThemeAPIView.as_view(), name="remove-chat-theme"),
+    path("get-chat-theme/<str:group_id>/", GetChatThemeAPIView.as_view(), name="get-chat-theme"),
     
 ]

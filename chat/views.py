@@ -551,3 +551,39 @@ class RemoveChatThemeAPIView(APIView):
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
+
+
+class GetChatThemeAPIView(APIView):
+    """
+    GET /api/chat/themes/<group_id>/
+
+    Returns the currently applied chat theme for a specific chat group.
+    User must be a member of the group.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        try:
+            profile = request.user.profile
+
+            # Validate group
+            try:
+                group = ChatGroup.objects.get(id=group_id)
+            except ChatGroup.DoesNotExist:
+                return Response(error_response("Chat group not found."), status=404)
+
+            # Check membership
+            if not ChatGroupMember.objects.filter(group=group, profile=profile).exists():
+                return Response(error_response("You are not a member of this chat group."), status=403)
+
+            # Get current theme
+            chat_theme = ChatGroupTheme.objects.filter(group=group).select_related("theme", "applied_by").first()
+            if not chat_theme or not chat_theme.theme:
+                return Response(success_response("No theme applied for this chat group.", None))
+
+            # Serialize theme
+            serializer = ChatThemeSerializer(chat_theme.theme)
+            return Response(success_response("Chat theme fetched successfully.", serializer.data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
