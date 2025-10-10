@@ -9,7 +9,7 @@ from profiles.views import (
     CreateProfileViewAPIView, ProfileStatsAPIView,RecentlyInteractedAPIView, EnableOrUpdateArtServiceAPIView, GetArtServiceAPIView,
     SendArtServiceInquiryAPIView, ArtServiceInquiriesAPIView, SuggestedProfilesAPIView, ReferredUsersAPIView, CreateVerificationRequestAPIView,
     VerificationRequestDetailAPIView, ListVerificationRequestsAPIView, UploadUserDocumentAPIView, AdminVerificationRequestListAPIView,
-    AdminVerificationRequestDetailAPIView, AdminVerificationRequestUpdateAPIView,
+    AdminVerificationRequestDetailAPIView, AdminVerificationRequestUpdateAPIView, ApplyCanvasFrameAPIView
 )
 
 urlpatterns = [
@@ -35,6 +35,7 @@ urlpatterns = [
     path('canvas/<int:profile_id>/', ProfileCanvasView.as_view(), name='canvas'),
     path('canvas-update/<int:pk>/', ProfileCanvasView.as_view(), name='canvas-update'),
     path('canvas-delete/<int:pk>/', ProfileCanvasView.as_view(), name='canvas-delete'),
+    path('apply-canvas-frame/', ApplyCanvasFrameAPIView.as_view(), name='apply-canvas-frame'),
     
     path('static-fields/', StaticFieldValueView.as_view(), name='static-fields'),
 

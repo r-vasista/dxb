@@ -2,7 +2,7 @@ from django.contrib import admin
 
 from profiles.models import (
     Profile, ProfileField, ProfileFieldSection, FriendRequest, ProfileCanvas, StaticProfileSection, StaticProfileField, StaticFieldValue,
-    ProfileView, ArtService, ArtServiceInquiry
+    ProfileView, ArtService, ArtServiceInquiry, CanvasFrame
 )
 
 @admin.register(Profile)
@@ -78,3 +78,10 @@ class ArtServiceInquiryAdmin(admin.ModelAdmin):
     list_display = ['id', 'artist_profile', 'inquirer_profile', 'message']
     search_fields = ['id', 'artist_profile', 'inquirer_profile', 'message']
     list_filter = ['id', 'artist_profile', 'inquirer_profile', 'message']
+
+
+@admin.register(CanvasFrame)
+class CanvasFrameAdmin(admin.ModelAdmin):
+    list_display = ['id', 'name', 'frame_image', 'is_premium']
+    search_fields = ['id', 'name', 'frame_image', 'is_premium']
+    list_filter = ['id', 'name', 'frame_image', 'is_premium']

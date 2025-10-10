@@ -34,7 +34,7 @@ from core.services import (
 )
 from profiles.models import (
     Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView,
-    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument, CanvasFrame
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
@@ -1368,4 +1368,62 @@ class AdminVerificationRequestUpdateAPIView(APIView):
             return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
         except VerificationRequest.DoesNotExist:
             return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
-   
+        
+
+class ApplyCanvasFrameAPIView(APIView):
+    """
+    POST /api/canvas-frames/apply/
+    Allows a user to apply a frame to their profile canvas.
+    Request data:
+    {
+        "frame_id": 3,
+        "canvas_id": 5
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            frame_id = request.data.get("frame_id")
+            canvas_id = request.data.get("canvas_id")
+
+            if not frame_id or not canvas_id:
+                return Response(error_response("frame_id and canvas_id are required."), status.HTTP_400_BAD_REQUEST)
+
+            frame = CanvasFrame.objects.filter(id=frame_id, is_active=True).first()
+            if not frame:
+                return Response(error_response("Frame not found or inactive."), status.HTTP_404_NOT_FOUND)
+
+            profile = request.user.profile
+            canvas = ProfileCanvas.objects.filter(id=canvas_id, profile=profile).first()
+            if not canvas:
+                return Response(error_response("Canvas not found or not owned by user."), status.HTTP_404_NOT_FOUND)
+
+            # Get user subscription
+            subscription = getattr(profile, "subscription", None)
+
+            # Check for premium access if the frame is premium
+            if frame.is_premium:
+                if not subscription or not subscription.is_active:
+                    return Response(error_response("You must have an active subscription to use this frame."), status.HTTP_403_FORBIDDEN)
+                if not subscription.plan.canvas_frames:
+                    return Response(error_response("Your current plan does not include canvas frames."), status.HTTP_403_FORBIDDEN)
+
+            # Apply the frame
+            canvas.frame = frame
+            canvas.save(update_fields=["frame"])
+
+            return Response(success_response(
+                message="Frame applied successfully.",
+                data={
+                    "canvas_id": canvas.id,
+                    "applied_frame": {
+                        "id": frame.id,
+                        "name": frame.name,
+                        "is_premium": frame.is_premium,
+                    }
+                }
+            ), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return error_response("Error applying frame.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)

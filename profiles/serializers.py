@@ -13,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 # Local imports
 from profiles.models import (
     ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection,
-    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument, CanvasFrame
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -424,10 +424,18 @@ class ProfileListSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'profile_picture', 'bio']
 
 
+class CanvasFrameSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for showing applied frame info."""
+    class Meta:
+        model = CanvasFrame
+        fields = ["id", "name", "frame_image", "is_premium"]
+
+
 class ProfileCanvasSerializer(serializers.ModelSerializer):
+    frame = CanvasFrameSerializer(read_only=True)
     class Meta:
         model = ProfileCanvas
-        fields = ['id', 'profile', 'image', 'display_order', 'created_by']
+        fields = ['id', 'profile', 'image', 'display_order', 'created_by', 'frame']
         read_only_fields = ['id', 'profile', 'created_by']
     
     def create(self, validated_data):
