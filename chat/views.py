@@ -18,7 +18,7 @@ from rest_framework.parsers import MultiPartParser, FormParser
 
 from core.services import success_response, error_response, get_user_profile
 from chat.models import (
-    ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear, ChatTheme, ChatGroupTheme
+    ChatGroup, ChatGroupMember, ChatMessage, MessageReceipt, ChatClear, ChatTheme, ChatGroupTheme, ScheduleMessage
 )
 from chat.serializers import (
     ChatGroupSerializer, ChatMessageSerializer, ChatGroupMiniSerializer, ScheduleMessageSerializer,
@@ -584,6 +584,52 @@ class GetChatThemeAPIView(APIView):
             # Serialize theme
             serializer = ChatThemeSerializer(chat_theme.theme)
             return Response(success_response("Chat theme fetched successfully.", serializer.data))
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=500)
+
+
+
+class GetScheduledMessagesAPIView(APIView):
+    """
+    GET /api/chat/scheduled-messages/?group_id=<id>&executed=true|false
+
+    Returns all scheduled messages for a group.
+    Allows filtering by executed status.
+    User must be a member of the group.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, group_id):
+        try:
+            profile = request.user.profile
+            executed_param = request.query_params.get("executed")
+
+            if not group_id:
+                return Response(error_response("'group_id' is required."), status=400)
+
+            # Validate group
+            try:
+                group = ChatGroup.objects.get(id=group_id)
+            except ChatGroup.DoesNotExist:
+                return Response(error_response("Chat group not found."), status=404)
+
+            # Check membership
+            if not ChatGroupMember.objects.filter(group=group, profile=profile).exists():
+                return Response(error_response("You are not a member of this chat group."), status=403)
+
+            # Apply filter
+            scheduled_messages = ScheduleMessage.objects.filter(group=group)
+
+            if executed_param is not None:
+                executed_value = executed_param.lower() == "true"
+                scheduled_messages = scheduled_messages.filter(executed=executed_value)
+
+            scheduled_messages = scheduled_messages.select_related("sender", "group").order_by("-scheduled_at")
+
+            # Serialize
+            serializer = ScheduleMessageSerializer(scheduled_messages, many=True)
+            return Response(success_response("Scheduled messages fetched successfully.", serializer.data))
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)

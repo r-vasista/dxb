@@ -163,10 +163,11 @@ class ChatGroupMiniSerializer(TimezoneAwareSerializerMixin):
 
 
 class ScheduleMessageSerializer(TimezoneAwareSerializerMixin):
+    sender_name = serializers.CharField(source="sender.user.username", read_only=True)
     class Meta:
         model = ScheduleMessage
-        fields = ["id", "group", "sender", "message_type", "content", "file", "scheduled_at", "executed"]
-        read_only_fields = ["id", "sender", "executed"]
+        fields = ["id", "group", "sender", "message_type", "content", "file", "scheduled_at", "executed", "sender_name"]
+        read_only_fields = ["id", "sender", "executed", "sender_name"]
 
     def create(self, validated_data):
         validated_data["sender"] = self.context["request"].user.profile
