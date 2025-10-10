@@ -41,7 +41,7 @@ from profiles.serializers import (
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
     StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer, 
     BasicProfileSerializer, VerificationRequestSerializer, UserDocumentSerializer, VerificationRequestDetailSerializer,
-    VerificationRequestAdminSerializer, VerificationRequestAdminUpdateSerializer
+    VerificationRequestAdminSerializer, VerificationRequestAdminUpdateSerializer, CanvasFrameSerializer
 )
 from profiles.choices import (
     StaticFieldType, VisibilityStatus
@@ -1427,3 +1427,27 @@ class ApplyCanvasFrameAPIView(APIView):
 
         except Exception as e:
             return error_response("Error applying frame.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CanvasFrameListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/canvas-frames/
+    Lists all active frames. Optionally filters by premium/free.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            frame_type = request.query_params.get("type")
+            frames = CanvasFrame.objects.filter(is_active=True)
+            if frame_type == "premium":
+                frames = frames.filter(is_premium=True)
+            elif frame_type == "free":
+                frames = frames.filter(is_premium=False)
+            
+            paginated_queryset = self.paginate_queryset(frames, request)
+            serializer = CanvasFrameSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        except Exception as e:
+            return error_response("Error fetching frames.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
