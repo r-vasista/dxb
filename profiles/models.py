@@ -169,6 +169,31 @@ class Profile(BaseModel):
         return f"{'User: ' + str(self.username), self.id if self.user else 'Org: ' + str(self.username), self.id}"
 
 
+class CanvasFrame(BaseModel):
+    """
+    Admin-defined frames that can be applied to a user's profile canvas.
+    """
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True, null=True)
+    frame_image = models.ImageField(upload_to='profiles/canvas_frames/')
+    is_active = models.BooleanField(default=True)
+    is_premium = models.BooleanField(default=False)
+    created_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='created_canvas_frames'
+    )
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['name']),
+            models.Index(fields=['is_active']),
+        ]
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.name} ({'Premium' if self.is_premium else 'Free'})"
+
+
+
 class ProfileCanvas(BaseModel):
     """
     Stores the canvas images of profile
@@ -179,6 +204,7 @@ class ProfileCanvas(BaseModel):
         related_name='profile_canvas'
     )
     image = models.ImageField(upload_to='profiles/canvas_picture/', blank=True, null=True)
+    frame = models.ForeignKey(CanvasFrame, on_delete=models.SET_NULL, null=True, blank=True, related_name='applied_canvases')
     display_order = models.PositiveIntegerField(default=0)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
 
