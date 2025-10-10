@@ -582,7 +582,7 @@ class GetChatThemeAPIView(APIView):
                 return Response(success_response("No theme applied for this chat group.", None))
 
             # Serialize theme
-            serializer = ChatThemeSerializer(chat_theme.theme)
+            serializer = ChatThemeSerializer(chat_theme.theme, context={'request':request})
             return Response(success_response("Chat theme fetched successfully.", serializer.data))
 
         except Exception as e:
