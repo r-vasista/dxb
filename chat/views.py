@@ -590,11 +590,11 @@ class GetChatThemeAPIView(APIView):
 
 
 
-class GetScheduledMessagesAPIView(APIView):
+class GetScheduledMessagesAPIView(APIView, PaginationMixin):
     """
-    GET /api/chat/scheduled-messages/?group_id=<id>&executed=true|false
+    GET /api/chat/scheduled-messages/?group_id=<id>&executed=true|false&page=1
 
-    Returns all scheduled messages for a group.
+    Returns all scheduled messages for a group with pagination.
     Allows filtering by executed status.
     User must be a member of the group.
     """
@@ -618,18 +618,20 @@ class GetScheduledMessagesAPIView(APIView):
             if not ChatGroupMember.objects.filter(group=group, profile=profile).exists():
                 return Response(error_response("You are not a member of this chat group."), status=403)
 
-            # Apply filter
-            scheduled_messages = ScheduleMessage.objects.filter(group=group)
+            # Base queryset
+            queryset = ScheduleMessage.objects.filter(group=group).select_related("sender", "group").order_by("-scheduled_at")
 
+            # Apply executed filter
             if executed_param is not None:
                 executed_value = executed_param.lower() == "true"
-                scheduled_messages = scheduled_messages.filter(executed=executed_value)
+                queryset = queryset.filter(executed=executed_value)
 
-            scheduled_messages = scheduled_messages.select_related("sender", "group").order_by("-scheduled_at")
+            # Apply pagination
+            paginated_qs = self.paginate_queryset(queryset, request)
+            serializer = ScheduleMessageSerializer(paginated_qs, many=True)
 
-            # Serialize
-            serializer = ScheduleMessageSerializer(scheduled_messages, many=True)
-            return Response(success_response("Scheduled messages fetched successfully.", serializer.data))
+            # Return paginated response
+            return self.get_paginated_response(serializer.data)
 
         except Exception as e:
             return Response(error_response(str(e)), status=500)
