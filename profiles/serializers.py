@@ -435,7 +435,7 @@ class ProfileCanvasSerializer(serializers.ModelSerializer):
     frame = CanvasFrameSerializer(read_only=True)
     class Meta:
         model = ProfileCanvas
-        fields = ['id', 'profile', 'image', 'display_order', 'created_by', 'frame']
+        fields = '__all__'
         read_only_fields = ['id', 'profile', 'created_by']
     
     def create(self, validated_data):

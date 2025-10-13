@@ -1373,22 +1373,43 @@ class AdminVerificationRequestUpdateAPIView(APIView):
 class ApplyCanvasFrameAPIView(APIView):
     """
     POST /api/canvas-frames/apply/
-    Allows a user to apply a frame to their profile canvas.
-    Request data:
+    Allows a user to apply a frame to their profile canvas with positioning and crop details.
+
+    Example Request:
     {
         "frame_id": 3,
-        "canvas_id": 5
+        "canvas_id": 5,
+        "position_x": 0.1,
+        "position_y": 0.2,
+        "scale": 0.5,
+        "crop_top": 0,
+        "crop_right": 0,
+        "crop_bottom": 0,
+        "crop_left": 0
     }
     """
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
         try:
+            required_fields = ["frame_id", "canvas_id"]
+            for field in required_fields:
+                if not request.data.get(field):
+                    return Response(error_response(f"{field} is required."), status.HTTP_400_BAD_REQUEST)
+
             frame_id = request.data.get("frame_id")
             canvas_id = request.data.get("canvas_id")
 
-            if not frame_id or not canvas_id:
-                return Response(error_response("frame_id and canvas_id are required."), status.HTTP_400_BAD_REQUEST)
+            # Optional transformation data
+            transform_fields = {
+                "position_x": float(request.data.get("position_x", 0)),
+                "position_y": float(request.data.get("position_y", 0)),
+                "scale": float(request.data.get("scale", 1)),
+                "crop_top": float(request.data.get("crop_top", 0)),
+                "crop_right": float(request.data.get("crop_right", 0)),
+                "crop_bottom": float(request.data.get("crop_bottom", 0)),
+                "crop_left": float(request.data.get("crop_left", 0)),
+            }
 
             frame = CanvasFrame.objects.filter(id=frame_id, is_active=True).first()
             if not frame:
@@ -1399,19 +1420,19 @@ class ApplyCanvasFrameAPIView(APIView):
             if not canvas:
                 return Response(error_response("Canvas not found or not owned by user."), status.HTTP_404_NOT_FOUND)
 
-            # Get user subscription
+            # Check premium restrictions
             subscription = getattr(profile, "subscription", None)
-
-            # Check for premium access if the frame is premium
             if frame.is_premium:
                 if not subscription or not subscription.is_active:
                     return Response(error_response("You must have an active subscription to use this frame."), status.HTTP_403_FORBIDDEN)
                 if not subscription.plan.canvas_frames:
-                    return Response(error_response("Your current plan does not include canvas frames."), status.HTTP_403_FORBIDDEN)
+                    return Response(error_response("Your plan does not include canvas frames."), status.HTTP_403_FORBIDDEN)
 
-            # Apply the frame
+            # Apply frame & transformation
+            for field, value in transform_fields.items():
+                setattr(canvas, field, value)
             canvas.frame = frame
-            canvas.save(update_fields=["frame"])
+            canvas.save(update_fields=["frame", *transform_fields.keys()])
 
             return Response(success_response(
                 message="Frame applied successfully.",
@@ -1421,12 +1442,14 @@ class ApplyCanvasFrameAPIView(APIView):
                         "id": frame.id,
                         "name": frame.name,
                         "is_premium": frame.is_premium,
-                    }
+                    },
+                    "transform": transform_fields
                 }
             ), status=status.HTTP_200_OK)
 
         except Exception as e:
-            return error_response("Error applying frame.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(error_response(str(e)), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 
 class CanvasFrameListAPIView(APIView, PaginationMixin):

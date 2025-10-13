@@ -207,6 +207,15 @@ class ProfileCanvas(BaseModel):
     frame = models.ForeignKey(CanvasFrame, on_delete=models.SET_NULL, null=True, blank=True, related_name='applied_canvases')
     display_order = models.PositiveIntegerField(default=0)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True)
+    
+    # New transformation fields
+    position_x = models.FloatField(default=0)
+    position_y = models.FloatField(default=0)
+    scale = models.FloatField(default=1)
+    crop_top = models.FloatField(default=0)
+    crop_right = models.FloatField(default=0)
+    crop_bottom = models.FloatField(default=0)
+    crop_left = models.FloatField(default=0)
 
     class Meta:
         indexes = [
