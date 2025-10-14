@@ -11,6 +11,7 @@ class SubscriptionPlan(BaseModel):
     name = models.CharField(max_length=100, unique=True)
     description = models.TextField(blank=True)
     price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    currency = models.CharField(max_length=10, default="INR")
     duration_days = models.PositiveIntegerField(default=30)
 
     # Optional feature flags for fast lookups

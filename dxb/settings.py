@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     "chat",
     "admindashboard",
     "subscription",
+    "payment",
     
 ]
 
@@ -342,3 +343,6 @@ GOOGLE_OAUTH = {
     # Acceptable issuers per Google docs:
     "ISSUERS": ["accounts.google.com", "https://accounts.google.com"],
 }
+
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
+RAZORPAY_KEY = os.environ.get('RAZORPAY_KEY', '')
