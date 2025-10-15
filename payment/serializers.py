@@ -1,5 +1,6 @@
 from django.utils import timezone
 from rest_framework import serializers
+from rest_framework.serializers import ValidationError
 
 from .models import PaymentTransaction
 from subscription.models import SubscriptionPlan
@@ -29,16 +30,25 @@ class TransactionModelSerializer(serializers.ModelSerializer):
         profile = self.context['profile']
         plan_id = validated_data.pop('plan_id')
         plan = SubscriptionPlan.objects.get(id=plan_id)
+        order_id = validated_data['order_id']
 
-        transaction = PaymentTransaction.objects.create(
-            profile=profile,
-            plan=plan,
-            razorpay_order_id=validated_data['order_id'],
-            razorpay_payment_id=validated_data['payment_id'],
-            razorpay_signature=validated_data['signature'],
-            amount=validated_data.get('amount', plan.price),
-            currency=validated_data.get('currency', 'INR'),
-            status="SUCCESS",
-            payment_time=timezone.now(),
-        )
+        # Fetch the existing order record
+        try:
+            transaction = PaymentTransaction.objects.get(
+                razorpay_order_id=order_id, 
+                profile=profile
+            )
+        except PaymentTransaction.DoesNotExist:
+            raise ValidationError("No transaction found for the given order_id.")
+
+        # Update transaction details
+        transaction.razorpay_payment_id = validated_data['payment_id']
+        transaction.razorpay_signature = validated_data['signature']
+        transaction.amount = validated_data.get('amount', plan.price)
+        transaction.currency = validated_data.get('currency', 'INR')
+        transaction.status = "SUCCESS"
+        transaction.payment_time = timezone.now()
+        transaction.plan = plan
+        transaction.save()
+
         return transaction
