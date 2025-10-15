@@ -79,7 +79,7 @@ class CreateRazorpayOrderAPIView(APIView):
             if currency.upper() in no_fraction_currencies:
                 smallest_unit_amount = int(converted_amount)
             else:
-                smallest_unit_amount = int(converted_amount * 100)
+                smallest_unit_amount = int(converted_amount)
 
             # Then create order
             order = rz_client.create_order(
