@@ -778,11 +778,11 @@ class SuggestedEventsAPIView(APIView, PaginationMixin):
             # 2. Get related tag IDs
             tag_ids = Event.objects.filter(
                 Q(id__in=attended_event_ids) | Q(host=profile)
-            ).values_list('tags', flat=True)
+            ).values_list('hashtags', flat=True)
 
             # 3. Get upcoming events matching tags, exclude already attended
             suggested_events = Event.objects.filter(
-                tags__in=tag_ids,
+                hashtags__in=tag_ids,
                 start_datetime__gte=timezone.now()
             ).exclude(
                 Q(id__in=attended_event_ids) | Q(host=profile)
@@ -1519,7 +1519,7 @@ class FilterEventListAPIView(APIView, PaginationMixin):
             if co_host_name:
                 filters &= Q(co_hosts__username__icontains=co_host_name)
             if tag:
-                filters &= Q(tags__name__icontains=tag)
+                filters &= Q(hashtags__name__icontains=tag)
             if upcoming and upcoming.lower() == 'true':
                 filters &= Q(start_datetime__gt=timezone.now())
             if past and past.lower() == 'true':
