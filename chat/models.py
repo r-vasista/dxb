@@ -152,7 +152,7 @@ class ChatTheme(models.Model):
         ("custom", "Custom"),
     ]
     
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
     type = models.CharField(max_length=10, choices=THEME_TYPE_CHOICES, default="DEFAULT")
 
