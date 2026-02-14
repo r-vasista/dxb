@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from user.models import (
-    UserType, CustomUser, Permission, Role, UserLog
+    UserType, CustomUser, Permission, Role, UserLog, SocialAccount
 )
 
 @admin.register(UserType)
@@ -14,14 +14,14 @@ class UserTypeAdmin(admin.ModelAdmin):
 @admin.register(CustomUser)
 class CustomUserAdmin(BaseUserAdmin):
     model = CustomUser
-    list_display = ('id', 'email', 'user_type', 'is_active', 'is_staff', 'last_login', 'timezone')
+    list_display = ('id', 'email', 'user_type', 'is_active', 'is_staff', 'last_login', 'timezone', 'provider')
     search_fields = ('email',)
     list_filter = ('user_type', 'is_active', 'is_staff', 'is_superuser')
     ordering = ('-id',)
     readonly_fields = ('last_login',)
 
     fieldsets = (
-        (None, {'fields': ('email', 'password', 'full_name', 'roles', 'timezone')}),
+        (None, {'fields': ('email', 'password', 'full_name', 'roles', 'timezone','provider')}),
         ('Personal Info', {'fields': ('user_type',)}),
         ('Permissions', {
             'fields': (
@@ -59,3 +59,10 @@ class UserLogAdmin(admin.ModelAdmin):
     list_display = ['id', 'user', 'login_time', 'timezone']
     search_fields = ['id', 'user', 'login_time', 'timezone']
     list_filter = ['id', 'user', 'login_time', 'timezone']
+
+
+@admin.register(SocialAccount)
+class SocialAccountAdmin(admin.ModelAdmin):
+    list_display = ['id', 'user', 'provider', 'email']
+    search_fields = ['id', 'user', 'provider', 'email']
+    list_filter = ['id', 'user', 'provider', 'email']

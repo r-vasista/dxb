@@ -1,6 +1,7 @@
 # Django imports
 from django.db import models
 from django.db.models import Prefetch
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework import serializers
@@ -12,7 +13,7 @@ from decimal import Decimal, InvalidOperation
 # Local imports
 from profiles.models import (
     ProfileField, Profile, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, StaticProfileSection,
-    ArtService, ArtServiceInquiry
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument, CanvasFrame
 )
 from profiles.utils import (
     validate_profile_field_data
@@ -25,12 +26,14 @@ from organization.serializers import (
 )
 from core.services import get_user_profile
 from core.utils import process_media_file
+from core.serializers import TimezoneAwareSerializerMixin
 from event.serializers import (
     EventListSerializer
 )
 from post.choices import (
     PostStatus
 )
+from subscription.models import UserSubscription
 
 
 class StaticFieldValueSerializer(serializers.ModelSerializer):
@@ -244,6 +247,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     city_name = serializers.CharField(source='city.name', read_only=True)
     state_name = serializers.CharField(source='state.name', read_only=True)
     country_name = serializers.CharField(source='country.name', read_only=True)
+    subscription_type = serializers.SerializerMethodField()
+    subscription_expires_at = serializers.SerializerMethodField()
 
     
     class Meta:
@@ -256,7 +261,8 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
             'got_friend_request', 'organized_events', 'website_url', 'tiktok_url', 'youtube_url', 'linkedin_url',
             'instagram_url', 'twitter_url', 'facebook_url', 'city_name', 'state_name', 'country_name', 'awards', 'tools',
             'notify_email', 'profile_tutorial', 'wall_tutorial', 'onboarding_required', 'followers_count', 
-            'following_count', 'friends_count', 'total_posts_count'
+            'following_count', 'friends_count', 'total_posts_count', 'referral_code', 'subscription_type', 
+            'subscription_expires_at',
         ]
     
     def get_is_friend(self, obj):
@@ -371,6 +377,22 @@ class ProfileDetailSerializer(serializers.ModelSerializer):
     
     def get_total_posts_count(self, obj):
         return obj.posts.filter(status=PostStatus.PUBLISHED).count()
+    
+    def get_subscription_type(self, obj):
+        active_sub = (
+            UserSubscription.objects.filter(profile=obj, is_active=True)
+            .order_by("-start_date")
+            .first()
+        )
+        return active_sub.plan.name if active_sub else "FREE"
+
+    def get_subscription_expires_at(self, obj):
+        active_sub = (
+            UserSubscription.objects.filter(profile=obj, is_active=True)
+            .order_by("-start_date")
+            .first()
+        )
+        return active_sub.end_date if active_sub else None
 
 
 class FriendRequestSerializer(serializers.ModelSerializer):
@@ -386,6 +408,7 @@ class FriendRequestSerializer(serializers.ModelSerializer):
             'from_username',
             'from_profile_pic',
             'status',
+            'created_at',
         ]
 
 
@@ -401,10 +424,18 @@ class ProfileListSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'profile_picture', 'bio']
 
 
+class CanvasFrameSerializer(serializers.ModelSerializer):
+    """Lightweight serializer for showing applied frame info."""
+    class Meta:
+        model = CanvasFrame
+        fields = ["id", "name", "frame_image", "is_premium"]
+
+
 class ProfileCanvasSerializer(serializers.ModelSerializer):
+    frame = CanvasFrameSerializer(read_only=True)
     class Meta:
         model = ProfileCanvas
-        fields = ['id', 'profile', 'image', 'display_order', 'created_by']
+        fields = '__all__'
         read_only_fields = ['id', 'profile', 'created_by']
     
     def create(self, validated_data):
@@ -510,7 +541,75 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
         model = Profile
         fields = ['id', 'username', 'bio', 'profile_picture', 'tools', 'awards']
 
-class BasicProfileSerializer(serializers.ModelSerializer):
+class BasicProfileSerializer(TimezoneAwareSerializerMixin):
     class Meta:
         model = Profile
-        fields = ['id', 'username','profile_picture']
+        fields = ['id', 'username', 'profile_picture', 'is_online', 'last_seen']
+        
+        
+class UserDocumentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserDocument
+        fields = ["id", "document_type", "file", "uploaded_at"]
+
+
+class VerificationRequestSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id", "status", "created_at", "updated_at",
+            "reviewed_at", "reviewed_by", "rejection_reason",
+            "documents"
+        ]
+
+class VerificationRequestDetailSerializer(serializers.ModelSerializer):
+    documents = UserDocumentSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "documents",
+        ]
+        
+
+class VerificationRequestAdminUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = VerificationRequest
+        fields = ["status", "rejection_reason"]
+
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        instance.status = validated_data.get("status", instance.status)
+        instance.rejection_reason = validated_data.get("rejection_reason", "")
+        instance.reviewed_by = get_user_profile(request.user)
+        instance.reviewed_at = timezone.now()
+        instance.save()
+        return instance
+
+
+class VerificationRequestAdminSerializer(serializers.ModelSerializer):
+    profile = serializers.StringRelatedField()
+    documents = serializers.StringRelatedField(many=True)
+
+    class Meta:
+        model = VerificationRequest
+        fields = [
+            "id",
+            "profile",
+            "status",
+            "created_at",
+            "updated_at",
+            "reviewed_at",
+            "reviewed_by",
+            "rejection_reason",
+            "documents",
+        ]

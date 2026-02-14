@@ -18,8 +18,8 @@ class Group(BaseModel):
     name = models.CharField(max_length=100)
     slug = models.SlugField(max_length=200, null=True, blank=True,unique=True)
     type = models.CharField(max_length=20, choices=GroupType.choices, default=GroupType.GROUP)
-    description = models.TextField(max_length=500)
-    tags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
+    description = models.TextField()
+    hashtags = models.ManyToManyField(HashTag, related_name='groups', blank=True)
     creator = models.ForeignKey(Profile, on_delete=models.CASCADE, related_name='created_groups')
     privacy = models.CharField(max_length=20, choices=PrivacyChoices.choices, default=PrivacyChoices.PUBLIC)
     logo = models.ImageField(upload_to='group_logo/', null=True, blank=True)
@@ -65,21 +65,23 @@ class GroupMember(BaseModel):
     def __str__(self):
         return f'{self.group.name}, {self.profile}'
 
-
+MAX_SLUG_BASE_LENGTH = 10
 class GroupPost(BaseModel):
     group = models.ForeignKey(Group, on_delete=models.CASCADE, related_name='posts')
     profile = models.ForeignKey(Profile, on_delete=models.CASCADE)
     content = models.TextField()
     media_file = models.FileField(upload_to='group_media/', null=True, blank=True)
-    tags = models.ManyToManyField(HashTag, blank=True)
+    hashtags = models.ManyToManyField(HashTag, blank=True, related_name='group_posts')
     is_pinned = models.BooleanField(default=False)
     pinned_at = models.DateTimeField(null=True, blank=True)
     is_announcement = models.BooleanField(default=False)
+    announcement_expiry = models.DateTimeField(null=True, blank=True)
     likes_count = models.PositiveIntegerField(default=0)
     comments_count = models.PositiveIntegerField(default=0)
     share_count = models.PositiveIntegerField(default=0)
     is_flagged = models.BooleanField(default=False)
     flag_count = models.PositiveIntegerField(default=0)
+    slug = models.SlugField(max_length=150, blank=True)
     
     def __str__(self):
         return f'{self.group.name}, {self.id}'
@@ -94,6 +96,16 @@ class GroupPost(BaseModel):
             self.pinned_at = timezone.now()
         elif not self.is_pinned:
             self.pinned_at = None  
+            
+        # Auto-generate slug per post
+        if not self.slug and self.content:
+            base_title = self.content.strip()[:MAX_SLUG_BASE_LENGTH]
+            base_slug = slugify(base_title)
+
+            username = self.profile.username if self.profile and self.profile.username else "user"
+            timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
+
+            self.slug = f"{base_slug}-{username}-{timestamp}-grp".lower()
         super().save(*args, **kwargs)
 
 
@@ -199,3 +211,18 @@ class GroupPostFlag(models.Model):
 
     def __str__(self):
         return f"Flag by {self.reported_by} on Post {self.post}"
+
+
+class ShareGroupPost(BaseModel):
+    group_post = models.ForeignKey(
+        GroupPost, on_delete=models.CASCADE, related_name="shares"
+    )
+    profile = models.ForeignKey(
+        Profile, on_delete=models.CASCADE, related_name="group_post_shares"
+    )
+
+    class Meta:
+        unique_together = ('group_post', 'profile')
+
+    def __str__(self):
+        return f"{self.profile.username} shared {self.group_post.id}"

@@ -3,9 +3,10 @@ from django.template.loader import render_to_string
 from django.template.exceptions import TemplateDoesNotExist, TemplateSyntaxError
 from django.conf import settings
 from django.template import Template, Context
+from django.db.models import F
 
-from core.models import EmailTemplate, EmailConfiguration
-from post.models import Hashtag, ArtType
+from core.models import EmailTemplate, EmailConfiguration, HashTag, HashTagVariant
+from post.models import ArtType
 
 
 import re
@@ -108,17 +109,52 @@ def extract_hashtags(text):
     """Extracts hashtags from the given text"""
     return set(re.findall(r"#(\w+)", text))
 
-
-def handle_hashtags(post):
-    hashtag_text = f"{post.title} {post.caption} {post.content}"
-    hashtags = extract_hashtags(hashtag_text)
+def process_hashtags_for_instance(instance, text):
+    """
+    Extract hashtags from text, link them to the instance (event/post),
+    track variant usage, and update the display_name to the most used variant.
+    """
+    hashtags = extract_hashtags(text)
 
     # Clear existing hashtags
-    post.hashtags.clear()
+    instance.hashtags.clear()
 
     for tag in hashtags:
-        hashtag_obj, created = Hashtag.objects.get_or_create(name=tag.lower())
-        post.hashtags.add(hashtag_obj)
+        normalized = HashTag.normalize_name(tag)
+
+        # Create/get main hashtag
+        hashtag_obj, _ = HashTag.objects.get_or_create(name=normalized)
+
+        # Track display variant (e.g., "SuperHuman" vs "superhuman")
+        variant_obj, _ = HashTagVariant.objects.get_or_create(
+            hashtag=hashtag_obj,
+            display_name=tag
+        )
+
+        # Increment usage
+        variant_obj.usage_count = F('usage_count') + 1
+        variant_obj.save(update_fields=['usage_count'])
+        variant_obj.refresh_from_db()
+
+        # Ensure hashtag is linked
+        instance.hashtags.add(hashtag_obj)
+
+        # ✅ Update main hashtag's display_name to most used variant
+        top_variant = (
+            HashTagVariant.objects
+            .filter(hashtag=hashtag_obj)
+            .order_by('-usage_count')
+            .first()
+        )
+        if top_variant and hashtag_obj.display_name != top_variant.display_name:
+            hashtag_obj.display_name = top_variant.display_name
+            hashtag_obj.save(update_fields=['display_name'])
+
+
+def handle_post_hashtags(post):
+    hashtag_text = f"{post.title or ''} {post.caption or ''} {post.content or ''}"
+    process_hashtags_for_instance(post, hashtag_text)
+
 
 def get_actual_user(obj):
     """

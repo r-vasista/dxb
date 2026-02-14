@@ -1,6 +1,7 @@
 # Django imports
 from django.db.models import Q
 from django.utils import timezone
+from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticatedOrReadOnly
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -23,6 +24,8 @@ from core.models import (
 from core.serializers import (
     HashTagSerializer
 )
+from profiles.models import Profile
+from user.models import CustomUser
 
 
 class LocationHierarchyAPIView(APIView, PaginationMixin):
@@ -175,3 +178,5 @@ class HashTagSearchAPIView(APIView, PaginationMixin):
         paginated_qs = self.paginate_queryset(hashtags, request)
         serializer = HashTagSerializer(paginated_qs, many=True)
         return self.get_paginated_response(serializer.data)
+
+

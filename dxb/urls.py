@@ -32,6 +32,10 @@ urlpatterns = [
     path('ai/', include('ai.urls')),
     path('mentor/', include('mentor.urls')),
     path('group/', include('group.urls')),
+    path('chat/', include('chat.urls')),
+    path('admindashboard/', include('admindashboard.urls')),
+    path('subscription/', include('subscription.urls')),
+    path('transaction/', include('payment.urls')),
 ]
 
 if settings.DEBUG:

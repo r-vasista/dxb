@@ -22,11 +22,11 @@ from django.db import IntegrityError
 from event.serializers import (
     EventCreateSerializer, EventListSerializer, EventAttendanceSerializer, EventSerializer, EventSummarySerializer, EventMediaSerializer, 
     EventCommentSerializer, EventCommentListSerializer, EventMediaCommentSerializer, EventDetailSerializer, EventSerializer,
-    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer
+    EventUpdateSerializer,EventMediaLikeSerializer,EventMediaCommentLikeSerializer, EventActivityLogSerializer, ShareEventMediaSerializer
 )
 from event.models import (
     Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike,EventMediaCommentLike, EventActivityLog,
-    EventTag
+    HashTag, ShareEventMedia
 )
 from event.choices import (
     EventStatus, AttendanceStatus, EventActivityType
@@ -778,11 +778,11 @@ class SuggestedEventsAPIView(APIView, PaginationMixin):
             # 2. Get related tag IDs
             tag_ids = Event.objects.filter(
                 Q(id__in=attended_event_ids) | Q(host=profile)
-            ).values_list('tags', flat=True)
+            ).values_list('hashtags', flat=True)
 
             # 3. Get upcoming events matching tags, exclude already attended
             suggested_events = Event.objects.filter(
-                tags__in=tag_ids,
+                hashtags__in=tag_ids,
                 start_datetime__gte=timezone.now()
             ).exclude(
                 Q(id__in=attended_event_ids) | Q(host=profile)
@@ -1519,7 +1519,7 @@ class FilterEventListAPIView(APIView, PaginationMixin):
             if co_host_name:
                 filters &= Q(co_hosts__username__icontains=co_host_name)
             if tag:
-                filters &= Q(tags__name__icontains=tag)
+                filters &= Q(hashtags__name__icontains=tag)
             if upcoming and upcoming.lower() == 'true':
                 filters &= Q(start_datetime__gt=timezone.now())
             if past and past.lower() == 'true':
@@ -1574,7 +1574,8 @@ class FilterEventListAPIView(APIView, PaginationMixin):
         
 class EventByTagAPIView(APIView, PaginationMixin):
     """
-    Get all events based on a hashtag (EventTag).
+    Get all events based on a hashtag (HashTag).
+    Example: /api/events/by-tag/?tag=SuperHuman
     """
     def get(self, request):
         try:
@@ -1582,20 +1583,49 @@ class EventByTagAPIView(APIView, PaginationMixin):
             if not tag_name:
                 return Response({"error": "Tag name is required."}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Get tag instance
-            tag = get_object_or_404(EventTag, name__iexact=tag_name)
-            
-            # Get all events associated with this tag
-            events=tag.events.all().select_related("host").prefetch_related("tags")
-            print(events, 'events')
-            # events = Event.objects.filter(tags=tag, is_active=True).select_related("host").prefetch_related("tags")
+            # Normalize for lookup
+            canonical = HashTag.normalize_name(tag_name)
 
-            # Serialize
-            paginated_queryset = self.paginate_queryset(events,request)
+            # Get hashtag instance
+            hashtag = get_object_or_404(HashTag, name=canonical)
+
+            # Get all events associated with this hashtag
+            events = hashtag.events.all().select_related("host").prefetch_related("hashtags")
+
+            # Paginate + serialize
+            paginated_queryset = self.paginate_queryset(events, request)
             serializer = EventSerializer(paginated_queryset, many=True, context={'request': request})
             return self.get_paginated_response(serializer.data)
-        
+
         except Http404 as e:
             return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
         except Exception as e:
             return Response({"status": False, "error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class EventMediaShareView(APIView):
+    """
+    POST /api/event-media/{media_id}/share/
+    Allows a profile to share an event media once.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, media_id):
+        try:
+            event_media = get_object_or_404(EventMedia, id=media_id)
+            profile = get_user_profile(request.user)
+
+            existing_share = ShareEventMedia.objects.filter(event_media=event_media, profile=profile).first()
+            if existing_share:
+                return Response(success_response("Event media already shared."), status=status.HTTP_200_OK)
+
+            serializer = ShareEventMediaSerializer(data={"event_media": event_media.id, "profile": profile.id})
+            serializer.is_valid(raise_exception=True)
+            share = serializer.save()
+
+            event_media.share_count = ShareEventMedia.objects.filter(event_media=event_media).count()
+            event_media.save(update_fields=["share_count"])
+            
+            return Response(success_response(serializer.data), status=status.HTTP_201_CREATED)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)

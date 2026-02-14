@@ -40,6 +40,7 @@ CORS_ALLOW_CREDENTIALS = True
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -66,7 +67,12 @@ INSTALLED_APPS = [
     "import_export",
     "ai",
     "mentor",
-    "group"
+    "group",
+    "chat",
+    "admindashboard",
+    "subscription",
+    "payment",
+    
 ]
 
 MIDDLEWARE = [
@@ -110,7 +116,8 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'dxb.wsgi.application'
+# WSGI_APPLICATION = 'dxb.wsgi.application'
+ASGI_APPLICATION = 'dxb.asgi.application'
 
 
 # Database
@@ -234,9 +241,20 @@ FRONTEND_URL = 'http://127.0.0.1:8000'
 #         'language': 'en',
 #     },
 # }
-
-
-CELERY_BROKER_URL = REDIS_HOST
+def redis_available(url):
+    try:
+        import redis
+        client = redis.Redis.from_url(url)
+        client.ping()
+        return True
+    except Exception:
+        return False
+if REDIS_HOST and redis_available(REDIS_HOST):
+    CELERY_BROKER_URL = REDIS_HOST
+    CELERY_RESULT_BACKEND = "django-db"
+else:
+    CELERY_BROKER_URL = "memory://"
+    CELERY_RESULT_BACKEND = "django-db"
 
 
 CELERY_ACCEPT_CONTENT = ['application/json']
@@ -304,3 +322,27 @@ LOGGING = {
         },
     }
 }
+
+
+# REDIS CHANNEL LAYER
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [("127.0.0.1", 6379)],
+        },
+    },
+}
+
+GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
+
+# Google oauth client
+GOOGLE_OAUTH = {
+    "CLIENT_IDS": [GOOGLE_CLIENT_ID],
+    # "HOSTED_DOMAINS": [],
+    # Acceptable issuers per Google docs:
+    "ISSUERS": ["accounts.google.com", "https://accounts.google.com"],
+}
+
+RAZORPAY_KEY_SECRET = os.environ.get('RAZORPAY_KEY_SECRET', '')
+RAZORPAY_KEY = os.environ.get('RAZORPAY_KEY', '')

@@ -16,7 +16,7 @@ from profiles.models import (
     Profile
 )
 from core.models import (
-    Country, State, City
+    Country, State, City, HashTag
 )
 from core.utils import (
     normalize_name
@@ -80,9 +80,10 @@ class Post(BaseModel):
     caption = models.TextField(blank=True)
     art_types = models.ManyToManyField(ArtType, related_name='art_type_posts', blank=True)
     custom_art_types = models.ManyToManyField(CustomArtType, related_name='custom_art_type_posts', blank=True)
+    hashtags = models.ManyToManyField(HashTag,related_name="posts",blank=True)
 
     # Slug & Status
-    slug = models.SlugField(max_length=150, blank=True)
+    slug = models.SlugField(max_length=150, blank=True, unique=True)
     status = models.CharField(max_length=20, choices=PostStatus.choices, default=PostStatus.PUBLISHED)
     visibility = models.CharField(max_length=20, choices=PostVisibility.choices, default=PostVisibility.PUBLIC)
 
@@ -106,6 +107,11 @@ class Post(BaseModel):
     is_featured = models.BooleanField(default=False)
     allow_comments = models.BooleanField(default=True)
     allow_reactions = models.BooleanField(default=True)
+    
+    # scheduling fields
+    is_scheduled = models.BooleanField(default=False)
+    scheduled_at = models.DateTimeField(null=True, blank=True)
+    original_visibility = models.CharField(max_length=20, choices=PostVisibility.choices, null=True, blank=True)
 
     city = models.ForeignKey(City, blank=True, null=True, on_delete=models.SET_NULL)
     state = models.ForeignKey(State, blank=True, null=True, on_delete=models.SET_NULL)
@@ -125,9 +131,12 @@ class Post(BaseModel):
 
     def save(self, *args, **kwargs):
         # Auto-generate slug per post
-        if not self.slug and self.title:
-            base_title = self.title.strip()[:MAX_SLUG_BASE_LENGTH]
-            base_slug = slugify(base_title)
+        if not self.slug:
+            if self.title:
+                base_title = self.title.strip()[:MAX_SLUG_BASE_LENGTH]
+                base_slug = slugify(base_title)
+            else:
+                base_slug = "post"  # fallback when title is missing
 
             username = self.profile.username if self.profile and self.profile.username else "user"
             timestamp = timezone.now().strftime("%Y%m%d%H%M%S")
@@ -138,6 +147,7 @@ class Post(BaseModel):
         if self.status == PostStatus.PUBLISHED and not self.published_at:
             self.published_at = timezone.now()
 
+        # Assign gallery order
         if not self.gallery_order and self.profile:
             max_order = Post.objects.filter(profile=self.profile).aggregate(
                 max_order=models.Max('gallery_order')
@@ -145,6 +155,7 @@ class Post(BaseModel):
             self.gallery_order = max_order + 1
 
         super().save(*args, **kwargs)
+
 
 
 class PostMedia(BaseModel):
@@ -189,9 +200,9 @@ class Comment(BaseModel):
     class Meta:
         ordering = ['created_at']
         indexes = [
-            models.Index(fields=['post', '-created_at']),
-            models.Index(fields=['parent', 'created_at']),
-            models.Index(fields=['profile', '-created_at']),
+            models.Index(fields=['post']),
+            models.Index(fields=['parent']),
+            models.Index(fields=['profile']),
         ]
 
     def __str__(self):
@@ -205,21 +216,6 @@ class CommentLike(BaseModel):
 
     class Meta:
         unique_together = ['comment', 'profile']
-
-
-class Hashtag(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    posts = models.ManyToManyField('Post', related_name='hashtags', blank=True)
-    
-    class Meta:
-        indexes = [
-            models.Index(
-                fields=['name'], name='hash_tag_name_idx'
-            )
-        ]
-
-    def __str__(self):
-        return f"#{self.name}"
 
 
 class PostView(BaseModel):

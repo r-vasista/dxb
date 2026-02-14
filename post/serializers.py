@@ -3,16 +3,16 @@ from rest_framework import serializers
 
 # Local imports
 from post.models import (
-    Post, PostMedia, PostReaction, Comment, CommentLike, Hashtag, SavedPost, SharePost, ArtType, CustomArtType
+    Post, PostMedia, PostReaction, Comment, CommentLike, SavedPost, SharePost, ArtType, CustomArtType
 )
-
 from post.utils import extract_mentions
 from profiles.models import Profile
-from profiles.serializers import ProfileSerializer
+from profiles.serializers import ProfileSerializer, BasicProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.choices import PostVisibility
 from core.serializers import TimezoneAwareSerializerMixin
 from core.services import get_user_profile
+from core.models import HashTag
 
 class PostMediaSerializer(serializers.ModelSerializer):
     class Meta:
@@ -201,7 +201,7 @@ class HashtagSerializer(serializers.ModelSerializer):
     """
     
     class Meta:
-        model = Hashtag
+        model = HashTag
         fields = ['name']
 
 
@@ -235,4 +235,39 @@ class ProfileSearchSerializer(serializers.ModelSerializer):
         fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
         read_only_fields = ['id', 'username', 'profile_picture', 'bio', 'allow_mentions']
 
+
+
+class CommentUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ["content"]
         
+
+class PostCommentListSerializer(serializers.ModelSerializer):
+    profile = serializers.SerializerMethodField()
+    has_replies = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Comment
+        fields = [
+            'id', 'post', 'profile', 'content', 'parent',
+            'created_at', 'has_replies'
+        ]
+        read_only_fields = fields
+
+    def get_profile(self, obj):
+        return {
+            "id": obj.profile.id,
+            "username": obj.profile.username,
+            "profile_picture": obj.profile.profile_picture.url if obj.profile.profile_picture else None,
+        }
+
+    def get_has_replies(self, obj):
+        return obj.replies.filter(is_approved=True).exists()
+
+class BasicPostSerializer(serializers.ModelSerializer):
+    profile = BasicProfileSerializer(read_only=True)
+    media = PostMediaSerializer(many=True, read_only=True)
+    class Meta:
+        model = Post
+        fields=['profile', 'media', 'title', 'slug', 'content']

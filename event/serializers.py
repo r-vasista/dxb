@@ -6,7 +6,8 @@ from rest_framework import serializers
 
 # Local imports
 from event.models import (
-    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog
+    Event, EventAttendance, EventMedia, EventComment, EventMediaComment, EventMediaLike, EventMediaCommentLike, EventActivityLog,
+    ShareEventMedia
 )
 from event.utils import generate_google_calendar_link, is_host_or_cohost
 from event.choices import (
@@ -118,7 +119,7 @@ class EventCreateSerializer(TimezoneAwareSerializerMixin):
     class Meta:
         model = Event
         fields = "__all__"
-        read_only_fields = ['host']
+        read_only_fields = ['host', 'hashtags']
         
     def validate(self, attrs):
         if attrs['end_datetime'] <= attrs['start_datetime']:
@@ -206,7 +207,7 @@ class EventMediaSerializer(serializers.ModelSerializer):
         model = EventMedia
         fields = [
                     'id', 'event', 'file', 'media_type', 'title', 'description', 'is_pinned', 'uploaded_at',
-                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count'
+                    'uploaded_by','like_count', 'uploaded_by_host', 'uploaded_by_details', 'comments_count', 'share_count'
                 ]
         read_only_fields = ['media_type', 'uploaded_at', 'uploaded_by_host']
     
@@ -318,7 +319,7 @@ class EventSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'start_datetime', 'end_datetime',
-            'event_image', 'attendee_count', 'tags', 'description',
+            'event_image', 'attendee_count', 'hashtags', 'description',
             'is_online', 'city', 'country', 'slug', 'event_logo', 'host_username',
             'host_profile_picture'
         ]
@@ -337,7 +338,7 @@ class EventUpdateSerializer(serializers.ModelSerializer):
             "start_datetime", "end_datetime", "timezone",
             "is_online", "address", "city", "state", "country", "online_link",
             "max_attendees", "is_free", "price", "currency",
-            "event_image", "event_logo", "tags","slug", "aprove_attendees", "allow_public_media",
+            "event_image", "event_logo", "hashtags","slug", "aprove_attendees", "allow_public_media",
             "updated_end_datetime", "updated_start_datetime", "show_views"
         ]
         read_only_fields = ["slug", "start_datetime", "end_datetime"]
@@ -399,3 +400,10 @@ class EventActivityLogSerializer(serializers.ModelSerializer):
         model = EventActivityLog
         fields = ['id', 'event', 'activity_type', 'timestamp']
         read_only_fields = ['id', 'timestamp']
+        
+
+class ShareEventMediaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShareEventMedia
+        fields = ['event_media', 'profile']
+        

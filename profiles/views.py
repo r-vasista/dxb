@@ -8,6 +8,7 @@ from django.conf import settings
 from django.utils.dateparse import parse_datetime
 from django.db.models import Q, F, Sum
 from django.db import IntegrityError
+from django.utils import timezone
 
 # Rest Framework imports
 from rest_framework.views import APIView
@@ -33,12 +34,14 @@ from core.services import (
 )
 from profiles.models import (
     Profile, ProfileField, FriendRequest, ProfileFieldSection, ProfileCanvas, StaticProfileField, StaticFieldValue, ProfileView,
-    ArtService, ArtServiceInquiry
+    ArtService, ArtServiceInquiry, VerificationRequest, UserDocument, CanvasFrame
 )
 from profiles.serializers import (
     ProfileFieldSerializer, UpdateProfileFieldSerializer, ProfileSerializer, UpdateProfileSerializer, FriendRequestSerializer,
     ProfileDetailSerializer, UpdateProfileFieldSectionSerializer, ProfileListSerializer, ProfileCanvasSerializer, 
-    StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer
+    StaticFieldInputSerializer, StaticFieldValueSerializer, ArtServiceSerializer, ArtServiceInquirySerializer, 
+    BasicProfileSerializer, VerificationRequestSerializer, UserDocumentSerializer, VerificationRequestDetailSerializer,
+    VerificationRequestAdminSerializer, VerificationRequestAdminUpdateSerializer, CanvasFrameSerializer
 )
 from profiles.choices import (
     StaticFieldType, VisibilityStatus
@@ -1218,3 +1221,256 @@ class SuggestedProfilesAPIView(APIView, PaginationMixin):
 
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ReferredUsersAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            # Get the current user's profile
+            profile = get_user_profile(request.user)
+            
+            # Fetch all profiles referred by this user
+            referred_profiles = Profile.objects.filter(referred_by=profile)
+            
+            paginated_qs = self.paginate_queryset(referred_profiles, request)
+            serializer = BasicProfileSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+        
+        except Profile.DoesNotExist:
+            return Response(error_response('Profile not found'), status=status.HTTP_404_NOT_FOUND)
+
+
+class CreateVerificationRequestAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Ensure user doesn't already have a pending request
+            if VerificationRequest.objects.filter(profile=profile, status=VerificationRequest.Status.PENDING).exists():
+                return Response(error_response("You already have a pending request."),
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            verification_request = VerificationRequest.objects.create(profile=profile)
+            serializer = VerificationRequestSerializer(verification_request)
+            return Response(success_response(serializer.data, "Verification request created successfully"),
+                            status=status.HTTP_201_CREATED)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class UploadUserDocumentAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, request_id):
+        try:
+            profile = get_user_profile(request.user)
+
+            # Ensure request belongs to user
+            try:
+                verification_request = VerificationRequest.objects.get(id=request_id, profile=profile)
+            except VerificationRequest.DoesNotExist:
+                return Response(error_response("Verification request not found."),
+                                status=status.HTTP_404_NOT_FOUND)
+
+            if verification_request.status != VerificationRequest.Status.PENDING:
+                return Response(error_response("Cannot upload documents to a non-pending request."),
+                                status=status.HTTP_400_BAD_REQUEST)
+
+            serializer = UserDocumentSerializer(data=request.data)
+            if serializer.is_valid():
+                serializer.save(request=verification_request)
+                return Response(success_response(serializer.data, "Document uploaded successfully"),
+                                status=status.HTTP_201_CREATED)
+
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class ListVerificationRequestsAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            profile = get_user_profile(request.user)
+            qs = VerificationRequest.objects.filter(profile=profile).order_by("-created_at")
+
+            paginated_qs = self.paginate_queryset(qs, request)
+            serializer = VerificationRequestSerializer(paginated_qs, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+
+
+class VerificationRequestDetailAPIView(APIView):
+    """
+    Get details of a specific verification request along with linked documents.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, request_id):
+        try:
+            profile = get_user_profile(request.user)
+            if not profile:
+                return Response(error_response("Profile not found"), status=status.HTTP_404_NOT_FOUND)
+
+            # Fetch request only if it belongs to the user
+            verification_request = get_object_or_404(
+                VerificationRequest, id=request_id, profile=profile
+            )
+
+            serializer = VerificationRequestDetailSerializer(verification_request)
+            return Response(success_response(serializer.data), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_400_BAD_REQUEST)
+        
+
+class AdminVerificationRequestListAPIView(APIView, PaginationMixin):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        qs = VerificationRequest.objects.all().order_by("-created_at")
+        paginated_qs = self.paginate_queryset(qs, request)
+        serializer = VerificationRequestAdminSerializer(paginated_qs, many=True)
+        return self.get_paginated_response(serializer.data)
+
+
+class AdminVerificationRequestDetailAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminSerializer(vr)
+            return Response(success_response(serializer.data))
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+
+
+class AdminVerificationRequestUpdateAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            vr = VerificationRequest.objects.get(pk=pk)
+            serializer = VerificationRequestAdminUpdateSerializer(vr, data=request.data, context={"request": request})
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(serializer.data, "Verification request updated successfully"))
+            return Response(error_response(serializer.errors), status=status.HTTP_400_BAD_REQUEST)
+        except VerificationRequest.DoesNotExist:
+            return Response(error_response("Verification request not found"), status=status.HTTP_404_NOT_FOUND)
+        
+
+class ApplyCanvasFrameAPIView(APIView):
+    """
+    POST /api/canvas-frames/apply/
+    Allows a user to apply a frame to their profile canvas with positioning and crop details.
+
+    Example Request:
+    {
+        "frame_id": 3,
+        "canvas_id": 5,
+        "position_x": 0.1,
+        "position_y": 0.2,
+        "scale": 0.5,
+        "crop_top": 0,
+        "crop_right": 0,
+        "crop_bottom": 0,
+        "crop_left": 0
+    }
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        try:
+            required_fields = ["frame_id", "canvas_id"]
+            for field in required_fields:
+                if not request.data.get(field):
+                    return Response(error_response(f"{field} is required."), status.HTTP_400_BAD_REQUEST)
+
+            frame_id = request.data.get("frame_id")
+            canvas_id = request.data.get("canvas_id")
+
+            # Optional transformation data
+            transform_fields = {
+                "position_x": float(request.data.get("position_x", 0)),
+                "position_y": float(request.data.get("position_y", 0)),
+                "scale": float(request.data.get("scale", 1)),
+                "crop_top": float(request.data.get("crop_top", 0)),
+                "crop_right": float(request.data.get("crop_right", 0)),
+                "crop_bottom": float(request.data.get("crop_bottom", 0)),
+                "crop_left": float(request.data.get("crop_left", 0)),
+            }
+
+            frame = CanvasFrame.objects.filter(id=frame_id, is_active=True).first()
+            if not frame:
+                return Response(error_response("Frame not found or inactive."), status.HTTP_404_NOT_FOUND)
+
+            profile = request.user.profile
+            canvas = ProfileCanvas.objects.filter(id=canvas_id, profile=profile).first()
+            if not canvas:
+                return Response(error_response("Canvas not found or not owned by user."), status.HTTP_404_NOT_FOUND)
+
+            # Check premium restrictions
+            subscription = getattr(profile, "subscription", None)
+            if frame.is_premium:
+                if not subscription or not subscription.is_active:
+                    return Response(error_response("You must have an active subscription to use this frame."), status.HTTP_403_FORBIDDEN)
+                if not subscription.plan.canvas_frames:
+                    return Response(error_response("Your plan does not include canvas frames."), status.HTTP_403_FORBIDDEN)
+
+            # Apply frame & transformation
+            for field, value in transform_fields.items():
+                setattr(canvas, field, value)
+            canvas.frame = frame
+            canvas.save(update_fields=["frame", *transform_fields.keys()])
+
+            return Response(success_response(
+                message="Frame applied successfully.",
+                data={
+                    "canvas_id": canvas.id,
+                    "applied_frame": {
+                        "id": frame.id,
+                        "name": frame.name,
+                        "is_premium": frame.is_premium,
+                    },
+                    "transform": transform_fields
+                }
+            ), status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response(error_response(str(e)), status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+
+class CanvasFrameListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/canvas-frames/
+    Lists all active frames. Optionally filters by premium/free.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        try:
+            frame_type = request.query_params.get("type")
+            frames = CanvasFrame.objects.filter(is_active=True)
+            if frame_type == "premium":
+                frames = frames.filter(is_premium=True)
+            elif frame_type == "free":
+                frames = frames.filter(is_premium=False)
+            
+            paginated_queryset = self.paginate_queryset(frames, request)
+            serializer = CanvasFrameSerializer(paginated_queryset, many=True, context={'request': request})
+            return self.get_paginated_response(serializer.data)
+        
+        except Exception as e:
+            return error_response("Error fetching frames.", str(e), status.HTTP_500_INTERNAL_SERVER_ERROR)

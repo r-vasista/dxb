@@ -23,9 +23,11 @@ from rest_framework.permissions import IsAuthenticated, AllowAny, IsAuthenticate
 
 # Local imports
 from core.services import (
-    success_response, error_response, get_user_profile, handle_hashtags, handle_art_styles
+    success_response, error_response, get_user_profile, handle_post_hashtags, handle_art_styles
 )
 from core.pagination import PaginationMixin
+from django.contrib.contenttypes.models import ContentType
+
 from core.utils import process_media_file
 from notification.task import notify_friends_of_new_post, send_comment_notification_task, send_mention_notification_task, send_post_reaction_notification_task, send_post_share_notification_task
 from post.models import ReactionType, PostView, SavedPost
@@ -35,14 +37,18 @@ from profiles.models import (
 from profiles.serializers import ProfileSerializer
 from profiles.choices import VisibilityStatus
 from post.models import (
-    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, Hashtag, SharePost, ArtType
+    Post, PostMedia,PostReaction,CommentLike, Comment, PostStatus, HashTag, SharePost, ArtType
 )
 from post.choices import (
     PostStatus,PostVisibility
 )
 from post.serializers import (
     PostSerializer, ImageMediaSerializer,PostReactionSerializer,CommentSerializer, CommentLikeSerializer,
-    HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer
+    HashtagSerializer, ProfileSearchSerializer, SavedPostSerializer, SharePostSerailizer, ArtTypeSerializer,
+    CommentUpdateSerializer, PostCommentListSerializer
+)
+from post.tasks import (
+    publish_scheduled_post
 )
 from user.permissions import (
     HasPermission, ReadOnly, IsOrgAdminOrMember
@@ -57,6 +63,8 @@ from core.permissions import (
     is_owner_or_org_member
 )
 
+from core .models import Report
+from core. serializers import ReportSerializer
 
 User = get_user_model()
 
@@ -102,17 +110,44 @@ class PostAPIView(APIView):
 
             if not is_allowed:
                 return Response(error_response("You are not allowed to post for this profile."), status=status.HTTP_403_FORBIDDEN)
-
-            # Use request.data as-is — DO NOT copy!
+            
             serializer = PostSerializer(data=request.data, context={'request': request})
             serializer.is_valid(raise_exception=True)
             post = serializer.save(profile=profile, created_by=request.user)
-            handle_hashtags(post)
+            handle_post_hashtags(post)
             handle_art_styles(post, request.data.get("art_types"))
-            try:
-                transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
-            except:
-                pass
+           # --- Scheduled Publishing Logic ---
+            if post.status == PostStatus.SCHEDULED:
+                scheduled_at = request.data.get("scheduled_at")
+                if not scheduled_at:
+                    post.delete()
+                    return Response(error_response("scheduled_at is required when status is 'scheduled'"), status=400)
+
+                scheduled_dt = parse_datetime(scheduled_at)
+                if not scheduled_dt:
+                    post.delete()
+                    return Response(error_response("Invalid datetime format for scheduled_at"), status=400)
+
+                if scheduled_dt <= timezone.now():
+                    post.delete()
+                    return Response(error_response("scheduled_at must be in the future"), status=400)
+                
+                # Save original visibility before hiding it
+                post.original_visibility = post.visibility
+                post.visibility = PostVisibility.PRIVATE
+                post.scheduled_at = scheduled_dt
+                post.save(update_fields=["original_visibility", "visibility", "scheduled_at", "status"])
+
+                # Schedule the publish task
+                # publish_scheduled_post.apply_async(args=[post.id])
+                publish_scheduled_post.apply_async(args=[post.id], eta=scheduled_dt)
+
+            else:
+                # Immediate post → notify
+                try:
+                    transaction.on_commit(lambda: notify_friends_of_new_post.delay(post.id))
+                except:
+                    pass
             
             mentions = extract_mentions(" ".join(filter(None, [post.caption, post.title, post.content])))
 
@@ -157,7 +192,7 @@ class PostAPIView(APIView):
             serializer = PostSerializer(post, data=request.data, partial=True, context={'request': request})
             serializer.is_valid(raise_exception=True)
             serializer.save()
-            handle_hashtags(post)
+            handle_post_hashtags(post)
 
             return Response(success_response(serializer.data), status=status.HTTP_200_OK)
         except Http404 as e:
@@ -245,7 +280,7 @@ class AllPostsAPIView(APIView, PaginationMixin):
         try:
             visibility_filter = get_post_visibility_filter(request.user)
 
-            posts = Post.objects.filter(visibility_filter).order_by('-created_at')
+            posts = Post.objects.filter(status=PostStatus.PUBLISHED).filter(visibility_filter).order_by('-created_at')
 
             paginated_queryset = self.paginate_queryset(posts, request)
             serializer = PostSerializer(paginated_queryset, many=True, context={'request': request})
@@ -673,7 +708,7 @@ class HashtagPostsView(APIView, PaginationMixin):
     """
     def get(self, request, hashtag_name):
         try:
-            hashtag = get_object_or_404(Hashtag, name=hashtag_name.lower())
+            hashtag = get_object_or_404(HashTag, name=hashtag_name.lower())
 
             visibility_filter = get_post_visibility_filter(request.user)
 
@@ -699,9 +734,12 @@ class HashtagsListView(APIView, PaginationMixin):
         try:
             search_query = request.query_params.get('search', '').strip()
             
-            hashtags = Hashtag.objects.all()
+            hashtags = HashTag.objects.all()
             if search_query:
-                hashtags = hashtags.filter(name__icontains=search_query)
+                hashtags = hashtags.filter(
+                Q(name__icontains=search_query.lower()) |
+                Q(display_name__icontains=search_query)
+            )
 
             paginated_queryset = self.paginate_queryset(hashtags, request)
             serializer = HashtagSerializer(paginated_queryset, many=True, context={'request': request})
@@ -1080,9 +1118,12 @@ class GlobalSearchAPIView(APIView, PaginationMixin):
 
             # --- HASHTAGS ---
             if search_type in ['hashtag', 'all']:
-                hashtags = Hashtag.objects.all()
+                hashtags = HashTag.objects.all()
                 if search:
-                    hashtags = hashtags.filter(name__icontains=search)
+                    hashtags = hashtags.filter(
+                            Q(name__icontains=search.lower()) |
+                            Q(display_name__icontains=search)
+                        )
 
                 paginated_hashtags = self.paginate_queryset(hashtags.order_by('-id'), request)
                 data['hashtags'] = HashtagSerializer(paginated_hashtags, many=True, context={'request': request}).data
@@ -1181,3 +1222,143 @@ class UpdateCommentVisibilityAPIView(APIView):
             return Response(error_response(str(e)), status=status.HTTP_403_FORBIDDEN)
         except Exception as e:
             return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class CommentUpdateAPIView(APIView):
+    """
+    PUT /api/comments/<id>/update/
+    Allows updating a comment only within 1 minute of creation.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def put(self, request, pk):
+        try:
+            profile = get_user_profile(request.user)
+            comment = Comment.objects.get(pk=pk, profile=profile)
+
+            # Check time condition: created_at within 1 min
+            if timezone.now() - comment.created_at > timedelta(minutes=1):
+                return Response(
+                    error_response("You can only edit a comment within 1 minute of posting."),
+                    status=400
+                )
+
+            serializer = CommentUpdateSerializer(comment, data=request.data, partial=True)
+            if serializer.is_valid():
+                serializer.save()
+                return Response(success_response(serializer.data), status=200)
+            return Response(error_response(serializer.errors), status=400)
+
+        except Comment.DoesNotExist:
+            return Response(error_response("Comment not found or not owned by you."), status=404)
+        except Exception as e:
+            return Response(error_response(str(e)), status=400)
+
+
+class ParentPostCommentListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/posts/<post_id>/comments/
+    Lists all top-level comments for a post (no nested replies, just `has_replies` flag).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+
+            comments = Comment.objects.select_related('profile').filter(
+                post=post, parent__isnull=True, is_approved=True
+            ).order_by('-created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = PostCommentListSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ChildPostCommentListAPIView(APIView, PaginationMixin):
+    """
+    GET /api/posts/<post_id>/comments/<parent_id>/replies/
+    Lists all child comments (replies) for a given parent comment.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, post_id, parent_id):
+        try:
+            post = get_object_or_404(Post, id=post_id)
+
+            comments = Comment.objects.select_related('profile', 'parent').filter(
+                post=post, parent_id=parent_id, is_approved=True
+            ).order_by('created_at')
+
+            paginated_comments = self.paginate_queryset(comments, request)
+            serializer = PostCommentListSerializer(paginated_comments, many=True, context={'request': request})
+            return self.get_paginated_response(success_response(serializer.data))
+
+        except Http404 as e:
+            return Response(error_response(str(e)), status=status.HTTP_404_NOT_FOUND)
+        except Exception as e:
+            return Response(error_response(str(e)), status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+class ReportPostAPIView(APIView):
+    """
+    API endpoint to report a Post (or other content objects).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+
+        # Validate content_type and object_id
+        content_type_str = data.get("content_type", "post")  # default to "post"
+        object_id = data.get("object_id")
+
+        if not object_id:
+            return Response({"error": "object_id is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            content_type = ContentType.objects.get(model=content_type_str)
+        except ContentType.DoesNotExist:
+            return Response({"error": "Invalid content type."}, status=status.HTTP_400_BAD_REQUEST)
+
+        model_class = content_type.model_class()
+        target_object = get_object_or_404(model_class, id=object_id)
+
+        # Build serializer with request context
+        serializer = ReportSerializer(data=data, context={"request": request})
+        if serializer.is_valid():
+            report = serializer.save(
+                reporter=request.user.profile,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+            return Response(
+                {"message": "Report submitted successfully.", "report_id": report.id},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class ReportProfileAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, *args, **kwargs):
+        data = request.data.copy()
+        data["content_type"] = "profile"  # force profile type
+
+        serializer = ReportSerializer(data=data, context={"request": request})
+        if serializer.is_valid():
+            report = serializer.save(
+                reporter=request.user.profile,
+                ip_address=request.META.get("REMOTE_ADDR"),
+                user_agent=request.META.get("HTTP_USER_AGENT", ""),
+            )
+            return Response(
+                {"message": "Profile reported successfully.", "report_id": report.id},
+                status=status.HTTP_201_CREATED,
+            )
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

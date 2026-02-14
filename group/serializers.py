@@ -1,18 +1,28 @@
 # Rest Framework imports
 from rest_framework import serializers
 
+#Django imports 
+from django.utils import timezone
+
 # Local imports
 from group.models import (
     Group, GroupMember, GroupPost, GroupPostComment, GroupPostCommentLike, GroupPostLike, GroupJoinRequest, GroupPostFlag,
-     GroupActionLog
+     GroupActionLog, GroupActionLog, ShareGroupPost
 )
 from group.choices import (
     RoleChoices
+)
+from group.utils import (
+    handle_grouppost_hashtags
 )
 from profiles.serializers import (
     BasicProfileSerializer
 )
 from core.serializers import HashTagSerializer
+from core.services import get_user_profile
+from core.models import (
+    HashTag
+)
 
 class GroupCreateSerializer(serializers.ModelSerializer):
     
@@ -30,6 +40,7 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     creator = BasicProfileSerializer()
     my_role = serializers.SerializerMethodField()
     join_request_status = serializers.SerializerMethodField()
+    is_owner = serializers.SerializerMethodField()
     
     class Meta:
         model = Group
@@ -59,19 +70,31 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             except GroupJoinRequest.DoesNotExist:
                 pass
         return None
+    
+    def get_is_owner(self, obj):
+        """Show role if user is authenticated and is a member."""
+        request = self.context.get('request', None)
+        if request and request.user.is_authenticated:
+            try:
+                return obj.creator == request.user.profile
+            except:
+                return None
+        return None
 
     
-class GroupPostSerializer(serializers.ModelSerializer):
+class  GroupPostSerializer(serializers.ModelSerializer):
     profile = BasicProfileSerializer(read_only=True)
-    tags = HashTagSerializer(many=True, read_only=True)
+    hashtags = HashTagSerializer(many=True, read_only=True)
     comments_count = serializers.SerializerMethodField()
     class Meta:
         model = GroupPost
         fields = [
-            'id', 'group', 'profile', 'content', 'media_file', 'tags',
-            'is_pinned', 'is_announcement', 'likes_count','pinned_at',
-            'comments_count', 'share_count', 'is_flagged', 'flag_count'
+            'id', 'group', 'profile', 'content', 'media_file', 'hashtags',
+            'is_announcement', 'announcement_expiry', 'likes_count',
+            'comments_count', 'share_count', 'is_flagged', 'flag_count',
+            'slug', 'created_at', 'updated_at'
         ]
+        read_only_fields =['slug']
         extra_kwargs = {
             'is_pinned': {'default': False}  # Ensures default False
         }
@@ -79,7 +102,6 @@ class GroupPostSerializer(serializers.ModelSerializer):
         return GroupPostComment.objects.filter(
             group_post=obj,
             is_active=True,
-            parent__isnull=True  # ✅ Count only top-level comments
         ).count()
 
 
@@ -242,7 +264,7 @@ class GroupSearchSerializer(serializers.ModelSerializer):
         model = Group
         fields = [
             'id', 'name', 'slug', 'type', 'description',
-            'tags', 'creator', 'privacy', 'logo', 'cover_image',
+            'hashtags', 'creator', 'privacy', 'logo', 'cover_image',
             'member_count', 'post_count', 'avg_engagement',
             'trending_score', 'last_activity_at', 'featured'
         ]
@@ -267,3 +289,73 @@ class GroupSuggestionSerializer(serializers.ModelSerializer):
             "trending_score",
             "featured",
         ]
+        
+
+class BasicGroupDetailSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'slug', 'cover_image', 'logo']
+        
+
+class GroupPostUpdateSerializer(serializers.ModelSerializer):
+    hashtags = serializers.PrimaryKeyRelatedField(
+        queryset=HashTag.objects.all(), many=True, required=False
+    )
+
+    class Meta:
+        model = GroupPost
+        fields = ['content', 'hashtags', 'is_pinned', 'is_announcement', 'announcement_expiry']
+        
+    def update(self, instance, validated_data):
+        request = self.context.get("request")
+        profile = get_user_profile(request.user)
+
+        # Hashtags
+        if "hashtags" in validated_data:
+            hashtags = validated_data.pop("hashtags", [])
+            instance.hashtags.set(hashtags)
+
+        # Handle pinning logic
+        if "is_pinned" in validated_data:
+            pin_requested = validated_data.pop("is_pinned")
+            group_member = GroupMember.objects.filter(
+                group=instance.group, profile=profile, is_banned=False
+            ).first()
+            allowed_roles = [RoleChoices.ADMIN, RoleChoices.MODERATOR]
+            is_privileged = group_member and group_member.role in allowed_roles
+
+            if not is_privileged:
+                raise serializers.ValidationError("Only admins/moderators can pin posts.")
+
+            if pin_requested:
+                if not instance.is_pinned or instance.is_pin_expired():
+                    instance.is_pinned = True
+                    instance.pinned_at = timezone.now()
+                else:
+                    raise serializers.ValidationError("Post is already pinned and not expired.")
+            else:
+                instance.is_pinned = False
+                instance.pinned_at = None
+
+        if "is_announcement" in validated_data:
+            instance.is_announcement = validated_data["is_announcement"]
+
+        if "announcement_expiry" in validated_data:
+            instance.announcement_expiry = validated_data["announcement_expiry"]
+
+        # Content update
+        instance.content = validated_data.get("content", instance.content)
+
+        instance.save()
+
+        # Handle hashtags
+        handle_grouppost_hashtags(instance)
+
+        return instance
+
+
+class ShareGroupPostSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ShareGroupPost
+        fields = ['group_post', 'profile']
+

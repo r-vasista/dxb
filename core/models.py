@@ -1,8 +1,17 @@
 
+import unicodedata
+import re
+
 from django.db import models
 from django.utils import timezone
 from django.utils.text import slugify
+from django.contrib.contenttypes.models import ContentType
+from django.contrib.contenttypes.fields import GenericForeignKey
+
+from core.choices import ReportReason
+
 from ckeditor.fields import RichTextField
+
 
 class BaseModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -153,4 +162,86 @@ class FeatureStep(models.Model):
     
 
 class HashTag(models.Model):
-    name = models.CharField(max_length=255, unique=True)
+    name = models.CharField(max_length=100, unique=True, db_index=True)
+    display_name = models.CharField(max_length=100, null=True)
+    slug = models.SlugField(max_length=120, unique=True, db_index=True)
+    
+    def __str__(self):
+        return str(self.name)
+    
+    @staticmethod
+    def normalize_name(raw: str) -> str:
+        """
+        Convert raw user input (e.g., '#Super Human') into the canonical form:
+        - strip leading '#'
+        - unicode normalize
+        - remove all whitespace
+        - lowercase
+        """
+        if not raw:
+            return ""
+        s = str(raw).strip()
+        if s.startswith("#"):
+            s = s[1:]
+        s = unicodedata.normalize("NFKC", s)
+        s = re.sub(r"\s+", "", s)
+        return s.lower()
+    
+    def save(self, *args, **kwargs):
+        # Normalize name → lowercase (no spaces, no special casing issues)
+        if self.name:
+            self.name = self.name.strip().lower()
+
+        # Ensure slug is generated from normalized name
+        if not self.slug:
+            self.slug = slugify(self.name)
+
+        # Fallback: if display_name not set, keep a proper capitalized form
+        if not self.display_name:
+            # Example: "superhuman" → "Superhuman"
+            self.display_name = self.name.capitalize()
+
+        super().save(*args, **kwargs)
+    
+
+class Report(BaseModel):
+    from profiles.models import Profile
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveBigIntegerField()
+    content_object = GenericForeignKey("content_type", "object_id")
+
+    reporter = models.ForeignKey(
+        Profile,
+        on_delete=models.CASCADE,
+        related_name="reports_filed",
+    )
+    reason = models.CharField(max_length=20, choices=ReportReason.choices)
+    details = models.TextField(blank=True)
+
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["content_type", "object_id"]),
+            models.Index(fields=["reporter", "created_at"]),
+            models.Index(fields=["reason"]),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["content_type", "object_id", "reporter", "reason"],
+                name="one_report_per_reason_per_target_per_reporter",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Report({self.id}) → {self.content_type.model}#{self.object_id}"
+    
+
+class HashTagVariant(BaseModel):
+    hashtag = models.ForeignKey(HashTag, on_delete=models.CASCADE, related_name="variants")
+    display_name = models.CharField(max_length=100, db_index=True)
+    usage_count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ("hashtag", "display_name")

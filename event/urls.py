@@ -6,7 +6,8 @@ from event.views import (
     EventDetailAPIView,SuggestedEventsAPIView,EventMediaDetailAPIView, MyHostedEventsAPIView, AddCoHostsAPIView, RemoveCoHostAPIView,
     ApproveRSVPAPIView, EventMediaLikeAPIView, EventMediaLikeDetailAPIView, EventMediaLikesByIdAPIView, EventListByHostOrCoHostAPIView, 
     EventMediaCommentLikeToggleAPIView, EventMediaCommentLikeListAPIView, GetCoHostListAPIView, EventViewActivityAPIView, EventShareActivityAPIView, EventAnalyticsAPIView, 
-    ShareEventWithProfilesAPIView, PublicEventDetailAPIView, DownloadEventAttendanceExcel, FilterEventListAPIView, EventByTagAPIView
+    ShareEventWithProfilesAPIView, PublicEventDetailAPIView, DownloadEventAttendanceExcel, FilterEventListAPIView, EventByTagAPIView,
+    EventMediaShareView
 )
 
 
@@ -38,6 +39,7 @@ urlpatterns = [
     path('suggest/event/',SuggestedEventsAPIView.as_view(),name='suggest-event-user'),
     path('event-media-likes/', EventMediaLikeAPIView.as_view(), name='event-media-like'),
     path('event-media-likes/<int:pk>/', EventMediaLikeDetailAPIView.as_view(), name='event-media-like-detail'),
+    path('share-event-media/<int:media_id>/', EventMediaShareView.as_view(), name='share-event-media'),
     path('media/likes/<int:id>/', EventMediaLikesByIdAPIView.as_view(), name='event-media-likes-by-id'),
     path('events/owned/<str:username>/', EventListByHostOrCoHostAPIView.as_view(), name='event-owned-by-name'),
     path('approve-rsvp/', ApproveRSVPAPIView.as_view(), name='approve-rsvp'),
